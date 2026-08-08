@@ -1,0 +1,16 @@
+{
+  "name": "example-api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "setup": "uv sync",
+    "dev": "uv run uvicorn example_api.main:app --reload --port 8000",
+    "build": "uv build",
+    "start": "uv run uvicorn example_api.main:app --port 8000",
+    "test": "uv run pytest",
+    "lint": "uv run ruff check .",
+    "format": "uv run ruff format .",
+    "typecheck": "uv run mypy",
+    "clean": "rm -rf .venv dist .pytest_cache .mypy_cache .ruff_cache"
+  }
+}
