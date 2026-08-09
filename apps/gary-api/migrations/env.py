@@ -7,7 +7,17 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
-from gary_api.db import database_url
+import os
+
+from gary_api.db import DEFAULT_URL, database_url
+
+# Say which database is being targeted, without printing credentials. Without
+# this, an unset DATABASE_URL surfaces only as a connection-refused traceback
+# against localhost, dozens of frames deep.
+if os.environ.get("DATABASE_URL"):
+    print("alembic: connecting using DATABASE_URL")
+else:
+    print(f"alembic: DATABASE_URL is not set, falling back to {DEFAULT_URL}")
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
