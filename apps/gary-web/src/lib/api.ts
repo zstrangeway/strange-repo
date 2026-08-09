@@ -5,7 +5,11 @@
 // Worth knowing when debugging: none of these requests appear in browser
 // devtools. They are in the gary-web server log.
 
+import { getLogger, REQUEST_ID_HEADER, requestId } from "./logger";
+
 const UNAVAILABLE = "gary is unavailable, try again shortly";
+
+const log = getLogger("api");
 
 export type ApiOk<T> = { ok: true; data: T };
 export type ApiError = { ok: false; status: number; message: string };
@@ -68,6 +72,7 @@ export async function callApi<T>(
   path: string,
   options: { method?: string; body?: unknown; token?: string | null } = {},
 ): Promise<ApiResult<T>> {
+  const method = options.method ?? "GET";
   const headers: Record<string, string> = {};
   if (options.body !== undefined) {
     headers["content-type"] = "application/json";
@@ -76,19 +81,42 @@ export async function callApi<T>(
     headers["authorization"] = `Bearer ${options.token}`;
   }
 
+  // Handed to gary-api, which keeps an inbound id rather than minting its
+  // own. That is what makes one action findable in both logs at once.
+  const request_id = requestId();
+  headers[REQUEST_ID_HEADER] = request_id;
+
+  const started = performance.now();
+  const elapsed = () => Math.round((performance.now() - started) * 1000) / 1000;
+
   let response: Response;
   try {
     response = await fetch(`${baseUrl()}${path}`, {
-      method: options.method ?? "GET",
+      method,
       headers,
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
       cache: "no-store",
     });
   } catch (error) {
     // gary-api being down should read as "try again", not as a stack trace.
-    console.error(`gary-api unreachable at ${baseUrl()}${path}:`, error);
+    log.error("api.unreachable", {
+      request_id,
+      method,
+      path,
+      url: baseUrl(),
+      duration_ms: elapsed(),
+      error,
+    });
     return { ok: false, status: 0, message: UNAVAILABLE };
   }
+
+  log.info("api.call", {
+    request_id,
+    method,
+    path,
+    status: response.status,
+    duration_ms: elapsed(),
+  });
 
   if (!response.ok) {
     return { ok: false, status: response.status, message: await messageFor(response) };

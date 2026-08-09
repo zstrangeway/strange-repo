@@ -1,0 +1,97 @@
+import assert from "node:assert/strict";
+
+import { Then, When } from "@cucumber/cucumber";
+
+import * as stack from "../support/stack.mjs";
+import { webOutput, world } from "../support/hooks.mjs";
+
+// Both apps write one JSON object per line. Anything else in the output —
+// `next dev`'s banner, uvicorn's startup — is not a log line and is skipped
+// rather than failed on.
+function objects(raw) {
+  const found = [];
+  for (const line of raw.split("\n")) {
+    if (!line.trim().startsWith("{")) {
+      continue;
+    }
+    try {
+      found.push(JSON.parse(line));
+    } catch {
+      // A partial line, mid-write. It will be whole on the next read.
+    }
+  }
+  return found;
+}
+
+const webLines = () => objects(webOutput());
+const apiLines = () => objects(stack.apiOutput());
+
+/**
+ * Waits for a line to turn up rather than assuming it already has.
+ *
+ * The page has finished loading, but the server's write to the pipe and our
+ * read of it are two different events. Without this the assertion races the
+ * plumbing and fails perhaps one run in twenty.
+ */
+async function waitForLine(read, matches, what, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    const found = read().filter(matches);
+    if (found.length > 0) {
+      return found.at(-1);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  throw new Error(`no ${what} within ${timeoutMs}ms. The log held:\n${JSON.stringify(read(), null, 2)}`);
+}
+
+When(
+  'I open the home page with {string} set to {string}',
+  async function (header, value) {
+    await world.page.setExtraHTTPHeaders({ [header]: value });
+    await world.page.goto(`${world.baseUrl}/`, { waitUntil: "domcontentloaded" });
+  },
+);
+
+Then("gary-web should have logged the call it made to gary-api", async function () {
+  world.webCall = await waitForLine(
+    webLines,
+    (line) => line.message === "api.call" && line.app === "gary-web",
+    "api.call line from gary-web",
+  );
+
+  assert.ok(world.webCall.request_id, "the line carries no request id");
+});
+
+Then("gary-api should have logged receiving that call", async function () {
+  world.apiCall = await waitForLine(
+    apiLines,
+    (line) =>
+      line.message === "http.request" &&
+      line.app === "gary-api" &&
+      line.path === world.webCall.path,
+    `http.request line from gary-api for ${world.webCall.path}`,
+  );
+});
+
+Then("the two lines should carry the same request id", function () {
+  assert.equal(
+    world.apiCall.request_id,
+    world.webCall.request_id,
+    "the two apps logged the same call under different ids, so the two logs cannot be joined",
+  );
+});
+
+Then(
+  'no line in either log should have {string} set to {string}',
+  function (field, value) {
+    const offending = [...webLines(), ...apiLines()].filter((line) => line[field] === value);
+    assert.deepEqual(
+      offending,
+      [],
+      `a value the browser chose reached the logs as ${field}`,
+    );
+  },
+);

@@ -1,7 +1,7 @@
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { callApi } from "./api";
 
@@ -50,8 +50,33 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+// callApi logs every call it makes. Captured rather than left to print, so a
+// passing run is quiet and the lines are assertable.
+const written: { stdout: string[]; stderr: string[] } = { stdout: [], stderr: [] };
+
+beforeEach(() => {
+  written.stdout = [];
+  written.stderr = [];
+  vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+    written.stdout.push(String(chunk));
+    return true;
+  });
+  vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
+    written.stderr.push(String(chunk));
+    return true;
+  });
+});
+
 function replyWith(reply: Reply) {
   nextReply = reply;
+}
+
+/** Every structured line callApi wrote, parsed. */
+function logged(): Record<string, unknown>[] {
+  return [...written.stdout, ...written.stderr]
+    .flatMap((chunk) => chunk.split("\n"))
+    .filter((line) => line.trim())
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
 }
 
 describe("callApi", () => {
@@ -109,7 +134,6 @@ describe("callApi", () => {
   });
 
   it("reports gary-api being unreachable rather than throwing", async () => {
-    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     // Nothing listens on port 1.
     vi.stubEnv("GARY_API_URL", "http://127.0.0.1:1");
 
@@ -120,14 +144,17 @@ describe("callApi", () => {
       status: 0,
       message: "gary is unavailable, try again shortly",
     });
-    expect(logged).toHaveBeenCalled();
+    // One object with the failure inside it, not a stack trace on stderr.
+    const line = logged().at(-1)!;
+    expect(line).toMatchObject({ message: "api.unreachable", level: "error", path: "/auth/me" });
+    expect(line.error).toMatchObject({ type: expect.any(String) });
+    expect(line.request_id).toEqual(expect.any(String));
 
     const { port } = server.address() as AddressInfo;
     vi.stubEnv("GARY_API_URL", `http://127.0.0.1:${port}`);
   });
 
   it("falls back to 127.0.0.1:8000 when GARY_API_URL is unset", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
     // Undefined, not empty: an empty string is not nullish, so ?? would not
     // reach the default and the branch would go untested.
     vi.stubEnv("GARY_API_URL", undefined);

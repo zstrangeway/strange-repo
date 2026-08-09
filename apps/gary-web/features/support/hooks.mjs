@@ -32,6 +32,12 @@ export const world = {
 };
 
 let webServer = null;
+let webLog = "";
+
+/** Everything gary-web's server has written since the last scenario began. */
+export function webOutput() {
+  return webLog;
+}
 
 async function waitForServer(url, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
@@ -63,9 +69,18 @@ BeforeAll(async function () {
     ["dev", "--port", String(WEB_PORT)],
     {
       env: { ...process.env, GARY_API_URL: apiUrl },
-      stdio: "ignore",
+      // Piped rather than ignored: gary-web logs its calls to gary-api here,
+      // and nowhere else. None of it reaches the browser, so a scenario that
+      // wants to see it has to read the server's own output.
+      stdio: ["ignore", "pipe", "pipe"],
     },
   );
+
+  const collect = (chunk) => {
+    webLog += chunk.toString();
+  };
+  webServer.stdout.on("data", collect);
+  webServer.stderr.on("data", collect);
 
   await waitForServer(world.baseUrl, 90_000);
 
@@ -95,6 +110,7 @@ Before(async function () {
     apiStub.reset();
   }
 
+  webLog = "";
   world.resetToken = null;
   world.verificationToken = null;
   world.page = await world.browser.newPage();

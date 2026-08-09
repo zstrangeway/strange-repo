@@ -56,6 +56,44 @@ mail seam end to end.
 Per-app commands live in each app's `Taskfile.yml` and are reachable as
 `pnpm --filter <app> <script>`, or `pnpm exec task --list` to see them all.
 
+## Logs
+
+Both apps write structured logs: one JSON object per line, the same field
+names on both sides.
+
+```json
+{"timestamp":"2026-08-09T17:50:00.123Z","level":"info","logger":"api",
+ "message":"api.call","app":"gary-web","request_id":"5f2c…","status":200}
+```
+
+`message` is a stable event name — `api.call`, `mail.logged`, `http.request` —
+and whatever varies goes beside it as a field, so a search can filter rather
+than grep. An exception lands as an `error` object with `type`, `message` and
+`stack`, inside the same line rather than as a loose traceback after it.
+
+| Variable | Applies to | Default | |
+| --- | --- | --- | --- |
+| `LOG_LEVEL` | both | `INFO` | |
+| `LOG_FORMAT` | gary-api | `json` | `text` lays the same fields out for reading by eye |
+
+`gary_api/logs.py` configures the *root* logger, so uvicorn's and SQLAlchemy's
+records come out in the same shape as ours rather than only ours.
+
+### Following one request through both apps
+
+gary-web mints a request id for each call it makes and sends it as
+`x-request-id`; gary-api keeps an inbound id rather than minting its own, binds
+it for the length of the request, and puts it on every line logged during it —
+including lines from libraries that know nothing about any of this. One id
+therefore finds one user action in both logs.
+
+The id is gary-web's, never the browser's. A trace id a visitor can set is one
+a visitor can collide with someone else's.
+
+**gary-web's log lines are in the gary-web server's output, not the browser
+console.** Same reason its gary-api calls do not appear in devtools: none of
+this runs in the browser.
+
 ## Deploying
 
 Both apps deploy to [Fly.io](https://fly.io) from `.github/workflows/ci.yml` on

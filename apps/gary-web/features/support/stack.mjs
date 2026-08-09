@@ -89,6 +89,11 @@ export function reset() {
   uv(["python", "e2e_db.py", "reset", database]);
 }
 
+/** Everything gary-api has written since the last scenario began. */
+export function apiOutput() {
+  return log;
+}
+
 /** The token from the most recent reset link gary-api logged. */
 export function emailedResetToken() {
   const found = [...log.matchAll(/[?&]token=([\w-]+)/g)];

@@ -23,5 +23,8 @@ Feature: One action, one story across both logs
   # id on the line is the one gary-web minted.
   Scenario: A request id offered by the browser is not taken on trust
     Given I am signed out
-    When I open the home page with "x-request-id" set to "pasted-by-hand"
-    Then no gary-web line should have "request_id" set to "pasted-by-hand"
+    When I open the sign up page
+    And I sign up as "Ada" with email "ada@example.com" and password "a long enough password"
+    And I open the home page with "x-request-id" set to "pasted-by-hand"
+    Then gary-web should have logged the call it made to gary-api
+    And no line in either log should have "request_id" set to "pasted-by-hand"

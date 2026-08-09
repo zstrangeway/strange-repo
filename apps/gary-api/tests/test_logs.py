@@ -25,12 +25,16 @@ class LogTestCase(unittest.TestCase):
 
     def setUp(self):
         self.stream = io.StringIO()
-        self.previous = logging.getLogger().handlers
+        root = logging.getLogger()
+        self.previous = (root.handlers, root.level)
         with patch.dict("os.environ", {"LOG_FORMAT": self.format}):
             logs.configure(stream=self.stream)
 
     def tearDown(self):
-        logging.getLogger().handlers = self.previous
+        # The level as well as the handlers: one test here drops the root to
+        # DEBUG, and leaving it there makes every later test noisier.
+        root = logging.getLogger()
+        root.handlers, root.level = self.previous
 
     @property
     def written(self):
