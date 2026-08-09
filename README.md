@@ -14,6 +14,37 @@ pnpm install     # once, from this directory
 pnpm test        # every app's specs
 ```
 
+### The three tiers
+
+`pnpm test` runs the first two. They need no setup beyond a Postgres for
+gary-api.
+
+- **gary-api specs** — Gherkin through behave, in-process against the ASGI app
+  and a real Postgres. Everything is real except the network.
+- **gary-web specs** — Gherkin through Cucumber, in a real browser against a
+  real `next dev`, with gary-api replaced by an in-memory stub.
+- **end to end** — the same browser, against a **real gary-api** on a database
+  created and dropped for the run.
+
+```sh
+pnpm --filter gary-web test:e2e
+```
+
+The third tier exists because the first two can both be green while gary is
+broken: the stub was written from the same understanding that produced
+gary-api, so it cannot notice the two drifting apart. Rename a field in
+gary-api's sign-in response and every spec in the first two tiers still
+passes. It is deliberately four scenarios — it costs a Postgres and a Python
+process, and its job is to catch drift, not to cover behaviour.
+
+Ephemeral means the database, not the server: the run creates
+`gary_e2e_<random>` on whatever `DATABASE_URL` points at, migrates it with the
+real Alembic migrations, empties it between scenarios, and drops it at the
+end. So it needs no Docker, and works against a local Postgres or a CI service
+container alike. It also reads the password reset link out of gary-api's own
+log rather than being handed one, which is the only test that exercises the
+mail seam end to end.
+
 Per-app commands live in each app's `Taskfile.yml` and are reachable as
 `pnpm --filter <app> <script>`, or `pnpm exec task --list` to see them all.
 

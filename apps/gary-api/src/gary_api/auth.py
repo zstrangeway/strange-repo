@@ -1,3 +1,4 @@
+import logging
 import os
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -24,6 +25,8 @@ RESET_LIFETIME = timedelta(hours=1)
 # Deliberately the same for a wrong password and an address with no account:
 # telling them apart turns sign-in into a way to ask who has an account.
 INVALID_CREDENTIALS = "Invalid email or password"
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -256,6 +259,17 @@ async def request_password_reset(request: ResetRequest, database: Db) -> None:
     )
     await database.commit()
 
+    # A provider outage must not change the answer. Raising here would 500 for
+    # an address that exists while an unknown one still got 202, which is the
+    # enumeration this endpoint is shaped to avoid. Nobody can reset while mail
+    # is down either way; the log is where that gets noticed.
+    try:
+        await _send_reset_link(user, token)
+    except mail.MailError:
+        logger.exception("mail: could not send a reset link to %s", user.email)
+
+
+async def _send_reset_link(user: User, token: str) -> None:
     await mail.send(
         mail.Message(
             to=user.email,

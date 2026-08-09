@@ -10,10 +10,15 @@ import {
 import { chromium } from "playwright";
 
 import * as apiStub from "./api-stub.mjs";
+import * as stack from "./stack.mjs";
 
 setDefaultTimeout(120_000);
 
 const WEB_PORT = 3999;
+
+// Set by the e2e profile. When on, gary-web talks to a real gary-api against a
+// throwaway database; when off, to the in-memory stub.
+export const fullStack = process.env.GARY_E2E === "1";
 
 export const world = {
   // localhost, not 127.0.0.1: `next dev` blocks cross-origin requests for
@@ -43,13 +48,20 @@ async function waitForServer(url, timeoutMs) {
 }
 
 BeforeAll(async function () {
-  await apiStub.start();
+  let apiUrl;
+  if (fullStack) {
+    await stack.start();
+    apiUrl = stack.API_URL;
+  } else {
+    await apiStub.start();
+    apiUrl = apiStub.BASE_URL;
+  }
 
   webServer = spawn(
     "node_modules/.bin/next",
     ["dev", "--port", String(WEB_PORT)],
     {
-      env: { ...process.env, GARY_API_URL: apiStub.BASE_URL },
+      env: { ...process.env, GARY_API_URL: apiUrl },
       stdio: "ignore",
     },
   );
@@ -62,10 +74,15 @@ BeforeAll(async function () {
 });
 
 Before(async function () {
-  // The stub holds accounts in memory, so it has to be emptied between
-  // scenarios or one scenario's user signs the next one in.
-  await apiStub.start();
-  apiStub.reset();
+  // Either backing store has to be emptied between scenarios, or one
+  // scenario's account signs the next one in.
+  if (fullStack) {
+    stack.reset();
+  } else {
+    await apiStub.start();
+    apiStub.reset();
+  }
+
   world.resetToken = null;
   world.page = await world.browser.newPage();
 });
@@ -78,5 +95,10 @@ After(async function () {
 AfterAll(async function () {
   await world.browser?.close();
   webServer?.kill();
-  await apiStub.stop();
+
+  if (fullStack) {
+    await stack.stop();
+  } else {
+    await apiStub.stop();
+  }
 });

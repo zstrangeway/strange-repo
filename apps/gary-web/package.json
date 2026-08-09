@@ -7,7 +7,8 @@
     "build": "task build",
     "serve": "task serve",
     "lint": "task lint",
-    "test": "task test"
+    "test": "task test",
+    "test:e2e": "task test:e2e"
   },
   "dependencies": {
     "next": "16.3.0",

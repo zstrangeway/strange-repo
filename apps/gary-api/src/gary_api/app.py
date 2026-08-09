@@ -1,3 +1,5 @@
+import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -7,6 +9,10 @@ from gary_api import auth, db, mail
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # uvicorn configures its own loggers and leaves the root one alone, so
+    # without this every record this app emits below WARNING is dropped —
+    # including the reset link the console mail provider exists to print.
+    logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
     mail.report_configuration()
     yield
 

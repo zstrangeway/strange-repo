@@ -44,8 +44,11 @@ class MailSpy:
 
     def __init__(self):
         self.sent = []
+        self.refusing = False
 
     async def send(self, message):
+        if self.refusing:
+            raise mail.MailError("the spy is refusing everything")
         self.sent.append(message)
 
 

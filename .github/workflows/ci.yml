@@ -62,6 +62,40 @@ jobs:
       - run: pnpm --filter gary-web exec playwright install --with-deps chromium
       - run: pnpm --filter gary-web test
 
+  e2e:
+    name: End-to-end specs
+    runs-on: ubuntu-latest
+    services:
+      # The e2e run creates its own throwaway database on this server and
+      # drops it afterwards, so nothing here is shared between scenarios.
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      # gary-web's e2e run boots the real gary-api, so it needs both toolchains.
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter gary-web exec playwright install --with-deps chromium
+      - run: pnpm --filter gary-web test:e2e
+
   images:
     name: Build images
     runs-on: ubuntu-latest
@@ -74,7 +108,7 @@ jobs:
 
   deploy-api:
     name: Deploy gary-api
-    needs: [test-api, test-web, images]
+    needs: [test-api, test-web, e2e, images]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:

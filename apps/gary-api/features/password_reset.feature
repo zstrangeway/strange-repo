@@ -48,6 +48,17 @@ Feature: Password reset
     When I check a token that was never issued
     Then the response status should be 400
 
+  # An outage must not change the answer either. If a known address 500s while
+  # an unknown one still gets 202, the difference is the account list.
+  Scenario: The mail provider is down
+    Given the mail provider refuses everything
+    When I POST "/auth/password-reset" with:
+      """
+      {"email": "ada@example.com"}
+      """
+    Then the response status should be 202
+    And no email should be sent
+
   Scenario: Setting a new password with the link
     Given "ada@example.com" has asked for a reset link
     When I POST "/auth/password-reset/confirm" with the emailed token and:

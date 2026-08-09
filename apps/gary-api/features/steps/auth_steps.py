@@ -267,3 +267,8 @@ def step_check_token(context):
 @when("I check a token that was never issued")
 def step_check_bogus_token(context):
     context.response = context.client.get("/auth/password-reset/never-issued")
+
+
+@given("the mail provider refuses everything")
+def step_mail_refuses(context):
+    context.mail.refusing = True
