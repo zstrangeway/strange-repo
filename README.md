@@ -58,17 +58,16 @@ flyctl tokens create deploy --name github-actions
 
 ### How the two apps find each other
 
-gary-web fetches gary-api over `.internal`, which stays inside the Fly org and
-never traverses the public internet. That address routes straight to the
-machine rather than through Fly's proxy, so it cannot wake a stopped one — and
-Fly's private DNS drops stopped machines entirely, so the name stops resolving
-rather than merely timing out. gary-api therefore sets
-`auto_stop_machines = "off"` and never scales to zero.
+gary-web fetches gary-api over [Flycast](https://fly.io/docs/networking/flycast/)
+at `http://<gary-api-app-name>.flycast:8080`. Traffic stays inside the Fly org,
+and because it is routed by Fly's proxy, a stopped gary-api machine is started
+on demand — so gary-api scales to zero. The workflow allocates the private
+address that Flycast needs on its first run.
 
-To let gary-api scale to zero instead, allocate a private address once with
-`flyctl ips allocate-v6 --private -a <gary-api-app-name>` and point
-`GARY_API_URL` at `http://<gary-api-app-name>.flycast:8080`. Flycast routes
-through Fly's proxy, which starts a stopped machine on demand.
+Do not use `.internal` for this. It addresses machines directly rather than
+going through the proxy, so it cannot start a stopped one, and Fly's private
+DNS omits stopped machines — the name fails to resolve at all rather than
+timing out, which makes the cause hard to read from the error.
 
 When gary-api is unreachable, gary-web renders `unavailable` rather than
 failing, so a gary-api outage degrades the page instead of breaking it.

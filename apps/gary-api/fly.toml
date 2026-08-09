@@ -9,13 +9,11 @@ primary_region = "iad"
 [http_service]
   internal_port = 8080
   force_https = true
-  # Do not autostop. gary-web resolves this app at gary-api.internal, and Fly's
-  # private DNS only returns machines that are running — a stopped machine
-  # disappears from DNS entirely rather than being woken on demand.
-  # min_machines_running alone did not hold the machine up.
-  auto_stop_machines = "off"
+  # Safe to scale to zero: gary-web reaches this app over Flycast, which routes
+  # through Fly's proxy and starts a stopped machine on demand.
+  auto_stop_machines = "stop"
   auto_start_machines = true
-  min_machines_running = 1
+  min_machines_running = 0
 
   [[http_service.checks]]
     grace_period = "10s"

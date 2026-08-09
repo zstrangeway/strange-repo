@@ -8,9 +8,10 @@ primary_region = "iad"
   dockerfile = "Dockerfile"
 
 [env]
-  # Private Fly networking: never leaves the org, so gary-api needs no public
-  # traffic. Must match the app name in apps/gary-api/fly.toml.
-  GARY_API_URL = "http://gary-api.internal:8080"
+  # Flycast: private to the org, and routed through Fly's proxy so a stopped
+  # gary-api machine is started on demand rather than dropping out of DNS.
+  # Must match the app name in apps/gary-api/fly.toml.
+  GARY_API_URL = "http://gary-api.flycast:8080"
 
 [http_service]
   internal_port = 8080
