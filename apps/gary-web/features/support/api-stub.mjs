@@ -5,6 +5,11 @@ const PORT = 8799;
 export const BASE_URL = `http://127.0.0.1:${PORT}`;
 
 let server = null;
+let body = { status: "ok", database: "ok" };
+
+export function reports(status, database) {
+  body = { status, database };
+}
 
 export async function start() {
   if (server) {
@@ -19,7 +24,7 @@ export async function start() {
         "content-type": "application/json",
         "access-control-allow-origin": "*",
       });
-      res.end(JSON.stringify({ status: "ok" }));
+      res.end(JSON.stringify(body));
       return;
     }
 
