@@ -14,6 +14,12 @@ primary_region = "iad"
     # instead would leave browser errors unreported with nothing to show for it.
     NEXT_PUBLIC_SENTRY_DSN = "https://7b033a8fc274f64ab923b550d7706a32@o4511882325655552.ingest.us.sentry.io/4511882329784320"
 
+    # Which project sentry-cli uploads source maps to. Slugs, not the numeric
+    # ids in the DSN. Neither is secret; the token that goes with them is, and
+    # arrives separately as a build secret from the deploy step.
+    SENTRY_ORG = "na"
+    SENTRY_PROJECT = "gary-web"
+
 [env]
   # The same project, read at runtime by the Node and Edge runtimes. Separate
   # from the build arg above because these two are read at different times, not
