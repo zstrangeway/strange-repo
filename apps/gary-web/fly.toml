@@ -3,7 +3,9 @@ app = "gary-web"
 primary_region = "iad"
 
 [build]
-  dockerfile = "apps/gary-web/Dockerfile"
+  # Relative to this file, not to the working directory. The build context is
+  # still the working directory, which must be the repo root.
+  dockerfile = "Dockerfile"
 
 [env]
   # Private Fly networking: never leaves the org, so gary-api needs no public

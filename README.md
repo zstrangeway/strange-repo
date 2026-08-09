@@ -38,18 +38,17 @@ name as `http://<gary-api-app-name>.internal:8080`.
 Apps are created in the `FLY_ORG` organisation set at the top of the workflow,
 which defaults to `personal`.
 
-Fly resolves every path — the config path, and `build.dockerfile` inside it —
-relative to the working directory, joining rather than replacing. The two apps
-therefore need different settings:
+Fly resolves the two paths against different bases, which is worth knowing
+before editing either `fly.toml`:
 
-| App | Working directory | Config path |
-| --- | --- | --- |
-| gary-api | `apps/gary-api` | `fly.toml` |
-| gary-web | repo root (leave blank) | `apps/gary-web/fly.toml` |
+- the config path is relative to the **working directory**
+- `build.dockerfile` inside it is relative to **the config file's own directory**
 
-gary-web cannot build from `apps/gary-web`. Its image needs `pnpm-lock.yaml`,
-`pnpm-workspace.yaml`, and the root `package.json` in the build context for the
-workspace to resolve, and all of those sit at the repo root.
+The build context is the working directory. gary-web therefore deploys from the
+repo root with `--config apps/gary-web/fly.toml` and `dockerfile = "Dockerfile"`
+— it cannot build from `apps/gary-web`, because its image needs
+`pnpm-lock.yaml`, `pnpm-workspace.yaml`, and the root `package.json` in the
+context for the workspace to resolve.
 
 Then add a deploy token to the repository as the `FLY_API_TOKEN` secret:
 
