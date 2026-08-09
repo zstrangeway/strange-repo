@@ -1,3 +1,6 @@
+# syntax=docker/dockerfile:1
+# The syntax line is load-bearing: RUN --mount=type=secret below needs it.
+
 # Build context is the repository root: the pnpm workspace has to be intact
 # for the app's dependencies to resolve.
 FROM node:22-slim AS base
@@ -36,6 +39,13 @@ COPY apps/gary-web apps/gary-web
 ARG NEXT_PUBLIC_SENTRY_DSN=""
 ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN
 
+# Which Sentry project the source maps belong to. Not secret, and not a
+# runtime concern — sentry-cli only needs them while the bundle is being built.
+ARG SENTRY_ORG=""
+ARG SENTRY_PROJECT=""
+ENV SENTRY_ORG=$SENTRY_ORG \
+    SENTRY_PROJECT=$SENTRY_PROJECT
+
 # Say which of the two happened. A build that quietly produces an image with no
 # browser error reporting looks exactly like one that works.
 RUN if [ -n "$NEXT_PUBLIC_SENTRY_DSN" ]; then \
@@ -44,7 +54,20 @@ RUN if [ -n "$NEXT_PUBLIC_SENTRY_DSN" ]; then \
       echo "Sentry: NO browser DSN — client-side errors will NOT be reported"; \
     fi
 
-RUN pnpm --filter gary-web exec next build
+# The auth token arrives as a BuildKit secret rather than an ARG: build args
+# are readable in image history forever, and this one is a real credential
+# unlike the DSN. Absent, the build still succeeds and simply skips upload —
+# which is what every local build and the CI smoke build do.
+RUN --mount=type=secret,id=sentry_auth_token \
+    if [ -s /run/secrets/sentry_auth_token ] && [ -n "$SENTRY_ORG" ] && [ -n "$SENTRY_PROJECT" ]; then \
+      echo "Sentry: uploading source maps to $SENTRY_ORG/$SENTRY_PROJECT"; \
+      export SENTRY_AUTH_TOKEN="$(cat /run/secrets/sentry_auth_token)"; \
+    else \
+      echo "Sentry: NOT uploading source maps — production stack traces will be minified"; \
+      echo "        token=$([ -s /run/secrets/sentry_auth_token ] && echo yes || echo no)" \
+           "org=${SENTRY_ORG:-unset} project=${SENTRY_PROJECT:-unset}"; \
+    fi; \
+    pnpm --filter gary-web exec next build
 
 
 FROM base AS runner

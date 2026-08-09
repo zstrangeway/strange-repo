@@ -143,6 +143,15 @@ jobs:
       # Runs from the repo root: the build context must be the whole workspace,
       # so the config path is given relative to it and cannot be read any
       # other way.
-      - run: flyctl deploy --config apps/gary-web/fly.toml --remote-only
+      # --build-secret, not --build-arg: the token is a real credential and a
+      # build arg would sit in the image history. It reaches `next build` on
+      # Fly's remote builder, which is the only place source maps exist —
+      # `fly secrets` are runtime and arrive far too late to matter.
+      # Absent, the deploy still succeeds without uploading; the Dockerfile
+      # prints which of the two happened.
+      - run: >-
+          flyctl deploy --config apps/gary-web/fly.toml --remote-only
+          --build-secret sentry_auth_token="$SENTRY_AUTH_TOKEN"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}

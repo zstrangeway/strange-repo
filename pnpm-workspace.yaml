@@ -4,3 +4,10 @@ packages:
 ignoredBuiltDependencies:
   - sharp
   - unrs-resolver
+
+# pnpm blocks postinstall scripts by default, and @sentry/cli's postinstall is
+# what fetches the binary that uploads source maps. Without this the upload
+# does not fail loudly — there is simply no CLI, and production stack traces
+# stay minified while everything reports success.
+onlyBuiltDependencies:
+  - '@sentry/cli'
