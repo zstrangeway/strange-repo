@@ -26,4 +26,7 @@ ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 8080
 
-CMD ["fastapi", "run", "src/gary_api/app.py", "--host", "0.0.0.0", "--port", "8080"]
+# Bind ::, not 0.0.0.0. Fly's private network — everything .internal resolves
+# to — is IPv6-only, and an IPv4 socket cannot accept those connections. A
+# dual-stack :: socket still serves IPv4, so the public route is unaffected.
+CMD ["fastapi", "run", "src/gary_api/app.py", "--host", "::", "--port", "8080"]
