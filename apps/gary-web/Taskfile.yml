@@ -21,9 +21,15 @@ tasks:
     cmds:
       - pnpm exec eslint
 
-  test:
-    desc: Run the Gherkin specs against a real browser, with gary-api stubbed
+  unit:
+    desc: Unit-test src/lib and enforce its coverage gate
     cmds:
+      - pnpm exec vitest run --coverage
+
+  test:
+    desc: Unit tests, then the Gherkin specs against a real browser
+    cmds:
+      - task: unit
       - pnpm exec cucumber-js
 
   test:e2e:

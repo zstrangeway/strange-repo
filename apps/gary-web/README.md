@@ -30,9 +30,18 @@ Chromium via Playwright. The suite starts its own Next server and a stub
 gary-api, so nothing needs to be running first.
 
 ```sh
-pnpm test          # against the stub, fast
+pnpm unit          # src/lib only, with its coverage gate
+pnpm test          # the above, then the browser specs against the stub
 pnpm test:e2e      # against a real gary-api and a throwaway database
 ```
+
+`pnpm unit` is Vitest over **`src/lib` and nothing else**, gated at 100%
+including branches. That scope is deliberate: everything outside `src/lib` here
+is an async Server Component or a Server Action, and [Next's own testing
+guide](https://nextjs.org/docs/app/guides/testing) recommends covering those
+end to end rather than with unit tests. A gate that swept them in would report
+a number it had not earned. `src/lib` is plain modules, which is where the
+branchy logic — error mapping, empty bodies, cookie flags — actually lives.
 
 `test:e2e` needs a reachable Postgres (`DATABASE_URL`) and gary-api's Python
 toolchain, because it boots the real thing. It creates `gary_e2e_<random>`,

@@ -20,9 +20,11 @@ pnpm test        # every app's specs
 gary-api.
 
 - **gary-api specs** — Gherkin through behave, in-process against the ASGI app
-  and a real Postgres. Everything is real except the network.
+  and a real Postgres. Everything is real except the network. Alongside them,
+  stdlib unittest for what the API cannot reach. Gated at 100%.
 - **gary-web specs** — Gherkin through Cucumber, in a real browser against a
-  real `next dev`, with gary-api replaced by an in-memory stub.
+  real `next dev`, with gary-api replaced by an in-memory stub. Alongside them,
+  Vitest over `src/lib` only, gated at 100%.
 - **end to end** — the same browser, against a **real gary-api** on a database
   created and dropped for the run.
 
@@ -36,6 +38,12 @@ gary-api, so it cannot notice the two drifting apart. Rename a field in
 gary-api's sign-in response and every spec in the first two tiers still
 passes. It is deliberately four scenarios — it costs a Postgres and a Python
 process, and its job is to catch drift, not to cover behaviour.
+
+gary-web's coverage gate covers `src/lib` and nothing else, deliberately. The
+rest of that app is async Server Components and Server Actions, and [Next's own
+testing guide](https://nextjs.org/docs/app/guides/testing) says to cover those
+end to end rather than with unit tests. A gate that swept them in would report
+a number it had not earned; the Gherkin suites are what cover them.
 
 Ephemeral means the database, not the server: the run creates
 `gary_e2e_<random>` on whatever `DATABASE_URL` points at, migrates it with the
