@@ -5,7 +5,8 @@ A FastAPI service.
 ## Run
 
 ```sh
-uv run fastapi dev src/gary_api/app.py
+uv run fastapi dev src/gary_api/app.py   # development, with reload
+uv run fastapi run src/gary_api/app.py   # production
 ```
 
 ## Test
