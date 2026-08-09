@@ -16,6 +16,7 @@ from functools import cache
 
 from gary_api.mail.base import MailError, Mailer, Message
 from gary_api.mail.console import ConsoleMailer
+from gary_api.mail.resend import API_URL as RESEND_API_URL
 from gary_api.mail.resend import ResendMailer
 
 __all__ = [
@@ -50,7 +51,14 @@ def _build_resend() -> Mailer:
     if not api_key:
         raise MailError("the resend provider needs RESEND_API_KEY, which is not set")
 
-    return ResendMailer(api_key=api_key, sender=sender())
+    # Overridable so the specs can aim this at a local server and exercise the
+    # real provider over real HTTP, rather than a double that agrees with
+    # whatever we told it to say. Also covers a Resend-compatible endpoint.
+    return ResendMailer(
+        api_key=api_key,
+        sender=sender(),
+        api_url=os.environ.get("RESEND_API_URL", RESEND_API_URL),
+    )
 
 
 PROVIDERS: dict[str, Callable[[], Mailer]] = {

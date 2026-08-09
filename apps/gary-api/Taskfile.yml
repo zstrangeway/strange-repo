@@ -31,8 +31,10 @@ tasks:
     desc: Run the specs and unit tests, then enforce the coverage gate
     env:
       # Pinned, not merely defaulted: a real RESEND_API_KEY in the environment
-      # would otherwise select Resend and turn a spec run into real email sent
-      # to real people. Specs assert on what the console provider logged.
+      # would otherwise select Resend and turn a run into real email sent to
+      # real people. The Gherkin specs override this to exercise the real
+      # Resend provider, but against a local server they point RESEND_API_URL
+      # at — so neither path can reach Resend.
       MAIL_PROVIDER: console
     cmds:
       - uv run coverage erase

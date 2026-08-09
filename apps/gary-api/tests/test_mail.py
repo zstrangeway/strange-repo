@@ -75,6 +75,18 @@ class ProviderSelectionTests(MailTestCase):
 
         self.assertEqual(built._sender, "gary <no-reply@gary.test>")
 
+    def test_resend_points_at_the_real_api_by_default(self):
+        with patch.dict("os.environ", {"RESEND_API_KEY": "k"}, clear=True):
+            self.assertEqual(mailer()._api_url, API_URL)
+
+    def test_resend_api_url_can_be_redirected(self):
+        with patch.dict(
+            "os.environ",
+            {"RESEND_API_KEY": "k", "RESEND_API_URL": "http://127.0.0.1:9/emails"},
+            clear=True,
+        ):
+            self.assertEqual(mailer()._api_url, "http://127.0.0.1:9/emails")
+
     def test_resolves_once_and_reuses(self):
         with patch.dict("os.environ", {}, clear=True):
             self.assertIs(mailer(), mailer())

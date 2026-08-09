@@ -30,9 +30,11 @@ def _sign_in(context, email, password):
 
 
 def _reset_link(context):
+    """The token out of the body gary actually posted to the provider."""
     assert context.mail.sent, "no email was sent"
-    found = re.search(r"[?&]token=([\w\-]+)", context.mail.sent[-1].text)
-    assert found, f"no reset link in: {context.mail.sent[-1].text}"
+    text = context.mail.sent[-1]["text"]
+    found = re.search(r"[?&]token=([\w\-]+)", text)
+    assert found, f"no reset link in: {text}"
     return found.group(1)
 
 
@@ -244,7 +246,8 @@ def step_cannot_sign_in(context, email, password):
 @then('a password reset email should be sent to "{email}"')
 def step_mail_sent(context, email):
     assert context.mail.sent, "no email was sent"
-    assert context.mail.sent[-1].to == email, f"sent to {context.mail.sent[-1].to}"
+    recipients = context.mail.sent[-1]["to"]
+    assert recipients == [email], f"sent to {recipients}"
 
 
 @then("the email should carry a reset link")

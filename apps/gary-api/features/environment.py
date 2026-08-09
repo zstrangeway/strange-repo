@@ -1,5 +1,8 @@
 import asyncio
+import json
 import os
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -33,29 +36,64 @@ def _run(work):
     return asyncio.run(scoped())
 
 
-class MailSpy:
-    """Stands in for a provider and keeps what it was handed.
+class FakeResend:
+    """A local stand-in for Resend's API, not for our own mail code.
 
-    Registered as a provider rather than patched over mail.send, so the specs
-    go through the same selection path a deployment does.
+    The specs run the real ResendMailer over real HTTP against this, so what
+    they prove is what gary actually sends. Nothing here is registered into
+    PROVIDERS — the provider under test is the shipped one, selected the way
+    a deployment selects it.
     """
-
-    name = "spy"
 
     def __init__(self):
         self.sent = []
         self.refusing = False
+        self.server = HTTPServer(("127.0.0.1", 0), self._handler())
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
 
-    async def send(self, message):
-        if self.refusing:
-            raise mail.MailError("the spy is refusing everything")
-        self.sent.append(message)
+    @property
+    def url(self):
+        host, port = self.server.server_address
+        return f"http://{host}:{port}/emails"
+
+    def close(self):
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join()
+
+    def _handler(fake):
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                body = json.loads(
+                    self.rfile.read(int(self.headers["content-length"]))
+                )
+                if fake.refusing:
+                    self.send_response(500)
+                    self.end_headers()
+                    self.wfile.write(b"the fake provider is refusing everything")
+                    return
+
+                fake.sent.append(body)
+                self.send_response(200)
+                self.send_header("content-type", "application/json")
+                self.end_headers()
+                self.wfile.write(b'{"id": "sent"}')
+
+            def log_message(self, *args):
+                pass
+
+        return Handler
 
 
 def before_all(context):
-    # Belt and braces with the test task's MAIL_PROVIDER pin: a real key in
-    # the environment must never turn a spec run into real email.
-    os.environ["MAIL_PROVIDER"] = "spy"
+    # The real Resend provider, pointed at a local server. RESEND_API_URL is
+    # what keeps a real key in the environment from reaching Resend, so it is
+    # set before anything can resolve a mailer, and the key is overridden too.
+    context.mail = FakeResend()
+    os.environ["MAIL_PROVIDER"] = "resend"
+    os.environ["RESEND_API_KEY"] = "not-a-real-key"
+    os.environ["RESEND_API_URL"] = context.mail.url
 
     async def build(engine):
         async with engine.begin() as connection:
@@ -70,8 +108,8 @@ def before_scenario(context, scenario):
     # scenario deliberately points db.engine at a dead database.
     db.engine = _engine()
 
-    context.mail = MailSpy()
-    mail.PROVIDERS["spy"] = lambda: context.mail
+    context.mail.sent.clear()
+    context.mail.refusing = False
     mail.mailer.cache_clear()
 
     async def empty(engine):
@@ -93,7 +131,10 @@ def before_scenario(context, scenario):
 def after_scenario(context, scenario):
     context.client.close()
     mail.mailer.cache_clear()
-    mail.PROVIDERS.pop("spy", None)
+
+
+def after_all(context):
+    context.mail.close()
 
 
 def sql(statement, **parameters):
