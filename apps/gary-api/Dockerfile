@@ -26,7 +26,7 @@ ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 8080
 
-# Bind ::, not 0.0.0.0. Fly's private network — everything .internal resolves
-# to — is IPv6-only, and an IPv4 socket cannot accept those connections. A
-# dual-stack :: socket still serves IPv4, so the public route is unaffected.
-CMD ["fastapi", "run", "src/gary_api/app.py", "--host", "::", "--port", "8080"]
+# 0.0.0.0 is the address fly-proxy expects, and it is what Flycast routes to.
+# Binding :: instead left the app unreachable and failed the deploy's smoke
+# check. Private networking is the proxy's job, not this socket's.
+CMD ["fastapi", "run", "src/gary_api/app.py", "--host", "0.0.0.0", "--port", "8080"]
