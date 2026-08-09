@@ -14,12 +14,22 @@ const MINIMUM_PASSWORD = 8;
 export const BASE_URL = `http://127.0.0.1:${PORT}`;
 
 let server = null;
+// When set, the stub answers 200 with a body that is not JSON. The realistic
+// version of this is a proxy error page or a truncated response — gary-web
+// parses it, throws inside a Server Component, and that is the path the
+// server.error spec exercises.
+let answeringWithGarbage = false;
 const users = new Map(); // email -> {id, email, display_name, password}
 const sessions = new Map(); // token -> email
 const resets = new Map(); // token -> {email, used, expired}
 const verifications = new Map(); // token -> {email, used, expired}
 
+export function answerWithGarbage() {
+  answeringWithGarbage = true;
+}
+
 export function reset() {
+  answeringWithGarbage = false;
   users.clear();
   sessions.clear();
   resets.clear();
@@ -259,6 +269,15 @@ export async function start() {
       }
 
       const path = request.url.split("?")[0];
+
+      if (answeringWithGarbage) {
+        // 200 on purpose: a non-200 is a case callApi already handles. What
+        // this reproduces is a success that cannot be parsed.
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end("<html><body>502 Bad Gateway</body></html>");
+        return;
+      }
+
       const result = handle(request.method, path, body, request);
       const status = result.status_override ?? result.status;
 

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import { Then, When } from "@cucumber/cucumber";
 
+import * as apiStub from "../support/api-stub.mjs";
 import * as stack from "../support/stack.mjs";
 import { webOutput, world } from "../support/hooks.mjs";
 
@@ -95,3 +96,25 @@ Then(
     );
   },
 );
+
+When("gary-api starts answering with something that is not JSON", function () {
+  apiStub.answerWithGarbage();
+});
+
+Then(
+  'gary-web should have logged a {string} line for {string}',
+  async function (message, path) {
+    world.serverError = await waitForLine(
+      webLines,
+      (line) => line.message === message && line.path === path,
+      `${message} line for ${path}`,
+    );
+  },
+);
+
+Then("that line should name the error type and message", function () {
+  const error = world.serverError.error;
+  assert.ok(error, `no error object on the line: ${JSON.stringify(world.serverError)}`);
+  assert.ok(error.type, "the error carries no type");
+  assert.ok(error.message, "the error carries no message");
+});
