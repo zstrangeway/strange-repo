@@ -1,4 +1,7 @@
+import json
+import threading
 import unittest
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -168,6 +171,81 @@ class ResendMailerTests(MailTestCase):
                 await self.mailer.send(self.message)
 
         self.assertIn("no route to host", str(caught.exception))
+
+
+class ResendOverTheWireTests(MailTestCase):
+    """The same adapter against a real socket rather than a mock.
+
+    A mocked client agrees with whatever resend.py happens to send, so it
+    cannot catch a malformed header or a body that never gets serialised.
+    This runs the actual httpx request against a local server and asserts on
+    what arrived. It still cannot prove Resend accepts it — that needs the
+    live API, which this environment's egress policy blocks.
+    """
+
+    def setUp(self):
+        super().setUp()
+        received = {}
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                length = int(self.headers["content-length"])
+                received["path"] = self.path
+                # Lowercased: the wire is case-insensitive but a plain dict
+                # is not, and httpx capitalises Content-Type.
+                received["headers"] = {
+                    name.lower(): value for name, value in self.headers.items()
+                }
+                received["body"] = json.loads(self.rfile.read(length))
+                self.send_response(200)
+                self.send_header("content-type", "application/json")
+                self.end_headers()
+                self.wfile.write(b'{"id": "sent"}')
+
+            def log_message(self, *args):
+                pass
+
+        self.received = received
+        self.server = HTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        thread.start()
+        # Cleanups run last-registered-first, so these read bottom-up:
+        # shutdown, then close the socket, then join. Joining a server still
+        # in serve_forever never returns.
+        self.addCleanup(thread.join)
+        self.addCleanup(self.server.server_close)
+        self.addCleanup(self.server.shutdown)
+
+        host, port = self.server.server_address
+        self.api_url = f"http://{host}:{port}/emails"
+
+    async def test_sends_a_request_resend_would_recognise(self):
+        mailer_ = ResendMailer(
+            api_key="a-key", sender="gary <no-reply@gary.test>", api_url=self.api_url
+        )
+
+        await mailer_.send(
+            Message(
+                to="ada@example.com",
+                subject="Reset your password",
+                text="Follow https://gary.test/reset?token=abc123",
+            )
+        )
+
+        self.assertEqual(self.received["path"], "/emails")
+        self.assertEqual(self.received["headers"]["authorization"], "Bearer a-key")
+        self.assertEqual(
+            self.received["headers"]["content-type"], "application/json"
+        )
+        self.assertEqual(
+            self.received["body"],
+            {
+                "from": "gary <no-reply@gary.test>",
+                "to": ["ada@example.com"],
+                "subject": "Reset your password",
+                "text": "Follow https://gary.test/reset?token=abc123",
+            },
+        )
 
 
 class SendTests(MailTestCase):

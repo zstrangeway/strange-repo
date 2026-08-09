@@ -16,15 +16,19 @@ class ResendMailer:
 
     name = "resend"
 
-    def __init__(self, api_key: str, sender: str) -> None:
+    def __init__(self, api_key: str, sender: str, api_url: str = API_URL) -> None:
         self._api_key = api_key
         self._sender = sender
+        # Overridable so the specs can point it at a real local server and
+        # assert on the bytes Resend would actually receive, rather than at a
+        # mock that agrees with whatever this file happens to send.
+        self._api_url = api_url
 
     async def send(self, message: Message) -> None:
         try:
             async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS) as client:
                 response = await client.post(
-                    API_URL,
+                    self._api_url,
                     headers={"authorization": f"Bearer {self._api_key}"},
                     json={
                         "from": self._sender,
