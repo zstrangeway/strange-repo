@@ -1,9 +1,18 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from gary_api import db
+from gary_api import db, mail
 
-app = FastAPI(title="gary-api")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    mail.report_configuration()
+    yield
+
+
+app = FastAPI(title="gary-api", lifespan=lifespan)
 
 # gary-web reads /health from the browser, so the request is cross-origin.
 # The endpoint is unauthenticated and read-only, so any origin may ask.

@@ -11,6 +11,9 @@ dependencies = [
     "alembic>=1.19.1",
     "asyncpg>=0.31.0",
     "fastapi[standard]>=0.141.1",
+    # Already present under fastapi[standard]; named here because the mail
+    # providers call it directly rather than inheriting it by luck.
+    "httpx>=0.28.1",
     "sqlalchemy[asyncio]>=2.0.51",
 ]
 
