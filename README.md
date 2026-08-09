@@ -25,15 +25,18 @@ never deploy.
 
 ### One-time setup
 
-Fly app names are globally unique, so `gary-api` and `gary-web` may already be
-taken. Pick names, then keep three places in sync: `app` in each `fly.toml`, and
-`GARY_API_URL` in `apps/gary-web/fly.toml`, which resolves gary-api over Fly's
-private network as `http://<gary-api-app-name>.internal:8080`.
+Add a Fly deploy token to the repository as the `FLY_API_TOKEN` secret, and the
+workflow does the rest — it creates each app on the first run if it does not
+already exist, then deploys. Nothing needs running by hand.
 
-```sh
-flyctl apps create <gary-api-app-name>
-flyctl apps create <gary-web-app-name>
-```
+Fly app names are globally unique, so `gary-api` and `gary-web` may already be
+taken. If either is, change `app` in that app's `fly.toml` and the matching
+name in the workflow's `Ensure the Fly app exists` step — and for gary-api,
+`GARY_API_URL` in `apps/gary-web/fly.toml` too, since that embeds the API's app
+name as `http://<gary-api-app-name>.internal:8080`.
+
+Apps are created in the `FLY_ORG` organisation set at the top of the workflow,
+which defaults to `personal`.
 
 Fly resolves every path — the config path, and `build.dockerfile` inside it —
 relative to the working directory, joining rather than replacing. The two apps
