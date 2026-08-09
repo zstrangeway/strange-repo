@@ -13,7 +13,7 @@ Every app exposes the same script names. Run them for the whole repo, or for one
 with `--filter`:
 
 ```bash
-pnpm setup      # install everything (pnpm workspaces + uv sync)
+pnpm bootstrap  # install everything (pnpm workspaces + uv sync)
 pnpm dev        # run all apps
 pnpm test       # run all BDD suites
 pnpm lint

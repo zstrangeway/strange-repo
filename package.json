@@ -13,7 +13,7 @@
     ]
   },
   "scripts": {
-    "setup": "pnpm install && pnpm -r setup",
+    "bootstrap": "pnpm install && pnpm -r bootstrap",
     "dev": "pnpm -r --parallel dev",
     "build": "pnpm -r build",
     "start": "pnpm -r --parallel start",

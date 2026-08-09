@@ -15,7 +15,7 @@ A pnpm monorepo.
 ## Getting started
 
 ```bash
-pnpm setup   # pnpm install, then uv sync for the Python app
+pnpm bootstrap   # pnpm install, then uv sync for the Python app
 pnpm dev     # example-web on :3000, example-api on :8000
 ```
 
@@ -26,7 +26,7 @@ single app via `pnpm --filter <app> <script>`.
 
 | Command          | What it does                                     |
 | ---------------- | ------------------------------------------------ |
-| `pnpm setup`     | Install dependencies for every app               |
+| `pnpm bootstrap` | Install dependencies for every app               |
 | `pnpm dev`       | Run the apps in watch mode                       |
 | `pnpm build`     | Production build (Next.js build / Python wheel)  |
 | `pnpm start`     | Run the production builds                        |

@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "setup": "echo \"example-web: no extra setup beyond pnpm install\"",
+    "bootstrap": "echo \"example-web: no extra setup beyond pnpm install\"",
     "dev": "next dev --port 3000",
     "build": "next build",
     "start": "next start --port 3000",

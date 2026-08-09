@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "setup": "uv sync",
+    "bootstrap": "uv sync",
     "dev": "uv run uvicorn example_api.main:app --reload --port 8000",
     "build": "uv build",
     "start": "uv run uvicorn example_api.main:app --port 8000",

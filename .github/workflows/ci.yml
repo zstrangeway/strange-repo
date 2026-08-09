@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A newer push to the same branch makes the in-flight run irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  web:
+    name: example-web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # The same script names documented in CLAUDE.md, so CI fails if that
+      # interface drifts.
+      - run: pnpm --filter example-web lint
+      - run: pnpm --filter example-web typecheck
+      - run: pnpm --filter example-web test
+      - run: pnpm --filter example-web build
+
+  api:
+    name: example-api
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: apps/example-api/uv.lock
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter example-api bootstrap
+
+      - run: pnpm --filter example-api lint
+      - run: pnpm --filter example-api typecheck
+      - run: pnpm --filter example-api test
+
+      # Formatting is enforced in CI only; `pnpm format` rewrites in place.
+      - name: Check formatting
+        working-directory: apps/example-api
+        run: uv run ruff format --check .
+
+  images:
+    name: build ${{ matrix.app }} image
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [example-web, example-api]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Build only — publishing to ECR is the deploy workflow's job.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile
+          push: false
+          load: true
+          tags: ${{ matrix.app }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+
+      - name: Smoke test the image
+        run: |
+          docker run -d --name smoke -p 8080:8080 ${{ matrix.app }}:${{ github.sha }}
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/health || true)
+            [ "$code" = "200" ] && break
+            sleep 2
+          done
+          if [ "$code" != "200" ]; then
+            echo "::error::${{ matrix.app }} did not become healthy (last status: $code)"
+            docker logs smoke
+            exit 1
+          fi
+          echo "${{ matrix.app }} healthy"
+          docker rm -f smoke
