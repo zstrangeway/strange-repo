@@ -6,10 +6,14 @@ primary_region = "iad"
 [build]
   dockerfile = "Dockerfile"
 
-[deploy]
-  # Runs once, before the new version takes traffic, so the schema is never
-  # behind the code that expects it.
-  release_command = "alembic upgrade head"
+# No release_command until a database is attached: it would block every deploy
+# on connecting, and there are no migrations to apply yet. Restore it once
+# DATABASE_URL is set, so the schema is never behind the code expecting it:
+#
+#   [deploy]
+#     release_command = "alembic upgrade head"
+#
+# Until then, apply migrations on demand with `task gary-api:migrate`.
 
 [http_service]
   internal_port = 8080

@@ -15,8 +15,10 @@ pnpm exec task gary-api:migrate                       # apply migrations
 pnpm exec task gary-api:revision -- "add widgets"     # generate one
 ```
 
-Deploys run `alembic upgrade head` as Fly's `release_command`, before the new
-version takes traffic.
+No database is attached yet, so `/health` reports `degraded` in production and
+gary-web shows the database as `unavailable`. Deploys do not run migrations —
+see the commented-out `release_command` in `fly.toml`, which should go back
+once `DATABASE_URL` is set.
 
 ## Run
 
