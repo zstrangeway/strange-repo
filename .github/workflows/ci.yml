@@ -149,9 +149,14 @@ jobs:
       # `fly secrets` are runtime and arrive far too late to matter.
       # Absent, the deploy still succeeds without uploading; the Dockerfile
       # prints which of the two happened.
+      # SENTRY_RELEASE has to come from here: only apps/gary-web reaches the
+      # build context, so the builder has no .git to derive a version from and
+      # sentry-cli would file the maps under `undefined`. github.sha is the
+      # same value the running app reports as its release.
       - run: >-
           flyctl deploy --config apps/gary-web/fly.toml --remote-only
           --build-secret sentry_auth_token="$SENTRY_AUTH_TOKEN"
+          --build-arg SENTRY_RELEASE="${{ github.sha }}"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}

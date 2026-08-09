@@ -28,6 +28,15 @@ FROM base AS builder
 
 WORKDIR /repo
 
+# sentry-cli is a Rust binary that verifies TLS against the system trust store.
+# node:22-slim ships without one, and Node carries its own roots, so the app's
+# HTTPS worked while the source map upload died on "unable to get local issuer
+# certificate" — invisible until the plugin was unmuted. Builder stage only:
+# nothing in the running image needs this.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
 COPY --from=deps /repo/ ./
 COPY apps/gary-web apps/gary-web
 
@@ -46,6 +55,14 @@ ARG SENTRY_PROJECT=""
 ENV SENTRY_ORG=$SENTRY_ORG \
     SENTRY_PROJECT=$SENTRY_PROJECT
 
+# The release the maps are filed under. Only apps/gary-web is copied into the
+# build context, so there is no .git here for sentry-cli to read a version
+# from — left alone it uploads against `--release undefined`, which matches
+# none of the events the running app reports. Passed in from CI as the commit
+# SHA so both sides agree. Empty locally, which just skips the release.
+ARG SENTRY_RELEASE=""
+ENV SENTRY_RELEASE=$SENTRY_RELEASE
+
 # Say which of the two happened. A build that quietly produces an image with no
 # browser error reporting looks exactly like one that works.
 RUN if [ -n "$NEXT_PUBLIC_SENTRY_DSN" ]; then \
@@ -60,7 +77,8 @@ RUN if [ -n "$NEXT_PUBLIC_SENTRY_DSN" ]; then \
 # which is what every local build and the CI smoke build do.
 RUN --mount=type=secret,id=sentry_auth_token \
     if [ -s /run/secrets/sentry_auth_token ] && [ -n "$SENTRY_ORG" ] && [ -n "$SENTRY_PROJECT" ]; then \
-      echo "Sentry: uploading source maps to $SENTRY_ORG/$SENTRY_PROJECT"; \
+      echo "Sentry: uploading source maps to $SENTRY_ORG/$SENTRY_PROJECT" \
+           "as release ${SENTRY_RELEASE:-<none — maps will not match events>}"; \
       export SENTRY_AUTH_TOKEN="$(cat /run/secrets/sentry_auth_token)"; \
     else \
       echo "Sentry: NOT uploading source maps — production stack traces will be minified"; \
