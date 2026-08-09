@@ -13,11 +13,13 @@ Preferred stacks: Next.js for web, FastAPI for services.
 
 ## New features
 
-Drive the work with BDD. Write the Cucumber/Gherkin `.feature` specs first and
-review them with me — get agreement on the functionality before writing any
-implementation code.
+Drive the work with BDD, using `behave` as the Gherkin runner. Write the
+`.feature` specs first and review them with me — get agreement on the
+functionality before writing any implementation code.
 
-Ship every new feature at 100% test coverage.
+Ship every new feature at 100% test coverage. A new app is different: a bare
+scaffold has no behavior to cover, so don't wire up the coverage gate until the
+first real feature lands.
 
 ## Dependencies
 
