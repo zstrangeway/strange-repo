@@ -1,0 +1,52 @@
+name: Dependency canary
+
+# Two version constraints in apps/example-web/package.json exist only because
+# typescript-eslint (a dependency of eslint-config-next) does not yet support
+# TypeScript >= 7 or ESLint >= 10:
+#   https://github.com/typescript-eslint/typescript-eslint/issues/10940
+#
+# A constraint nobody rechecks is how a project drifts stale. This job tries the
+# newest versions every week and fails loudly once they work, so the constraints
+# get removed when upstream catches up rather than outliving their reason.
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+
+jobs:
+  eslint-typescript:
+    name: can the eslint/typescript constraints be dropped?
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Try newest eslint and typescript
+        id: attempt
+        continue-on-error: true
+        working-directory: apps/example-web
+        run: |
+          pnpm add -D eslint@latest typescript@latest
+          echo "--- versions under test ---"
+          pnpm why eslint typescript --depth 0 || true
+          pnpm lint
+          pnpm typecheck
+
+      - name: Report
+        run: |
+          if [ "${{ steps.attempt.outcome }}" = "success" ]; then
+            echo "::error title=Version constraints are obsolete::eslint@latest and \
+          typescript@latest now pass lint and typecheck. Remove the typescript and \
+          eslint constraints from apps/example-web/package.json and the matching \
+          ignores from .github/dependabot.yml."
+            exit 1
+          fi
+          echo "Still blocked upstream — the constraints remain justified."
+          echo "Tracking: https://github.com/typescript-eslint/typescript-eslint/issues/10940"
