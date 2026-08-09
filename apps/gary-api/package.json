@@ -1,0 +1,12 @@
+{
+  "name": "gary-api",
+  "private": true,
+  "devDependencies": {
+    "@go-task/cli": "^3.52.0"
+  },
+  "scripts": {
+    "dev": "task dev",
+    "serve": "task serve",
+    "test": "task test"
+  }
+}
