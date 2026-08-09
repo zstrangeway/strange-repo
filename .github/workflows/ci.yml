@@ -1,9 +1,9 @@
 name: CI
 
+# Every branch, so work is checked before it reaches a pull request. Check runs
+# attach to the commit, so they still surface on the PR without a second run.
 on:
-  pull_request:
   push:
-    branches: [main]
 
 # A newer push to a PR branch makes the in-flight run irrelevant, but a run on
 # main may be mid-deploy — cancelling that would leave a half-rolled release.
