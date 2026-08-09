@@ -15,9 +15,10 @@ Use pnpm, never npm — for installs, scripts, and scaffolding alike.
 
 ## New features
 
-Drive the work with BDD, using `behave` as the Gherkin runner. Write the
-`.feature` specs first and review them with me — get agreement on the
-functionality before writing any implementation code.
+Drive the work with BDD. Write the `.feature` specs first and review them with
+me — get agreement on the functionality before writing any implementation code.
+The runner follows the language: `behave` for Python, `@cucumber/cucumber`
+driving a real browser through Playwright for web apps.
 
 Ship every new feature at 100% test coverage. A new app is different: a bare
 scaffold has no behavior to cover, so don't wire up the coverage gate until the

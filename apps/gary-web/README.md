@@ -1,36 +1,39 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# gary-web
 
-## Getting Started
+A Next.js companion to gary-api. The home page server-renders gary-api's
+`/health` response on each request, and shows `unavailable` when the API cannot
+be reached.
 
-First, run the development server:
+## Run
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```sh
+pnpm install     # once, from the repo root
+pnpm dev         # development
+pnpm build       # production build
+pnpm serve       # production server
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Set `GARY_API_URL` to point at gary-api. It defaults to `http://127.0.0.1:8000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Test
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Behavior is specified in Gherkin and run with cucumber-js against a real
+Chromium via Playwright. The suite starts its own Next server and a stub
+gary-api, so nothing needs to be running first.
 
-## Learn More
+```sh
+pnpm test
+```
 
-To learn more about Next.js, take a look at the following resources:
+The specs need a Playwright browser. Either install one:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```sh
+pnpm exec playwright install chromium
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+or, on a machine that already has a Chromium that Playwright did not install,
+point at it directly:
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```sh
+PLAYWRIGHT_CHROMIUM_EXECUTABLE=/path/to/chromium pnpm test
+```

@@ -1,0 +1,27 @@
+version: '3'
+
+tasks:
+  dev:
+    desc: Run the development server
+    cmds:
+      - pnpm exec next dev
+
+  build:
+    desc: Build for production
+    cmds:
+      - pnpm exec next build
+
+  serve:
+    desc: Run the production server
+    cmds:
+      - pnpm exec next start
+
+  lint:
+    desc: Lint the app
+    cmds:
+      - pnpm exec eslint
+
+  test:
+    desc: Run the Gherkin specs against a real browser
+    cmds:
+      - pnpm exec cucumber-js

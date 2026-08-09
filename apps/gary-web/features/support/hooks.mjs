@@ -1,0 +1,73 @@
+import { spawn } from "node:child_process";
+
+import {
+  AfterAll,
+  BeforeAll,
+  Before,
+  After,
+  setDefaultTimeout,
+} from "@cucumber/cucumber";
+import { chromium } from "playwright";
+
+import * as apiStub from "./api-stub.mjs";
+
+setDefaultTimeout(120_000);
+
+const WEB_PORT = 3999;
+
+export const world = {
+  baseUrl: `http://127.0.0.1:${WEB_PORT}`,
+  browser: null,
+  page: null,
+};
+
+let webServer = null;
+
+async function waitForServer(url, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    try {
+      await fetch(url);
+      return;
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
+
+  throw new Error(`${url} did not come up within ${timeoutMs}ms`);
+}
+
+BeforeAll(async function () {
+  await apiStub.start();
+
+  webServer = spawn(
+    "node_modules/.bin/next",
+    ["dev", "--port", String(WEB_PORT)],
+    {
+      env: { ...process.env, GARY_API_URL: apiStub.BASE_URL },
+      stdio: "ignore",
+    },
+  );
+
+  await waitForServer(world.baseUrl, 90_000);
+
+  world.browser = await chromium.launch({
+    executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined,
+  });
+});
+
+Before(async function () {
+  world.page = await world.browser.newPage();
+});
+
+After(async function () {
+  await world.page?.close();
+  world.page = null;
+});
+
+AfterAll(async function () {
+  await world.browser?.close();
+  webServer?.kill();
+  await apiStub.stop();
+});
