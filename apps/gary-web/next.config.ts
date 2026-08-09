@@ -23,6 +23,11 @@ export default withSentryConfig(nextConfig, {
   // ad blocker cannot quietly drop them.
   tunnelRoute: "/monitoring",
 
-  // Quiet locally, verbose in CI, where the output is the only record.
-  silent: !process.env.CI,
+  // Never silent. This was `!process.env.CI`, which was wrong in the one place
+  // it mattered: `flyctl deploy --remote-only` builds on Fly's builder, not on
+  // the GitHub runner, so CI is unset there and the plugin went quiet during
+  // the only build that actually uploads. The first real deploy printed the
+  // Dockerfile's "uploading source maps" line and then nothing at all, which
+  // is indistinguishable from an upload that silently failed.
+  silent: false,
 });
