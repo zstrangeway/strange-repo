@@ -13,7 +13,10 @@ async function getApiStatus(): Promise<string> {
 
     const body = await response.json();
     return typeof body?.status === "string" ? body.status : UNAVAILABLE;
-  } catch {
+  } catch (error) {
+    // The page degrades to "unavailable" either way, but without this the
+    // reason never surfaces anywhere.
+    console.error(`gary-api unreachable at ${baseUrl}:`, error);
     return UNAVAILABLE;
   }
 }
