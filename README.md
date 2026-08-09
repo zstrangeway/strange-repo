@@ -77,21 +77,27 @@ Every deploy is followed by [`scripts/smoke.sh`](scripts/smoke.sh), which checks
 
 ### One-time setup
 
+Only a Fly account and a token are needed — CI creates the apps on first deploy.
+
 ```bash
-brew install flyctl && fly auth login
-
-# App names are globally unique across Fly — change the zs- prefix in the
-# four fly.toml files if these are taken.
-fly apps create zs-example-web
-fly apps create zs-example-web-staging
-fly apps create zs-example-api
-fly apps create zs-example-api-staging
-
-fly tokens create deploy       # add the result as the FLY_API_TOKEN repo secret
+brew install flyctl && fly auth signup   # or: fly auth login
+fly tokens create deploy                 # add as the FLY_API_TOKEN repo secret
 ```
 
 Then create a `production` GitHub Environment with a required reviewer — that
 setting, not anything in the workflow file, is what gates production.
+
+App names are globally unique across Fly. If `zs-example-web` and friends are
+taken, change the `app` key in the four `fly.toml` files and the app lists in
+the workflow's "Ensure Fly apps exist" steps. If your Fly org isn't the default
+`personal`, set a `FLY_ORG` repository variable.
+
+### Deploying a branch to staging
+
+Staging does not require merging to `main`. Run the CI workflow manually
+(Actions → CI → Run workflow) against any branch with **Deploy this branch to
+staging** checked, and it deploys once the tests and image builds pass.
+Production only ever ships from `main`.
 
 ### Deploying by hand
 

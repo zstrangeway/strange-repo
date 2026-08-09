@@ -4,6 +4,13 @@ name: CI
 # attach to the commit, so they still surface on the PR without a second run.
 on:
   push:
+  # Lets a staging deploy be triggered from any branch, without merging first.
+  workflow_dispatch:
+    inputs:
+      deploy_staging:
+        description: Deploy this branch to staging once checks pass
+        type: boolean
+        default: true
 
 # A newer push to a PR branch makes the in-flight run irrelevant, but a run on
 # main may be mid-deploy — cancelling that would leave a half-rolled release.
@@ -110,16 +117,32 @@ jobs:
     name: deploy staging
     # Nothing ships until both suites and both images are green.
     needs: [web, api, images]
-    if: github.ref == 'refs/heads/main'
+    if: >-
+      github.ref == 'refs/heads/main' ||
+      (github.event_name == 'workflow_dispatch' && inputs.deploy_staging)
     runs-on: ubuntu-latest
     environment:
       name: staging
       url: https://zs-example-web-staging.fly.dev
     env:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      FLY_ORG: ${{ vars.FLY_ORG || 'personal' }}
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      # Idempotent, so the only manual setup is a Fly account and a token —
+      # the apps themselves get created on first deploy.
+      - name: Ensure Fly apps exist
+        run: |
+          for app in zs-example-api-staging zs-example-web-staging; do
+            if flyctl status --app "$app" >/dev/null 2>&1; then
+              echo "$app already exists"
+            else
+              echo "creating $app"
+              flyctl apps create "$app" --org "$FLY_ORG"
+            fi
+          done
 
       # Deployed from the repo root: the Dockerfiles need pnpm-lock.yaml and
       # pnpm-workspace.yaml, so the build context cannot be the app directory.
@@ -147,6 +170,7 @@ jobs:
   deploy-production:
     name: deploy production
     needs: [deploy-staging]
+    # Production only ever ships from main — never from a manual branch run.
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     # Approval gate lives on this GitHub Environment, not in this file.
@@ -155,9 +179,21 @@ jobs:
       url: https://zs-example-web.fly.dev
     env:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      FLY_ORG: ${{ vars.FLY_ORG || 'personal' }}
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Ensure Fly apps exist
+        run: |
+          for app in zs-example-api zs-example-web; do
+            if flyctl status --app "$app" >/dev/null 2>&1; then
+              echo "$app already exists"
+            else
+              echo "creating $app"
+              flyctl apps create "$app" --org "$FLY_ORG"
+            fi
+          done
 
       - name: Deploy example-api
         run: |
