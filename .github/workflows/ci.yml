@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Never cancel a deploy that is already in flight.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test-api:
+    name: gary-api specs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter gary-api test
+
+  test-web:
+    name: gary-web specs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter gary-web exec playwright install --with-deps chromium
+      - run: pnpm --filter gary-web test
+
+  images:
+    name: Build images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build gary-api image
+        run: docker build -f apps/gary-api/Dockerfile -t gary-api:ci apps/gary-api
+      - name: Build gary-web image
+        run: docker build -f apps/gary-web/Dockerfile -t gary-web:ci .
+
+  deploy-api:
+    name: Deploy gary-api
+    needs: [test-api, test-web, images]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl deploy apps/gary-api --config apps/gary-api/fly.toml --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+  deploy-web:
+    name: Deploy gary-web
+    # Sequential: gary-web reads gary-api at request time, so the API should be
+    # on the new revision first.
+    needs: [deploy-api]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl deploy . --config apps/gary-web/fly.toml --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

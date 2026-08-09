@@ -1,0 +1,22 @@
+# Fly app names are globally unique. If `gary-web` is taken, rename it here.
+app = "gary-web"
+primary_region = "iad"
+
+[build]
+  dockerfile = "apps/gary-web/Dockerfile"
+
+[env]
+  # Private Fly networking: never leaves the org, so gary-api needs no public
+  # traffic. Must match the app name in apps/gary-api/fly.toml.
+  GARY_API_URL = "http://gary-api.internal:8080"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

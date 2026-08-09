@@ -1,0 +1,27 @@
+# Fly app names are globally unique. If `gary-api` is taken, rename it here and
+# update GARY_API_URL in apps/gary-web/fly.toml to match.
+app = "gary-api"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  # gary-web reaches this app over .internal, which does not wake a stopped
+  # machine. Keep one running so the health display does not go dark.
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    path = "/health"
+    timeout = "5s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
