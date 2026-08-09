@@ -6,14 +6,11 @@ primary_region = "iad"
 [build]
   dockerfile = "Dockerfile"
 
-# No release_command until a database is attached: it would block every deploy
-# on connecting, and there are no migrations to apply yet. Restore it once
-# DATABASE_URL is set, so the schema is never behind the code expecting it:
-#
-#   [deploy]
-#     release_command = "alembic upgrade head"
-#
-# Until then, apply migrations on demand with `task gary-api:migrate`.
+[deploy]
+  # Runs once, before the new version takes traffic, so the schema is never
+  # behind the code that expects it. This gates deploys on reaching the
+  # database — which is intended, but means an unset DATABASE_URL blocks them.
+  release_command = "alembic upgrade head"
 
 [http_service]
   internal_port = 8080

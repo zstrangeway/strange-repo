@@ -50,19 +50,18 @@ repo root with `--config apps/gary-web/fly.toml` and `dockerfile = "Dockerfile"`
 `pnpm-lock.yaml`, `pnpm-workspace.yaml`, and the root `package.json` in the
 context for the workspace to resolve.
 
-gary-api needs a Postgres, and does not have one yet — it reports `degraded`
-until it does. Whatever you use, set `DATABASE_URL` on the app and restore the
-`release_command` in `apps/gary-api/fly.toml`:
+gary-api needs a Postgres. It runs on Fly Managed Postgres:
 
 ```sh
-flyctl secrets set DATABASE_URL="postgresql://..." -a <gary-api-app-name>
+flyctl mpg create
+flyctl mpg attach <cluster-id> -a <gary-api-app-name>
 ```
 
-Fly Managed Postgres is the tightest integration (`flyctl mpg create`, then
-`flyctl mpg attach`), but check its pricing first — it is an order of magnitude
-more than the apps themselves. A hosted free tier or a self-run Postgres app
-costs far less; any Postgres works, since the connection string is the only
-coupling.
+`attach` sets `DATABASE_URL` as a secret, which is the only coupling — any
+Postgres works, and `database_url()` normalises whatever connection string a
+provider hands out. Worth knowing that Fly Managed Postgres costs an order of
+magnitude more than the two apps combined, so a hosted free tier or a self-run
+Postgres app is a cheap swap if that ever matters.
 
 Then add a deploy token to the repository as the `FLY_API_TOKEN` secret:
 
