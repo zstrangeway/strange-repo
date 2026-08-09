@@ -26,6 +26,13 @@ class IsLocalTests(unittest.TestCase):
             seed.is_local("postgresql+asyncpg://u:p@gary-db.flympg.net:5432/gary")
         )
 
+    def test_rejects_a_host_that_merely_starts_with_localhost(self):
+        # A substring check would have called this local and seeded it.
+        self.assertFalse(seed.is_local("postgresql://u@localhost.example.com/db"))
+
+    def test_rejects_a_url_it_cannot_parse(self):
+        self.assertFalse(seed.is_local("postgresql://u@[::1x/db"))
+
 
 class SeedTests(unittest.TestCase):
     """Against the real database, because the whole job is what it wrote."""

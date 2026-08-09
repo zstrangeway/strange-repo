@@ -22,6 +22,7 @@ export const world = {
   baseUrl: `http://localhost:${WEB_PORT}`,
   browser: null,
   page: null,
+  resetToken: null,
 };
 
 let webServer = null;
@@ -61,6 +62,11 @@ BeforeAll(async function () {
 });
 
 Before(async function () {
+  // The stub holds accounts in memory, so it has to be emptied between
+  // scenarios or one scenario's user signs the next one in.
+  await apiStub.start();
+  apiStub.reset();
+  world.resetToken = null;
   world.page = await world.browser.newPage();
 });
 

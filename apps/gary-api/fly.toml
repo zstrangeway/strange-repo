@@ -6,6 +6,11 @@ primary_region = "iad"
 [build]
   dockerfile = "Dockerfile"
 
+[env]
+  # Where password reset links point. Must be gary-web's public URL: this one
+  # goes in an email and is opened by a person, not by a server.
+  WEB_BASE_URL = "https://gary-web.fly.dev"
+
 [deploy]
   # Runs once, before the new version takes traffic, so the schema is never
   # behind the code that expects it. This gates deploys on reaching the

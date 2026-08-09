@@ -1,8 +1,17 @@
 # gary-api
 
-A FastAPI service backed by Postgres. `GET /health` reports its own state and
-the database's, always at 200 — the app answering is the signal that it is up,
-and the body carries what it depends on.
+A FastAPI service backed by Postgres. It owns accounts, sessions and password
+reset; gary-web calls it from its own server and never from a browser.
+
+Passwords are argon2id. Session and reset tokens are random and stored only as
+SHA-256 digests, so a copy of the database is not enough to impersonate anyone.
+Sign-in answers identically for a wrong password and an unknown address, and
+password reset answers identically whether or not the address is known —
+either difference would turn the endpoint into a way to ask who has an account.
+
+`GET /health` reports its own state and the database's, always at 200 — the app
+answering is the signal that it is up, and the body carries what it depends on.
+It exists for Fly's health check, which is what `fly.toml` calls.
 
 ## Database
 
@@ -57,8 +66,13 @@ The default sender needs no DNS but **only delivers to the address that owns the
 Resend account**. Set `MAIL_FROM` to an address on a verified domain before
 anyone else signs up.
 
-Locally, copy `.env.example` to `.env`; it is gitignored and loaded by the
-Taskfile. In production these are Fly secrets:
+Locally, set them in the environment for the command that needs them —
+`RESEND_API_KEY=re_… pnpm dev`. There is deliberately no `.env` loading: go-task
+refuses `dotenv` in an included Taskfile, so it would work when run from the
+repo root and silently not when run per app, which is worse than not having it.
+
+In production these are Fly **secrets**, not `[env]` in `fly.toml` — that file
+is committed:
 
 ```sh
 flyctl secrets set RESEND_API_KEY=re_xxxxxxxx -a gary-api

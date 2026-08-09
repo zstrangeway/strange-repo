@@ -8,10 +8,12 @@ primary_region = "iad"
   dockerfile = "Dockerfile"
 
 [env]
-  # The browser fetches this directly, so it must be gary-api's public URL —
-  # not a Fly-private address, which a browser cannot route to. fly-proxy
-  # starts a stopped machine on a public request, so gary-api still scales to
-  # zero. Must match the app name in apps/gary-api/fly.toml.
+  # Read on gary-web's server now, never in the browser, so a Fly-private
+  # address would work here where it could not before. Left public because
+  # this app's history with Flycast is not encouraging and the public URL is
+  # known to work; http://gary-api.flycast is the change to try if you want
+  # gary-api off the internet. Must match the app name in
+  # apps/gary-api/fly.toml either way.
   GARY_API_URL = "https://gary-api.fly.dev"
 
 [http_service]

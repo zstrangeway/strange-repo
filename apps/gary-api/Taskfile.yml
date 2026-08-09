@@ -1,11 +1,5 @@
 version: '3'
 
-# Local secrets, so a key never has to live in a shell profile. Optional and
-# gitignored; in production Fly injects the same names as real secrets. The
-# app logs which mail provider it resolved at startup, so a .env that was not
-# picked up is visible rather than silent.
-dotenv: ['.env']
-
 tasks:
   dev:
     desc: Run the development server with reload

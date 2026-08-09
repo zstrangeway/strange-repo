@@ -255,3 +255,15 @@ def step_mail_has_link(context):
 @then("no email should be sent")
 def step_no_mail(context):
     assert not context.mail.sent, f"sent {len(context.mail.sent)} email(s)"
+
+
+@when("I check the emailed token")
+def step_check_token(context):
+    context.response = context.client.get(
+        f"/auth/password-reset/{context.reset_token}"
+    )
+
+
+@when("I check a token that was never issued")
+def step_check_bogus_token(context):
+    context.response = context.client.get("/auth/password-reset/never-issued")

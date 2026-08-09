@@ -11,6 +11,7 @@ back how I like it" is not a thing to run against production by accident.
 
 import asyncio
 import sys
+from urllib.parse import urlsplit
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
@@ -27,11 +28,18 @@ ACCOUNTS = [
     ("grace@example.com", "Grace Hopper"),
 ]
 
-LOCAL_HOSTS = ("127.0.0.1", "localhost", "@db", "postgres:5432")
+LOCAL_HOSTS = frozenset({"127.0.0.1", "::1", "localhost", "db", "postgres"})
 
 
 def is_local(url: str) -> bool:
-    return any(host in url for host in LOCAL_HOSTS)
+    # The host is compared whole, not searched for: a substring test would
+    # read localhost.someone-elses-domain.com as local and seed it.
+    try:
+        host = urlsplit(url).hostname
+    except ValueError:
+        return False
+
+    return host in LOCAL_HOSTS
 
 
 async def seed() -> list[str]:

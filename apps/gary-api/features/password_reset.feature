@@ -25,6 +25,29 @@ Feature: Password reset
     Then the response status should be 202
     And no email should be sent
 
+  # gary-web checks the link when the page opens, so that a dead link is not
+  # discovered only after typing a new password.
+  Scenario: Checking a link before offering the form
+    Given "ada@example.com" has asked for a reset link
+    When I check the emailed token
+    Then the response status should be 204
+
+  Scenario: Checking a link that has already been used
+    Given "ada@example.com" has asked for a reset link
+    And the emailed token has already been used to set the password "an even better password"
+    When I check the emailed token
+    Then the response status should be 400
+
+  Scenario: Checking a link that has expired
+    Given "ada@example.com" has asked for a reset link
+    And the emailed token expired an hour ago
+    When I check the emailed token
+    Then the response status should be 400
+
+  Scenario: Checking a link that was never issued
+    When I check a token that was never issued
+    Then the response status should be 400
+
   Scenario: Setting a new password with the link
     Given "ada@example.com" has asked for a reset link
     When I POST "/auth/password-reset/confirm" with the emailed token and:

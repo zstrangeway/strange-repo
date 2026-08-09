@@ -4,8 +4,8 @@ A pnpm + uv monorepo.
 
 | App | Stack | What it is |
 | --- | --- | --- |
-| [`apps/gary-api`](apps/gary-api) | FastAPI + Postgres | Serves `GET /health` |
-| [`apps/gary-web`](apps/gary-web) | Next.js | Displays gary-api's health |
+| [`apps/gary-api`](apps/gary-api) | FastAPI + Postgres | Accounts, sessions and password reset |
+| [`apps/gary-web`](apps/gary-web) | Next.js | Signs you in and welcomes you home |
 
 ## Working on it
 
@@ -71,15 +71,27 @@ flyctl tokens create deploy --name github-actions
 
 ### How the two apps find each other
 
-The browser fetches gary-api's `/health` directly, so `GARY_API_URL` is
-gary-api's **public** URL. A browser cannot route to a Fly-private address, so
-neither `.internal` nor Flycast works here. fly-proxy starts a stopped machine
-on a public request, so gary-api still scales to zero, and gary-api allows any
-origin on `/health` because the request is cross-origin.
+Nothing in the browser talks to gary-api. gary-web calls it from its own
+server, and the browser only ever talks to gary-web.
 
-The URL is read per request on the server and passed to the browser component
-as a prop, rather than being a `NEXT_PUBLIC_` variable — those are inlined at
-build time, which would bake the value into the image.
+That is not a preference, it is what makes sessions work. gary-web and gary-api
+are different sites, so a cookie set by gary-api would be third-party to
+gary-web — blocked outright by Safari and Firefox, partitioned by Chrome. A
+shared parent domain does not rescue it either, because `fly.dev` is on the
+public suffix list. So gary-web owns the session cookie on its own origin and
+holds the gary-api token inside it.
 
-When gary-api is unreachable, gary-web renders `unavailable` rather than
-failing, so a gary-api outage degrades the page instead of breaking it.
+Two things follow. gary-api needs no CORS, because there is no cross-origin
+browser request left to allow. And `GARY_API_URL` could now be a Fly-private
+address, since only a server resolves it — it is left public because this repo
+has been round the houses with Flycast already.
+
+**These calls do not appear in browser devtools.** You will see gary-web's own
+request and nothing else; the gary-api call is in the gary-web server log.
+Worth knowing before spending an hour in the network tab.
+
+`GARY_API_URL` is read per request rather than being a `NEXT_PUBLIC_` variable
+— those are inlined at build time, which would bake the value into the image.
+
+gary-api emails password reset links, so it needs `WEB_BASE_URL` pointing at
+gary-web. That one is opened by a person, so it must be the public URL.

@@ -272,18 +272,36 @@ async def request_password_reset(request: ResetRequest, database: Db) -> None:
     )
 
 
-@router.post("/password-reset/confirm", status_code=status.HTTP_204_NO_CONTENT)
-async def confirm_password_reset(request: ResetConfirmRequest, database: Db) -> None:
+# One message for never-issued, already-used and expired: which of the three
+# it was is not the holder's business.
+DEAD_LINK = "That reset link has expired or has already been used"
+
+
+async def _usable_reset(database: AsyncSession, token: str) -> PasswordResetToken:
     reset = await database.scalar(
         select(PasswordResetToken).where(
-            PasswordResetToken.token_hash == token_digest(request.token)
+            PasswordResetToken.token_hash == token_digest(token)
         )
     )
-    # One message for never-issued, already-used and expired: which of the
-    # three it was is not the sender's business.
-    expired = "That reset link has expired or has already been used"
     if reset is None or reset.used_at is not None or reset.expires_at <= _now():
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, expired)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, DEAD_LINK)
+
+    return reset
+
+
+@router.get("/password-reset/{token}", status_code=status.HTTP_204_NO_CONTENT)
+async def check_password_reset(token: str, database: Db) -> None:
+    """Whether a link is still good, so gary-web can say so on open.
+
+    Read-only and deliberately does not consume the token: opening the page
+    must not be what burns the one use.
+    """
+    await _usable_reset(database, token)
+
+
+@router.post("/password-reset/confirm", status_code=status.HTTP_204_NO_CONTENT)
+async def confirm_password_reset(request: ResetConfirmRequest, database: Db) -> None:
+    reset = await _usable_reset(database, request.token)
 
     user = await database.get(User, reset.user_id)
     user.password_hash = hash_password(request.new_password)
