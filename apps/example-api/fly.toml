@@ -1,0 +1,29 @@
+# example-api — production
+#
+# Deployed from the repo root so the build context is the whole workspace:
+#   flyctl deploy . --config apps/example-api/fly.toml --dockerfile apps/example-api/Dockerfile
+# CI does this on merge to main; see .github/workflows/ci.yml.
+
+app = "zs-example-api"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_start_machines = true
+  auto_stop_machines = "stop"
+  # Production keeps one machine warm so requests never pay a cold start.
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    path = "/health"
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

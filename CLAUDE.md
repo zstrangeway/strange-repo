@@ -27,6 +27,9 @@ pnpm --filter example-api test
 
 Prefer these over calling `next`, `uv`, `pytest`, or `cucumber-js` directly.
 
+Do not add a script named `setup` or `deploy` — both are pnpm builtins and would
+shadow the script silently.
+
 ## Testing: TDD with Cucumber/Gherkin
 
 **Write the `.feature` file first.** Every change starts with a failing scenario, then the
@@ -40,3 +43,13 @@ Scenarios describe behavior in the language of the domain, not the implementatio
 - `example-api` — `pytest-bdd`. Features in `tests/features/`, steps in `tests/step_defs/`.
 
 Both apps' greeting feature is the working reference for the pattern.
+
+## Deployment
+
+Both apps ship to Fly.io as containers. **Deploys happen in CI, never from a
+laptop** — merge to `main` for staging, approve the `production` GitHub
+Environment for production. See the Deployment section of [README.md](README.md).
+
+Anything that must run before an app serves traffic belongs in its `Dockerfile`;
+anything environment-specific belongs in `fly.toml` / `fly.staging.toml` or in
+`fly secrets`, never committed.
