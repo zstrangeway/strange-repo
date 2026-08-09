@@ -100,7 +100,9 @@ describe("values JSON cannot hold", () => {
 
   it("renders a bigint, a function and a symbol rather than dropping the line", () => {
     write("info", "api", "odd", {
-      big: 10n,
+      // BigInt(10), not 10n: the literal needs an ES2020 target and this
+      // project compiles to ES2017, so the literal fails `next build`.
+      big: BigInt(10),
       work: function named() {},
       tag: Symbol("marker"),
     });

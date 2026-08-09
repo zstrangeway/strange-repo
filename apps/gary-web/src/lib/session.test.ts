@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// Type-only, so it is erased before vi.mock("./api") hoists and cannot
+// resurrect the real module this file exists to replace.
+import type { SignedIn } from "./api";
+
 const store = {
   get: vi.fn(),
   set: vi.fn(),
@@ -24,10 +28,11 @@ beforeEach(() => {
 });
 
 describe("startSession", () => {
-  const signedIn = {
+  const signedIn: SignedIn = {
     id: "1",
     email: "ada@example.com",
     display_name: "Ada",
+    email_verified: false,
     token: "a-token",
     expires_at: "2030-01-01T00:00:00Z",
   };
