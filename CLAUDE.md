@@ -18,3 +18,9 @@ review them with me — get agreement on the functionality before writing any
 implementation code.
 
 Ship every new feature at 100% test coverage.
+
+## Dependencies
+
+Check what the project already pulls in before reaching for something new — an
+existing dependency usually covers it. If nothing does, bring me the options and
+discuss before adding anything.
