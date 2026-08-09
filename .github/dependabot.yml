@@ -11,6 +11,15 @@ updates:
       - /apps/example-web
     schedule:
       interval: weekly
+    ignore:
+      # eslint-config-next pulls in typescript-eslint 8, which refuses to run
+      # against the TS 7 (Go) compiler and crashes on ESLint 10's scope
+      # manager. Both bumps have already been opened and failed CI. Drop these
+      # ignores once typescript-eslint supports TS >= 7 and ESLint 10.
+      - dependency-name: typescript
+        versions: [">=7"]
+      - dependency-name: eslint
+        versions: [">=10"]
 
   - package-ecosystem: uv
     directory: /apps/example-api
