@@ -1,4 +1,5 @@
 import asyncio
+import io
 import json
 import os
 import threading
@@ -9,7 +10,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 from starlette.testclient import TestClient
 
-from gary_api import db, mail
+from gary_api import db, logs, mail
 from gary_api.app import app
 from gary_api.db import database_url
 from gary_api.models import Base
@@ -110,6 +111,9 @@ def before_scenario(context, scenario):
 
     context.mail.sent.clear()
     context.mail.refusing = False
+    # Restored per scenario, not just once: one spec swaps in the console
+    # provider, and the next one along would otherwise inherit it.
+    os.environ["MAIL_PROVIDER"] = "resend"
     mail.mailer.cache_clear()
 
     async def empty(engine):
@@ -119,6 +123,14 @@ def before_scenario(context, scenario):
             await connection.execute(text("TRUNCATE users CASCADE"))
 
     _run(empty)
+
+    # The real configuration, pointed at a buffer instead of stdout. Reading
+    # what the shipped formatter produced is the whole point — a spec that
+    # asserted against a formatter built here would agree with itself.
+    os.environ.pop("LOG_LEVEL", None)
+    os.environ.pop("LOG_FORMAT", None)
+    context.log = io.StringIO()
+    logs.configure(stream=context.log)
 
     context.client = TestClient(app)
     context.response = None

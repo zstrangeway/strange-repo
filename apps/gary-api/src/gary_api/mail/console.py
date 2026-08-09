@@ -1,8 +1,7 @@
-import logging
-
+from gary_api import logs
 from gary_api.mail.base import Message
 
-logger = logging.getLogger(__name__)
+logger = logs.get_logger(__name__)
 
 
 class ConsoleMailer:
@@ -12,15 +11,18 @@ class ConsoleMailer:
     machine and every spec run. It logs the body in full and on purpose: a
     password reset link nobody can read is the same as no reset at all, and
     the alternative is a seam that silently swallows mail.
+
+    The body is a field rather than part of the message, so the end-to-end
+    suite can pull the reset link out of one JSON object instead of parsing
+    several lines of prose. Set LOG_FORMAT=text to read it by eye.
     """
 
     name = "console"
 
     async def send(self, message: Message) -> None:
         logger.info(
-            "mail: no provider configured, logging instead of sending.\n"
-            "  to: %s\n  subject: %s\n%s",
-            message.to,
-            message.subject,
-            message.text,
+            "mail.logged",
+            to=message.to,
+            subject=message.subject,
+            body=message.text,
         )

@@ -1,4 +1,3 @@
-import logging
 import os
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -9,7 +8,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from gary_api import db, mail
+from gary_api import db, logs, mail
 from gary_api.models import (
     EmailVerificationToken,
     PasswordResetToken,
@@ -33,7 +32,7 @@ VERIFICATION_LIFETIME = timedelta(hours=24)
 # telling them apart turns sign-in into a way to ask who has an account.
 INVALID_CREDENTIALS = "Invalid email or password"
 
-logger = logging.getLogger(__name__)
+logger = logs.get_logger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -285,7 +284,7 @@ async def request_password_reset(request: ResetRequest, database: Db) -> None:
     try:
         await _send_reset_link(user, token)
     except mail.MailError:
-        logger.exception("mail: could not send a reset link to %s", user.email)
+        logger.exception("mail.failed", kind="password_reset", to=user.email)
 
 
 async def _send_reset_link(user: User, token: str) -> None:
@@ -369,7 +368,7 @@ async def _notify(user: User, subject: str, body: str) -> None:
     try:
         await mail.send(mail.Message(to=user.email, subject=subject, text=body))
     except mail.MailError:
-        logger.exception("mail: could not send %r to %s", subject, user.email)
+        logger.exception("mail.failed", kind="notification", subject=subject, to=user.email)
 
 
 async def _issue_verification(database: AsyncSession, user: User) -> None:
@@ -411,7 +410,7 @@ async def _issue_verification(database: AsyncSession, user: User) -> None:
             )
         )
     except mail.MailError:
-        logger.exception("mail: could not send a verification link to %s", user.email)
+        logger.exception("mail.failed", kind="email_verification", to=user.email)
 
 
 @router.post("/verify-email", status_code=status.HTTP_204_NO_CONTENT)

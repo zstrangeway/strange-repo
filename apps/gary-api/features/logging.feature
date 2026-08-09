@@ -51,10 +51,12 @@ Feature: Structured logs
     When something logs "chatty" at info
     Then nothing should have been logged for "chatty"
 
+  # uvicorn keeps handlers of its own and does not propagate, so its access
+  # log is the one most likely to still be plain text next to everything else.
   Scenario: Records from libraries are formatted the same way
-    When a library logger named "sqlalchemy.engine" logs "SELECT 1"
-    Then the line for "SELECT 1" should be a single JSON object
-    And the line for "SELECT 1" should have "logger" set to "sqlalchemy.engine"
+    When a library logger named "uvicorn.access" logs "GET /health 200"
+    Then the line for "GET /health 200" should be a single JSON object
+    And the line for "GET /health 200" should have "logger" set to "uvicorn.access"
 
   Scenario: A request is given an id, and told what it was
     When I GET "/health"
@@ -64,7 +66,7 @@ Feature: Structured logs
   # So a caller that already has a trace can hand it in and see it again on
   # both sides, rather than the two logs each inventing their own id.
   Scenario: An inbound request id is kept, not replaced
-    When I GET "/health" with "x-request-id" set to "abc-123"
+    When I GET "/health" carrying the request id abc-123
     Then the response should carry an "x-request-id" header set to "abc-123"
     And every line logged while handling that request should have "request_id" set to "abc-123"
 
@@ -88,7 +90,8 @@ Feature: Structured logs
   # The end-to-end suite reads the reset link out of this app's own output.
   # JSON escaping the body must not put the link out of its reach.
   Scenario: The reset link the console mailer logs survives being JSON
-    Given a user exists with email "ada@example.com" and password "a long enough password"
+    Given mail is going to the console
+    And a user exists with email "ada@example.com" and password "a long enough password"
     When I POST "/auth/password-reset" with:
       """
       {"email": "ada@example.com"}

@@ -9,11 +9,11 @@ config change, or at most a new module and one line in ``PROVIDERS``.
     RESEND_API_KEY required by the resend provider, and implies it
 """
 
-import logging
 import os
 from collections.abc import Callable
 from functools import cache
 
+from gary_api import logs
 from gary_api.mail.base import MailError, Mailer, Message
 from gary_api.mail.console import ConsoleMailer
 from gary_api.mail.resend import API_URL as RESEND_API_URL
@@ -29,7 +29,7 @@ __all__ = [
     "sender",
 ]
 
-logger = logging.getLogger(__name__)
+logger = logs.get_logger(__name__)
 
 # Resend's shared test sender. It needs no DNS, but it only delivers to the
 # address that owns the Resend account — good enough to watch a reset link
@@ -105,10 +105,10 @@ def report_configuration() -> None:
     try:
         provider = mailer()
     except MailError as error:
-        logger.error("mail: nothing will send. %s", error)
+        logger.error("mail.misconfigured", reason=str(error))
         return
 
-    logger.info("mail: sending through %s as %s", provider.name, sender())
+    logger.info("mail.configured", provider=provider.name, sender=sender())
 
 
 async def send(message: Message) -> None:

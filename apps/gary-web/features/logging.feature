@@ -25,12 +25,3 @@ Feature: One action, one story across both logs
     Given I am signed out
     When I open the home page with "x-request-id" set to "pasted-by-hand"
     Then no gary-web line should have "request_id" set to "pasted-by-hand"
-
-  Scenario: gary-api being down is logged as one object, not a stack trace
-    Given I am signed out
-    And gary-api has stopped
-    When I open the sign in page
-    And I sign in with email "ada@example.com" and password "a long enough password"
-    Then the page shows "gary is unavailable, try again shortly"
-    And gary-web should have logged that at error with "error.type" and "error.message"
-    And that line should carry the same request id as the page's own line

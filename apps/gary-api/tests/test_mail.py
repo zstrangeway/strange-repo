@@ -95,18 +95,24 @@ class ProviderSelectionTests(MailTestCase):
 class ReportConfigurationTests(MailTestCase):
     def test_reports_the_provider_and_the_sender(self):
         with patch.dict("os.environ", {"MAIL_FROM": "gary <no-reply@gary.test>"}, clear=True):
-            with self.assertLogs("gary_api.mail", level="INFO") as logs:
+            with self.assertLogs("gary_api.mail", level="INFO") as captured:
                 mail.report_configuration()
 
-        self.assertIn("console", logs.output[0])
-        self.assertIn("no-reply@gary.test", logs.output[0])
+        # The fields, not the rendered text: the message is now a stable event
+        # name and the answer to "which provider" lives beside it.
+        record = captured.records[0]
+        self.assertEqual(record.msg, "mail.configured")
+        self.assertEqual(record.provider, "console")
+        self.assertEqual(record.sender, "gary <no-reply@gary.test>")
 
     def test_reports_a_broken_config_without_raising(self):
         with patch.dict("os.environ", {"MAIL_PROVIDER": "resend"}, clear=True):
-            with self.assertLogs("gary_api.mail", level="ERROR") as logs:
+            with self.assertLogs("gary_api.mail", level="ERROR") as captured:
                 mail.report_configuration()
 
-        self.assertIn("RESEND_API_KEY", logs.output[0])
+        record = captured.records[0]
+        self.assertEqual(record.msg, "mail.misconfigured")
+        self.assertIn("RESEND_API_KEY", record.reason)
 
 
 class ConsoleMailerTests(MailTestCase):
@@ -117,14 +123,14 @@ class ConsoleMailerTests(MailTestCase):
             text="Follow https://gary.test/reset?token=abc123",
         )
 
-        with self.assertLogs("gary_api.mail.console", level="INFO") as logs:
+        with self.assertLogs("gary_api.mail.console", level="INFO") as captured:
             await ConsoleMailer().send(message)
 
-        logged = logs.output[0]
-        self.assertIn("ada@example.com", logged)
-        self.assertIn("Reset your password", logged)
+        record = captured.records[0]
+        self.assertEqual(record.to, "ada@example.com")
+        self.assertEqual(record.subject, "Reset your password")
         # The link is the entire value of the console provider.
-        self.assertIn("token=abc123", logged)
+        self.assertIn("token=abc123", record.body)
 
 
 class ResendMailerTests(MailTestCase):
