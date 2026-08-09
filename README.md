@@ -35,6 +35,19 @@ flyctl apps create <gary-api-app-name>
 flyctl apps create <gary-web-app-name>
 ```
 
+Fly resolves every path — the config path, and `build.dockerfile` inside it —
+relative to the working directory, joining rather than replacing. The two apps
+therefore need different settings:
+
+| App | Working directory | Config path |
+| --- | --- | --- |
+| gary-api | `apps/gary-api` | `fly.toml` |
+| gary-web | repo root (leave blank) | `apps/gary-web/fly.toml` |
+
+gary-web cannot build from `apps/gary-web`. Its image needs `pnpm-lock.yaml`,
+`pnpm-workspace.yaml`, and the root `package.json` in the build context for the
+workspace to resolve, and all of those sit at the repo root.
+
 Then add a deploy token to the repository as the `FLY_API_TOKEN` secret:
 
 ```sh
