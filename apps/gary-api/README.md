@@ -20,12 +20,12 @@ A `postgres://` or `postgresql://` URL is upgraded to the async driver
 automatically, so a provider's connection string works unmodified.
 
 ```sh
-pnpm exec task gary-api:migrate                       # apply migrations
-pnpm exec task gary-api:revision -- "add widgets"     # generate one
+pnpm --filter gary-api migrate                    # apply migrations
+pnpm --filter gary-api revision "add widgets"     # generate one
 ```
 
 ```sh
-pnpm exec task gary-api:seed                          # local accounts
+pnpm --filter gary-api seed                       # local accounts
 ```
 
 `seed` migrates, then creates or resets `ada@`, `alan@` and `grace@example.com`

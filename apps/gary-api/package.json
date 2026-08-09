@@ -7,6 +7,9 @@
   "scripts": {
     "dev": "task dev",
     "serve": "task serve",
-    "test": "task test"
+    "test": "task test",
+    "migrate": "task migrate",
+    "revision": "task revision --",
+    "seed": "task seed"
   }
 }
