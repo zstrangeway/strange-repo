@@ -63,8 +63,21 @@ there — an SMTP provider works locally and then silently times out in
 production.
 
 The default sender needs no DNS but **only delivers to the address that owns the
-Resend account**. Set `MAIL_FROM` to an address on a verified domain before
-anyone else signs up.
+Resend account**.
+
+> **TODO: verify a sending domain and set `MAIL_FROM` before anyone but the
+> Resend account owner signs up.** Until then every outbound email — verify
+> your address, address confirmed, reset requested, password changed — is
+> accepted by gary and quietly dropped for everyone else. They see a
+> confirmation and get nothing, and locking themselves out of an account
+> whose reset link cannot reach them is the likely first symptom.
+>
+> ```sh
+> flyctl secrets set MAIL_FROM='gary <no-reply@your-domain>' -a gary-api
+> ```
+>
+> Fine while gary is one person's, which is why it is a TODO and not a
+> blocker.
 
 Locally, set them in the environment for the command that needs them —
 `RESEND_API_KEY=re_… pnpm dev`. There is deliberately no `.env` loading: go-task
