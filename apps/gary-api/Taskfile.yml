@@ -22,6 +22,12 @@ tasks:
     cmds:
       - uv run alembic upgrade head
 
+  seed:
+    desc: Create or reset the local development accounts
+    deps: [migrate]
+    cmds:
+      - uv run gary-api-seed
+
   revision:
     desc: 'Generate a migration from model changes: task gary-api:revision -- "message"'
     cmds:

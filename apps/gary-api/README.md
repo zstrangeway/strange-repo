@@ -15,6 +15,16 @@ pnpm exec task gary-api:migrate                       # apply migrations
 pnpm exec task gary-api:revision -- "add widgets"     # generate one
 ```
 
+```sh
+pnpm exec task gary-api:seed                          # local accounts
+```
+
+`seed` migrates, then creates or resets `ada@`, `alan@` and `grace@example.com`
+— all with the password it prints. Re-running is safe and puts a mangled local
+database back rather than failing on the duplicate email. It refuses to run
+unless `DATABASE_URL` looks local, because those accounts have a published
+password.
+
 Deploys run `alembic upgrade head` as Fly's `release_command`, before the new
 version takes traffic. That gates the deploy on reaching the database, so an
 unset or wrong `DATABASE_URL` fails the deploy rather than starting a service
