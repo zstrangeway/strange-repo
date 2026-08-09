@@ -9,7 +9,8 @@ notes, no restating of general good practice.
 ## New projects
 
 Scaffold with the official CLI rather than hand-writing boilerplate.
-Preferred stacks: Next.js for web, FastAPI for services.
+Preferred stacks: Next.js for web, FastAPI for services, Postgres via
+SQLAlchemy and Alembic for data.
 
 Use pnpm, never npm — for installs, scripts, and scaffolding alike.
 
@@ -29,3 +30,26 @@ first real feature lands.
 Check what the project already pulls in before reaching for something new — an
 existing dependency usually covers it. If nothing does, bring me the options and
 discuss before adding anything.
+
+## Commands
+
+Every app gets a `Taskfile.yml`, and its `package.json` scripts delegate to it,
+so `pnpm test` means the same thing in every app.
+
+## Deploys
+
+Fly.io, deployed by GitHub Actions on pushes to main. Keep deploys gated behind
+the test and image-build jobs; don't move them to a platform integration that
+ships whatever landed.
+
+## Work you can't verify
+
+If you can't test a change, say so and say what would let you — don't ship it
+as a guess and let the next deploy find out. That has cost more time than
+asking ever would.
+
+Say when behavior won't show up where I'd look for it: a fetch that runs on the
+server never appears in browser devtools, and I'll waste an hour there.
+
+A check or setup step that silently does nothing is worse than none. Make them
+report what they did.

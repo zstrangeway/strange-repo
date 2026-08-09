@@ -22,6 +22,11 @@ WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/src /app/src
 
+# Needed by the release_command, which runs migrations before the new version
+# takes traffic.
+COPY alembic.ini ./
+COPY migrations ./migrations
+
 ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 8080

@@ -11,6 +11,16 @@ tasks:
     cmds:
       - uv run fastapi run src/gary_api/app.py
 
+  migrate:
+    desc: Apply database migrations
+    cmds:
+      - uv run alembic upgrade head
+
+  revision:
+    desc: 'Generate a migration from model changes: task gary-api:revision -- "message"'
+    cmds:
+      - uv run alembic revision --autogenerate -m "{{.CLI_ARGS}}"
+
   test:
     desc: Run the specs and unit tests, then enforce the coverage gate
     cmds:

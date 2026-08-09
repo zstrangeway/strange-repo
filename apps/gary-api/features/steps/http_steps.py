@@ -1,6 +1,18 @@
 import json
 
-from behave import then, when
+from behave import given, then, when
+from sqlalchemy.ext.asyncio import create_async_engine
+
+from gary_api import db
+
+
+@given("the database is unreachable")
+def step_database_unreachable(context):
+    # Nothing listens on port 1. create_async_engine does not connect until
+    # used, so swapping it here is enough.
+    db.engine = create_async_engine(
+        "postgresql+asyncpg://postgres@127.0.0.1:1/postgres"
+    )
 
 
 @when('I GET "{path}"')

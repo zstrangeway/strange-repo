@@ -4,7 +4,7 @@ A pnpm + uv monorepo.
 
 | App | Stack | What it is |
 | --- | --- | --- |
-| [`apps/gary-api`](apps/gary-api) | FastAPI | Serves `GET /health` |
+| [`apps/gary-api`](apps/gary-api) | FastAPI + Postgres | Serves `GET /health` |
 | [`apps/gary-web`](apps/gary-web) | Next.js | Displays gary-api's health |
 
 ## Working on it
@@ -49,6 +49,14 @@ repo root with `--config apps/gary-web/fly.toml` and `dockerfile = "Dockerfile"`
 — it cannot build from `apps/gary-web`, because its image needs
 `pnpm-lock.yaml`, `pnpm-workspace.yaml`, and the root `package.json` in the
 context for the workspace to resolve.
+
+gary-api needs a database. Create one and attach it, which sets `DATABASE_URL`
+as a secret on the app:
+
+```sh
+flyctl mpg create
+flyctl mpg attach <cluster-id> -a <gary-api-app-name>
+```
 
 Then add a deploy token to the repository as the `FLY_API_TOKEN` secret:
 
