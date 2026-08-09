@@ -17,7 +17,7 @@ primary_region = "iad"
     # Which project sentry-cli uploads source maps to. Slugs, not the numeric
     # ids in the DSN. Neither is secret; the token that goes with them is, and
     # arrives separately as a build secret from the deploy step.
-    SENTRY_ORG = "na"
+    SENTRY_ORG = "na-e0z"
     SENTRY_PROJECT = "gary-web"
 
 [env]
