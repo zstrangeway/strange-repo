@@ -28,6 +28,22 @@ WORKDIR /repo
 COPY --from=deps /repo/ ./
 COPY apps/gary-web apps/gary-web
 
+# Sentry's browser DSN has to be here rather than in `fly secrets`: NEXT_PUBLIC_
+# variables are inlined into the client bundle by `next build`, so a value that
+# only exists at runtime never reaches the browser and client-side reporting
+# stays silently off. Supplied by [build.args] in fly.toml. Safe to bake in — a
+# DSN is public by design and ships in the bundle either way.
+ARG NEXT_PUBLIC_SENTRY_DSN=""
+ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN
+
+# Say which of the two happened. A build that quietly produces an image with no
+# browser error reporting looks exactly like one that works.
+RUN if [ -n "$NEXT_PUBLIC_SENTRY_DSN" ]; then \
+      echo "Sentry: browser DSN baked into the client bundle"; \
+    else \
+      echo "Sentry: NO browser DSN — client-side errors will NOT be reported"; \
+    fi
+
 RUN pnpm --filter gary-web exec next build
 
 

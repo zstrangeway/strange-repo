@@ -7,7 +7,19 @@ primary_region = "iad"
   # still the working directory, which must be the repo root.
   dockerfile = "Dockerfile"
 
+  [build.args]
+    # Build-time, not a secret and not a runtime env var: `next build` inlines
+    # NEXT_PUBLIC_ values into the client bundle, and the deploy builds on Fly's
+    # remote builder where `fly secrets` do not exist. Setting this as a secret
+    # instead would leave browser errors unreported with nothing to show for it.
+    NEXT_PUBLIC_SENTRY_DSN = "https://7b033a8fc274f64ab923b550d7706a32@o4511882325655552.ingest.us.sentry.io/4511882329784320"
+
 [env]
+  # The same project, read at runtime by the Node and Edge runtimes. Separate
+  # from the build arg above because these two are read at different times, not
+  # because they are different projects.
+  SENTRY_DSN = "https://7b033a8fc274f64ab923b550d7706a32@o4511882325655552.ingest.us.sentry.io/4511882329784320"
+
   # Read on gary-web's server now, never in the browser, so a Fly-private
   # address would work here where it could not before. Left public because
   # this app's history with Flycast is not encouraging and the public URL is
