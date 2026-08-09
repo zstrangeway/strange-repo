@@ -69,6 +69,27 @@ Feature: Password reset
     And "ada@example.com" should be able to sign in with "an even better password"
     And "ada@example.com" should not be able to sign in with "a long enough password"
 
+  # The point of this one is the person who did not do it. A reset they did
+  # not ask for is the first sign someone else has their inbox.
+  Scenario: Resetting confirms by email
+    Given "ada@example.com" has asked for a reset link
+    When I POST "/auth/password-reset/confirm" with the emailed token and:
+      """
+      {"new_password": "an even better password"}
+      """
+    Then the response status should be 204
+    And a "password changed" email should be sent to "ada@example.com"
+
+  Scenario: A refused reset confirms nothing
+    Given "ada@example.com" has asked for a reset link
+    And the emailed token expired an hour ago
+    When I POST "/auth/password-reset/confirm" with the emailed token and:
+      """
+      {"new_password": "an even better password"}
+      """
+    Then the response status should be 400
+    And no "password changed" email should be sent
+
   Scenario: The link only works once
     Given "ada@example.com" has asked for a reset link
     And the emailed token has already been used to set the password "an even better password"

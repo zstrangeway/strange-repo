@@ -125,7 +125,16 @@ def before_scenario(context, scenario):
     context.token = None
     context.other_token = None
     context.first_token = None
+    context.first_verification = None
     context.reset_token = None
+    context.mail_baseline = 0
+
+
+def before_step(context, step):
+    # "no email should be sent" means none sent by the action under test, not
+    # none in the whole scenario — arranging an account now mails too.
+    if step.step_type == "when":
+        context.mail_baseline = len(context.mail.sent)
 
 
 def after_scenario(context, scenario):

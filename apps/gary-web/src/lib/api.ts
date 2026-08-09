@@ -11,7 +11,12 @@ export type ApiOk<T> = { ok: true; data: T };
 export type ApiError = { ok: false; status: number; message: string };
 export type ApiResult<T> = ApiOk<T> | ApiError;
 
-export type User = { id: string; email: string; display_name: string };
+export type User = {
+  id: string;
+  email: string;
+  display_name: string;
+  email_verified: boolean;
+};
 export type SignedIn = User & { token: string; expires_at: string };
 
 function baseUrl(): string {

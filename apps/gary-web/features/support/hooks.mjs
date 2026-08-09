@@ -28,6 +28,7 @@ export const world = {
   browser: null,
   page: null,
   resetToken: null,
+  verificationToken: null,
 };
 
 let webServer = null;
@@ -73,6 +74,17 @@ BeforeAll(async function () {
   });
 });
 
+// Selecting the profile is not the same as selecting the mode. Without this,
+// `cucumber-js --profile e2e` runs the full-stack scenarios against the stub
+// and most of them pass, which is a worse outcome than an error.
+Before({ tags: "@fullstack" }, function () {
+  if (!fullStack) {
+    throw new Error(
+      "@fullstack scenarios need GARY_E2E=1. Run `pnpm test:e2e`, which sets it.",
+    );
+  }
+});
+
 Before(async function () {
   // Either backing store has to be emptied between scenarios, or one
   // scenario's account signs the next one in.
@@ -84,6 +96,7 @@ Before(async function () {
   }
 
   world.resetToken = null;
+  world.verificationToken = null;
   world.page = await world.browser.newPage();
 });
 

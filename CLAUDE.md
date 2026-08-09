@@ -25,6 +25,12 @@ Ship every new feature at 100% test coverage. A new app is different: a bare
 scaffold has no behavior to cover, so don't wire up the coverage gate until the
 first real feature lands.
 
+## Bugs
+
+Every bug gets a test before it gets a fix. Write the test, watch it fail for
+the reason you think it fails, then fix it and watch it pass. A fix you never
+saw fail is a guess that happens to be green.
+
 ## Dependencies
 
 Check what the project already pulls in before reaching for something new — an

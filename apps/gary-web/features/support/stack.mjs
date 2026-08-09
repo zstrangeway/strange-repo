@@ -66,6 +66,10 @@ export async function start() {
         // an e2e run send real email, and the console provider is how these
         // scenarios read the reset link.
         MAIL_PROVIDER: "console",
+        // Python block-buffers stdout into a pipe, so its output can sit
+        // unflushed for as long as it takes to fill 8KB — long enough for a
+        // step to read an empty log and conclude nothing was sent.
+        PYTHONUNBUFFERED: "1",
         WEB_BASE_URL: `http://localhost:3999`,
       },
     },
@@ -89,7 +93,9 @@ export function reset() {
 export function emailedResetToken() {
   const found = [...log.matchAll(/[?&]token=([\w-]+)/g)];
   if (found.length === 0) {
-    throw new Error(`gary-api logged no reset link. Its output was:\n${log}`);
+    throw new Error(
+      `gary-api logged no reset link in ${log.length} bytes of output:\n${log}`,
+    );
   }
   return found.at(-1)[1];
 }

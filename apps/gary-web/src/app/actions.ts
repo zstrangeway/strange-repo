@@ -102,6 +102,36 @@ export async function confirmPasswordReset(
   redirect("/login?reset=1");
 }
 
+export async function verifyEmail(token: string): Promise<{ error?: string }> {
+  const result = await callApi("/auth/verify-email", {
+    method: "POST",
+    body: { token },
+  });
+
+  return result.ok ? {} : { error: result.message };
+}
+
+export async function resendVerification(
+  _previous: FormState,
+  _form: FormData,
+): Promise<FormState> {
+  const token = await sessionToken();
+  if (!token) {
+    return { error: NOT_SIGNED_IN };
+  }
+
+  const result = await callApi("/auth/verify-email/resend", {
+    method: "POST",
+    token,
+  });
+
+  if (!result.ok) {
+    return { error: result.message };
+  }
+
+  return { confirmation: "Sent — check your inbox for the link" };
+}
+
 export async function updateDisplayName(
   _previous: FormState,
   form: FormData,

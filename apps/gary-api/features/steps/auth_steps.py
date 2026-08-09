@@ -29,12 +29,18 @@ def _sign_in(context, email, password):
     )
 
 
+def _sent(context, kind, since=0):
+    """Emails of one kind. Registering now mails too, so counting all of
+    them would make "no email was sent" mean "nothing happened at all"."""
+    return [m for m in context.mail.sent[since:] if f"/{kind}?token=" in m["text"]]
+
+
 def _reset_link(context):
     """The token out of the body gary actually posted to the provider."""
-    assert context.mail.sent, "no email was sent"
-    text = context.mail.sent[-1]["text"]
-    found = re.search(r"[?&]token=([\w\-]+)", text)
-    assert found, f"no reset link in: {text}"
+    sent = _sent(context, "reset")
+    assert sent, "no reset email was sent"
+    found = re.search(r"[?&]token=([\w\-]+)", sent[-1]["text"])
+    assert found, f"no reset link in: {sent[-1]['text']}"
     return found.group(1)
 
 
@@ -158,6 +164,14 @@ def step_post_with_bogus_token(context, path):
 @then('the response field "{field}" should be "{expected}"')
 def step_field(context, field, expected):
     actual = context.response.json().get(field)
+    # Gherkin has only text, so "true"/"false" have to mean the booleans
+    # they plainly mean rather than failing against JSON's real ones.
+    if expected in ("true", "false"):
+        assert actual is (expected == "true"), (
+            f"expected {field} {expected}, got {actual!r}"
+        )
+        return
+
     assert actual == expected, f"expected {field} {expected!r}, got {actual!r}"
 
 
@@ -245,9 +259,9 @@ def step_cannot_sign_in(context, email, password):
 
 @then('a password reset email should be sent to "{email}"')
 def step_mail_sent(context, email):
-    assert context.mail.sent, "no email was sent"
-    recipients = context.mail.sent[-1]["to"]
-    assert recipients == [email], f"sent to {recipients}"
+    sent = _sent(context, "reset")
+    assert sent, "no reset email was sent"
+    assert sent[-1]["to"] == [email], f"sent to {sent[-1]['to']}"
 
 
 @then("the email should carry a reset link")
@@ -257,7 +271,11 @@ def step_mail_has_link(context):
 
 @then("no email should be sent")
 def step_no_mail(context):
-    assert not context.mail.sent, f"sent {len(context.mail.sent)} email(s)"
+    # Scoped to the kind the scenario is about; a verification email from
+    # arranging the user is not what these scenarios are asserting on.
+    kind = "verify" if "verif" in context.scenario.feature.name.lower() else "reset"
+    sent = _sent(context, kind, since=context.mail_baseline)
+    assert not sent, f"sent {len(sent)} {kind} email(s)"
 
 
 @when("I check the emailed token")
@@ -275,3 +293,112 @@ def step_check_bogus_token(context):
 @given("the mail provider refuses everything")
 def step_mail_refuses(context):
     context.mail.refusing = True
+
+
+def _verification_link(context, index=-1):
+    """The token out of a verification email gary actually posted."""
+    sent = _sent(context, "verify")
+    assert sent, "no verification email was sent"
+    found = re.search(r"[?&]token=([\w\-]+)", sent[index]["text"])
+    assert found, f"no verification link in: {sent[index]['text']}"
+    return found.group(1)
+
+
+@given("the emailed verification token has already been used")
+def step_verification_used(context):
+    response = context.client.post(
+        "/auth/verify-email", json={"token": _verification_link(context)}
+    )
+    assert response.status_code == 204, response.text
+
+
+@given("the emailed verification token expired a day ago")
+def step_verification_expired(context):
+    sql("UPDATE email_verification_tokens SET expires_at = :when",
+        when=datetime.now(timezone.utc) - timedelta(days=1))
+
+
+@given("I keep that first verification token")
+def step_keep_first_verification(context):
+    context.first_verification = _verification_link(context)
+
+
+@given('"{email}" has verified their address')
+def step_has_verified(context, email):
+    sql("UPDATE users SET email_verified_at = now() WHERE email = :email",
+        email=email.lower())
+
+
+@when('I POST "{path}" with the emailed token')
+def step_post_verification(context, path):
+    context.response = context.client.post(
+        path, json={"token": _verification_link(context)}, headers=_headers(context)
+    )
+
+
+@when('I POST "{path}" with the first verification token')
+def step_post_first_verification(context, path):
+    context.response = context.client.post(
+        path, json={"token": context.first_verification}, headers=_headers(context)
+    )
+
+
+@when('I POST "{path}" with a verification token that was never issued')
+def step_post_bogus_verification(context, path):
+    context.response = context.client.post(path, json={"token": "never-issued"})
+
+
+@when('I POST "{path}"')
+def step_post_bare(context, path):
+    context.response = context.client.post(path, headers=_headers(context))
+
+
+@then('a verification email should be sent to "{email}"')
+def step_verification_sent(context, email):
+    sent = _sent(context, "verify")
+    assert sent, "no verification email was sent"
+    assert sent[-1]["to"] == [email], f"sent to {sent[-1]['to']}"
+
+
+@then("the email should carry a verification link")
+def step_verification_link(context):
+    assert _verification_link(context)
+
+
+@then('"{email}" should be verified')
+def step_should_be_verified(context, email):
+    rows = sql("SELECT email_verified_at FROM users WHERE email = :email",
+               email=email.lower())
+    assert rows and rows[0][0] is not None, f"{email} is not verified"
+
+
+@then('"{email}" should not be verified')
+def step_should_not_be_verified(context, email):
+    rows = sql("SELECT email_verified_at FROM users WHERE email = :email",
+               email=email.lower())
+    assert rows and rows[0][0] is None, f"{email} is verified"
+
+
+# The notification emails carry no link, so they are matched by subject.
+SUBJECTS = {
+    "verification complete": "confirmed",
+    "password changed": "password was changed",
+}
+
+
+def _notifications(context, kind, since=0):
+    marker = SUBJECTS[kind]
+    return [m for m in context.mail.sent[since:] if marker in m["subject"]]
+
+
+@then('a "{kind}" email should be sent to "{email}"')
+def step_notification_sent(context, kind, email):
+    sent = _notifications(context, kind)
+    assert sent, f"no {kind!r} email was sent"
+    assert sent[-1]["to"] == [email], f"sent to {sent[-1]['to']}"
+
+
+@then('no "{kind}" email should be sent')
+def step_no_notification(context, kind):
+    sent = _notifications(context, kind, since=context.mail_baseline)
+    assert not sent, f"sent {len(sent)} {kind!r} email(s)"

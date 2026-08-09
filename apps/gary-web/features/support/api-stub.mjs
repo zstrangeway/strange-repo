@@ -17,16 +17,61 @@ let server = null;
 const users = new Map(); // email -> {id, email, display_name, password}
 const sessions = new Map(); // token -> email
 const resets = new Map(); // token -> {email, used, expired}
+const verifications = new Map(); // token -> {email, used, expired}
 
 export function reset() {
   users.clear();
   sessions.clear();
   resets.clear();
+  verifications.clear();
 }
 
-export function addUser(email, displayName, password) {
+export function addUser(email, displayName, password, { verified = false } = {}) {
   const key = email.toLowerCase();
-  users.set(key, { id: randomUUID(), email: key, display_name: displayName, password });
+  users.set(key, {
+    id: randomUUID(),
+    email: key,
+    display_name: displayName,
+    password,
+    email_verified: verified,
+  });
+  if (!verified) {
+    issueVerification(key);
+  }
+}
+
+function issueVerification(email) {
+  const token = randomUUID();
+  verifications.set(token, { email, used: false, expired: false });
+  return token;
+}
+
+export function hasUser(email) {
+  return users.has(email.toLowerCase());
+}
+
+export function verifyUser(email) {
+  users.get(email.toLowerCase()).email_verified = true;
+}
+
+export function lastVerificationToken() {
+  const live = [...verifications.entries()].filter(([, v]) => !v.used);
+  return live.length ? live[live.length - 1][0] : null;
+}
+
+export function expireVerification(token) {
+  const found = verifications.get(token);
+  if (found) {
+    found.expired = true;
+  }
+}
+
+export function markVerificationUsed(token) {
+  const found = verifications.get(token);
+  if (found) {
+    found.used = true;
+    users.get(found.email).email_verified = true;
+  }
 }
 
 export function lastResetToken() {
@@ -50,7 +95,12 @@ export function markResetUsed(token, newPassword) {
 }
 
 function publicUser(user) {
-  return { id: user.id, email: user.email, display_name: user.display_name };
+  return {
+    id: user.id,
+    email: user.email,
+    display_name: user.display_name,
+    email_verified: user.email_verified,
+  };
 }
 
 function bearer(request) {
@@ -128,6 +178,28 @@ function handle(method, path, body, request) {
 
     user.password = body.new_password;
     return { status: 204 };
+  }
+
+  if (method === "POST" && path === "/auth/verify-email") {
+    const found = verifications.get(body.token);
+    if (!found || found.used || found.expired) {
+      return {
+        status: 400,
+        body: {
+          detail: "That verification link has expired or has already been used",
+        },
+      };
+    }
+    markVerificationUsed(body.token);
+    return { status: 204 };
+  }
+
+  if (method === "POST" && path === "/auth/verify-email/resend") {
+    if (!email) return { status: 401, body: { detail: "Not signed in" } };
+    if (!users.get(email).email_verified) {
+      issueVerification(email);
+    }
+    return { status: 204, status_override: 202 };
   }
 
   if (method === "POST" && path === "/auth/password-reset") {

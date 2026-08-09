@@ -60,7 +60,11 @@ Given(
 );
 
 Given("I am signed in as {string}", async function (name) {
-  apiStub.addUser("ada@example.com", name, PASSWORD);
+  // Only create it if the scenario has not already set one up — otherwise
+  // this quietly undoes arrangements like "has verified their address".
+  if (!apiStub.hasUser("ada@example.com")) {
+    apiStub.addUser("ada@example.com", name, PASSWORD);
+  }
   await open("/login");
   await fill("email", "ada@example.com");
   await fill("password", PASSWORD);
@@ -70,7 +74,9 @@ Given("I am signed in as {string}", async function (name) {
 Given(
   "I am signed in as {string} with email {string}",
   async function (name, email) {
-    apiStub.addUser(email, name, PASSWORD);
+    if (!apiStub.hasUser(email)) {
+      apiStub.addUser(email, name, PASSWORD);
+    }
     await open("/login");
     await fill("email", email);
     await fill("password", PASSWORD);
@@ -225,4 +231,44 @@ Then('the page shows my email {string}', async function (email) {
 Then('the page shows my display name {string}', async function (name) {
   const actual = await world.page.inputValue('[data-testid="field-display_name"]');
   assert.equal(actual, name);
+});
+
+Given("{string} has verified their address", async function (email) {
+  apiStub.verifyUser(email);
+});
+
+function verificationToken() {
+  // Remembered on first use. lastVerificationToken() only reports live
+  // tokens, so a scenario that spends one would find nothing left to open —
+  // which is exactly what the used-link and expired-link cases do.
+  world.verificationToken ??= apiStub.lastVerificationToken();
+  assert.ok(world.verificationToken, "no verification link was issued");
+  return world.verificationToken;
+}
+
+Given("the verification link has already been used", async function () {
+  apiStub.markVerificationUsed(verificationToken());
+});
+
+Given("the verification link expired a day ago", async function () {
+  apiStub.expireVerification(verificationToken());
+});
+
+When("I open the verification link", async function () {
+  await open(`/verify?token=${encodeURIComponent(verificationToken())}`);
+});
+
+Then("the page shows an unverified notice", async function () {
+  await world.page.waitForSelector('[data-testid="unverified"]', {
+    timeout: 15_000,
+  });
+});
+
+Then("the page does not show an unverified notice", async function () {
+  const found = await world.page.$('[data-testid="unverified"]');
+  assert.equal(found, null, "the unverified notice was still showing");
+});
+
+When("I press {string}", async function (label) {
+  await submit(label);
 });

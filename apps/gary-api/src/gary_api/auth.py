@@ -10,7 +10,12 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gary_api import db, mail
-from gary_api.models import PasswordResetToken, Session, User
+from gary_api.models import (
+    EmailVerificationToken,
+    PasswordResetToken,
+    Session,
+    User,
+)
 from gary_api.passwords import (
     MINIMUM_LENGTH,
     hash_password,
@@ -21,6 +26,8 @@ from gary_api.passwords import (
 
 SESSION_LIFETIME = timedelta(days=30)
 RESET_LIFETIME = timedelta(hours=1)
+# Longer than a reset: this one is read at leisure, often on another device.
+VERIFICATION_LIFETIME = timedelta(hours=24)
 
 # Deliberately the same for a wrong password and an address with no account:
 # telling them apart turns sign-in into a way to ask who has an account.
@@ -84,10 +91,15 @@ class ResetConfirmRequest(BaseModel):
     new_password: str = Field(min_length=MINIMUM_LENGTH)
 
 
+class VerifyEmailRequest(BaseModel):
+    token: str
+
+
 class UserResponse(BaseModel):
     id: uuid.UUID
     email: str
     display_name: str
+    email_verified: bool
 
 
 class SignedInResponse(UserResponse):
@@ -96,7 +108,12 @@ class SignedInResponse(UserResponse):
 
 
 def _as_user(user: User) -> dict:
-    return {"id": user.id, "email": user.email, "display_name": user.display_name}
+    return {
+        "id": user.id,
+        "email": user.email,
+        "display_name": user.display_name,
+        "email_verified": user.email_verified_at is not None,
+    }
 
 
 async def _issue_session(database: AsyncSession, user: User) -> tuple[str, datetime]:
@@ -161,6 +178,8 @@ async def register(request: RegisterRequest, database: Db) -> SignedInResponse:
     )
     database.add(user)
     await database.commit()
+
+    await _issue_verification(database, user)
 
     token, expires_at = await _issue_session(database, user)
     return SignedInResponse(**_as_user(user), token=token, expires_at=expires_at)
@@ -326,3 +345,116 @@ async def confirm_password_reset(request: ResetConfirmRequest, database: Db) -> 
     # every session goes, including any they opened.
     await database.execute(delete(Session).where(Session.user_id == user.id))
     await database.commit()
+
+    # The audience for this one is the person who did *not* do it.
+    await _notify(
+        user,
+        "Your gary password was changed",
+        f"Hello {user.display_name},\n\n"
+        "Your gary password has just been changed, and everything signed in "
+        "with the old one has been signed out.\n\n"
+        "If this was not you, reset it again now — whoever did it can read "
+        "this address.\n",
+    )
+
+DEAD_VERIFICATION = "That verification link has expired or has already been used"
+
+
+async def _notify(user: User, subject: str, body: str) -> None:
+    """A courtesy email that carries no link and asks for nothing.
+
+    Never raises: these confirm something that has already happened, and
+    failing the request after the fact would be a lie about what happened.
+    """
+    try:
+        await mail.send(mail.Message(to=user.email, subject=subject, text=body))
+    except mail.MailError:
+        logger.exception("mail: could not send %r to %s", subject, user.email)
+
+
+async def _issue_verification(database: AsyncSession, user: User) -> None:
+    """Mint a link and mail it. Never raises — see the comment below."""
+    # A new link supersedes any older one, so a forwarded email cannot be
+    # used after the owner asked for a fresh link.
+    await database.execute(
+        delete(EmailVerificationToken).where(
+            EmailVerificationToken.user_id == user.id,
+            EmailVerificationToken.used_at.is_(None),
+        )
+    )
+
+    token = new_token()
+    database.add(
+        EmailVerificationToken(
+            user_id=user.id,
+            token_hash=token_digest(token),
+            expires_at=_now() + VERIFICATION_LIFETIME,
+        )
+    )
+    await database.commit()
+
+    # Registration must not hinge on the mail provider. Losing the account
+    # because the email could not go out is worse than an unverified account
+    # and a resend button, so this is logged and swallowed.
+    try:
+        await mail.send(
+            mail.Message(
+                to=user.email,
+                subject="Confirm your gary address",
+                text=(
+                    f"Hello {user.display_name},\n\n"
+                    "Confirm this address so gary knows it can reach you. "
+                    "The link is good for a day:\n\n"
+                    f"{web_base_url()}/verify?token={token}\n\n"
+                    "If you did not sign up for gary, you can ignore this.\n"
+                ),
+            )
+        )
+    except mail.MailError:
+        logger.exception("mail: could not send a verification link to %s", user.email)
+
+
+@router.post("/verify-email", status_code=status.HTTP_204_NO_CONTENT)
+async def verify_email(request: VerifyEmailRequest, database: Db) -> None:
+    """Confirm an address from the emailed link.
+
+    Deliberately needs no session: the email is often opened on a device
+    that has never signed in, and making people sign in first would be a
+    worse experience for no security gain — the token is the credential.
+    """
+    verification = await database.scalar(
+        select(EmailVerificationToken).where(
+            EmailVerificationToken.token_hash == token_digest(request.token)
+        )
+    )
+    if (
+        verification is None
+        or verification.used_at is not None
+        or verification.expires_at <= _now()
+    ):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, DEAD_VERIFICATION)
+
+    user = await database.get(User, verification.user_id)
+    user.email_verified_at = _now()
+    verification.used_at = _now()
+    database.add_all([user, verification])
+    await database.commit()
+
+    await _notify(
+        user,
+        "Your gary address is confirmed",
+        f"Hello {user.display_name},\n\n"
+        "Your email address is now confirmed and your gary account is all "
+        "set.\n\n"
+        "If you did not sign up for gary, someone has used your address — "
+        "nothing else has been done with it, and you can ignore this.\n",
+    )
+
+
+@router.post("/verify-email/resend", status_code=status.HTTP_202_ACCEPTED)
+async def resend_verification(user: CurrentUser, database: Db) -> None:
+    if user.email_verified_at is not None:
+        # Already done. Same status either way, and no mail to send.
+        return
+
+    await _issue_verification(database, user)
