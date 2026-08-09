@@ -80,7 +80,7 @@ jobs:
       - uses: docker/setup-buildx-action@v3
 
       # Build only — Fly builds and stores its own image at deploy time.
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           file: apps/${{ matrix.app }}/Dockerfile
