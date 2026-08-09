@@ -10,8 +10,10 @@ primary_region = "iad"
 [env]
   # Flycast: private to the org, and routed through Fly's proxy so a stopped
   # gary-api machine is started on demand rather than dropping out of DNS.
-  # Must match the app name in apps/gary-api/fly.toml.
-  GARY_API_URL = "http://gary-api.flycast:8080"
+  # Port 80, not 8080 — [http_service] makes fly-proxy listen on 80/443 and
+  # forward to internal_port. 8080 is the app's own socket, which only
+  # .internal would reach. Host must match the app name in gary-api's fly.toml.
+  GARY_API_URL = "http://gary-api.flycast"
 
 [http_service]
   internal_port = 8080

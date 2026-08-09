@@ -59,10 +59,12 @@ flyctl tokens create deploy --name github-actions
 ### How the two apps find each other
 
 gary-web fetches gary-api over [Flycast](https://fly.io/docs/networking/flycast/)
-at `http://<gary-api-app-name>.flycast:8080`. Traffic stays inside the Fly org,
-and because it is routed by Fly's proxy, a stopped gary-api machine is started
-on demand — so gary-api scales to zero. The workflow allocates the private
-address that Flycast needs on its first run.
+at `http://<gary-api-app-name>.flycast` — port 80, not 8080. `[http_service]`
+makes fly-proxy listen on 80 and 443 and forward to `internal_port`, so 8080 is
+the app's own socket and nothing is listening on it at the Flycast address.
+Traffic stays inside the Fly org, and because the proxy is in the path, a
+stopped gary-api machine is started on demand — so gary-api scales to zero. The
+workflow allocates the private address Flycast needs on its first run.
 
 Do not use `.internal` for this. It addresses machines directly rather than
 going through the proxy, so it cannot start a stopped one, and Fly's private
