@@ -2,23 +2,48 @@ export const dynamic = "force-dynamic";
 
 const UNAVAILABLE = "unavailable";
 
+// gary-api scales to zero, so the first request after an idle period arrives
+// while Fly is still starting the machine. Retry across that window rather
+// than reporting an outage.
+const ATTEMPTS = 5;
+const RETRY_DELAY_MS = 1_000;
+const REQUEST_TIMEOUT_MS = 5_000;
+
+async function fetchStatus(baseUrl: string): Promise<string | null> {
+  const response = await fetch(`${baseUrl}/health`, {
+    cache: "no-store",
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+  if (!response.ok) {
+    throw new Error(`responded ${response.status}`);
+  }
+
+  const body = await response.json();
+  return typeof body?.status === "string" ? body.status : null;
+}
+
 async function getApiStatus(): Promise<string> {
   const baseUrl = process.env.GARY_API_URL ?? "http://127.0.0.1:8000";
 
-  try {
-    const response = await fetch(`${baseUrl}/health`, { cache: "no-store" });
-    if (!response.ok) {
+  for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+    try {
+      const status = await fetchStatus(baseUrl);
+      if (status !== null) {
+        return status;
+      }
       return UNAVAILABLE;
+    } catch (error) {
+      console.error(
+        `gary-api unreachable at ${baseUrl} (attempt ${attempt}/${ATTEMPTS}):`,
+        error,
+      );
+      if (attempt < ATTEMPTS) {
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+      }
     }
-
-    const body = await response.json();
-    return typeof body?.status === "string" ? body.status : UNAVAILABLE;
-  } catch (error) {
-    // The page degrades to "unavailable" either way, but without this the
-    // reason never surfaces anywhere.
-    console.error(`gary-api unreachable at ${baseUrl}:`, error);
-    return UNAVAILABLE;
   }
+
+  return UNAVAILABLE;
 }
 
 export default async function Home() {
