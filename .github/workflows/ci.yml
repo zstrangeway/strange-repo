@@ -59,7 +59,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl deploy apps/gary-api --config apps/gary-api/fly.toml --remote-only
+      # Run from the app directory so fly.toml and the Dockerfile are both
+      # found relative to it, with no path flags to resolve ambiguously.
+      - run: flyctl deploy --remote-only
+        working-directory: apps/gary-api
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
@@ -72,6 +75,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl deploy . --config apps/gary-web/fly.toml --remote-only
+      # Runs from the repo root: the build context must be the whole workspace,
+      # so the config path is given relative to it and cannot be read any
+      # other way.
+      - run: flyctl deploy --config apps/gary-web/fly.toml --remote-only
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
