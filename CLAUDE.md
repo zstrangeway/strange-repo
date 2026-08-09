@@ -11,6 +11,8 @@ notes, no restating of general good practice.
 Scaffold with the official CLI rather than hand-writing boilerplate.
 Preferred stacks: Next.js for web, FastAPI for services.
 
+Use pnpm, never npm — for installs, scripts, and scaffolding alike.
+
 ## New features
 
 Drive the work with BDD, using `behave` as the Gherkin runner. Write the
