@@ -1,7 +1,13 @@
 import os
+from collections.abc import AsyncIterator
 
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 DEFAULT_URL = "postgresql+asyncpg://postgres@127.0.0.1:5432/postgres"
 
@@ -22,6 +28,18 @@ def database_url() -> str:
 
 
 engine: AsyncEngine = create_async_engine(database_url(), pool_pre_ping=True)
+
+
+async def session() -> AsyncIterator[AsyncSession]:
+    """A request-scoped session.
+
+    The factory is built per call rather than once at import, because the
+    specs swap `engine` to point at a dead database and a factory bound at
+    import time would keep using the live one.
+    """
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with factory() as open_session:
+        yield open_session
 
 
 async def is_reachable() -> bool:

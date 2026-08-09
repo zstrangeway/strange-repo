@@ -17,7 +17,14 @@ def step_database_unreachable(context):
 
 @when('I GET "{path}"')
 def step_get(context, path):
-    context.response = context.client.get(path)
+    # Carries the session when the scenario has one. Without this an
+    # authenticated GET is anonymous, and every 401 the specs assert would
+    # pass for the wrong reason.
+    headers = {}
+    if getattr(context, "token", None):
+        headers["authorization"] = f"Bearer {context.token}"
+
+    context.response = context.client.get(path, headers=headers)
 
 
 @then("the response status should be {expected:d}")

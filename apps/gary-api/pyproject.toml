@@ -9,6 +9,7 @@ authors = [
 requires-python = ">=3.11"
 dependencies = [
     "alembic>=1.19.1",
+    "argon2-cffi>=25.1.0",
     "asyncpg>=0.31.0",
     "fastapi[standard]>=0.141.1",
     # Already present under fastapi[standard]; named here because the mail
@@ -33,6 +34,10 @@ dev = [
 [tool.coverage.run]
 source = ["src/gary_api"]
 branch = true
+# SQLAlchemy's async layer hands control to greenlets, and behave drives the
+# app through a worker thread. Without both, every line after an await on the
+# database reads as uncovered while the specs exercising it pass.
+concurrency = ["thread", "greenlet"]
 
 [tool.coverage.report]
 show_missing = true

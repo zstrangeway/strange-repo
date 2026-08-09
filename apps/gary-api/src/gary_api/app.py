@@ -1,9 +1,8 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
-from gary_api import db, mail
+from gary_api import auth, db, mail
 
 
 @asynccontextmanager
@@ -14,13 +13,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="gary-api", lifespan=lifespan)
 
-# gary-web reads /health from the browser, so the request is cross-origin.
-# The endpoint is unauthenticated and read-only, so any origin may ask.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["GET"],
-)
+# No CORS middleware: nothing in a browser talks to gary-api any more.
+# gary-web calls it from its own server so that the session cookie belongs to
+# gary-web's origin — a cookie set here would be third-party to gary-web and
+# dropped by Safari and Firefox. /health is left to Fly's checker, which is
+# not a browser either.
+
+app.include_router(auth.router)
 
 
 @app.get("/health")
