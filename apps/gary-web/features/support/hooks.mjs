@@ -16,7 +16,10 @@ setDefaultTimeout(120_000);
 const WEB_PORT = 3999;
 
 export const world = {
-  baseUrl: `http://127.0.0.1:${WEB_PORT}`,
+  // localhost, not 127.0.0.1: `next dev` blocks cross-origin requests for
+  // dev assets, and it treats a different hostname for the same address as
+  // cross-origin — the page loads but its scripts 403 and it never hydrates.
+  baseUrl: `http://localhost:${WEB_PORT}`,
   browser: null,
   page: null,
 };

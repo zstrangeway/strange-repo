@@ -19,6 +19,17 @@ When("I open the home page", async function () {
 });
 
 Then("the page shows the API status {string}", async function (expected) {
+  // The status is fetched in the browser after the page paints, so wait for
+  // it to settle rather than reading the placeholder.
+  await world.page.waitForFunction(
+    (want) =>
+      document
+        .querySelector('[data-testid="api-status"]')
+        ?.textContent?.trim() === want,
+    expected,
+    { timeout: 30_000 },
+  );
+
   const actual = await world.page.textContent('[data-testid="api-status"]');
   assert.equal(actual?.trim(), expected);
 });

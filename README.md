@@ -58,18 +58,15 @@ flyctl tokens create deploy --name github-actions
 
 ### How the two apps find each other
 
-gary-web fetches gary-api over [Flycast](https://fly.io/docs/networking/flycast/)
-at `http://<gary-api-app-name>.flycast` — port 80, not 8080. `[http_service]`
-makes fly-proxy listen on 80 and 443 and forward to `internal_port`, so 8080 is
-the app's own socket and nothing is listening on it at the Flycast address.
-Traffic stays inside the Fly org, and because the proxy is in the path, a
-stopped gary-api machine is started on demand — so gary-api scales to zero. The
-workflow allocates the private address Flycast needs on its first run.
+The browser fetches gary-api's `/health` directly, so `GARY_API_URL` is
+gary-api's **public** URL. A browser cannot route to a Fly-private address, so
+neither `.internal` nor Flycast works here. fly-proxy starts a stopped machine
+on a public request, so gary-api still scales to zero, and gary-api allows any
+origin on `/health` because the request is cross-origin.
 
-Do not use `.internal` for this. It addresses machines directly rather than
-going through the proxy, so it cannot start a stopped one, and Fly's private
-DNS omits stopped machines — the name fails to resolve at all rather than
-timing out, which makes the cause hard to read from the error.
+The URL is read per request on the server and passed to the browser component
+as a prop, rather than being a `NEXT_PUBLIC_` variable — those are inlined at
+build time, which would bake the value into the image.
 
 When gary-api is unreachable, gary-web renders `unavailable` rather than
 failing, so a gary-api outage degrades the page instead of breaking it.

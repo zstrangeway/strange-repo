@@ -13,7 +13,12 @@ export async function start() {
 
   server = http.createServer((req, res) => {
     if (req.url === "/health") {
-      res.writeHead(200, { "content-type": "application/json" });
+      // The page fetches this from the browser, so it is cross-origin —
+      // matching gary-api, which allows any origin for /health.
+      res.writeHead(200, {
+        "content-type": "application/json",
+        "access-control-allow-origin": "*",
+      });
       res.end(JSON.stringify({ status: "ok" }));
       return;
     }
