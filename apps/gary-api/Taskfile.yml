@@ -1,0 +1,20 @@
+version: '3'
+
+tasks:
+  dev:
+    desc: Run the development server with reload
+    cmds:
+      - uv run fastapi dev src/gary_api/app.py
+
+  serve:
+    desc: Run the production server
+    cmds:
+      - uv run fastapi run src/gary_api/app.py
+
+  test:
+    desc: Run the specs and unit tests, then enforce the coverage gate
+    cmds:
+      - uv run coverage erase
+      - uv run coverage run -m behave
+      - uv run coverage run -a -m unittest discover -s tests
+      - uv run coverage report

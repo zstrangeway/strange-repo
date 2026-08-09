@@ -1,0 +1,12 @@
+version: '3'
+
+includes:
+  gary-api:
+    taskfile: ./apps/gary-api
+    dir: ./apps/gary-api
+
+tasks:
+  test:
+    desc: Run every app's tests
+    cmds:
+      - task: gary-api:test
