@@ -62,10 +62,12 @@ export async function start() {
       env: {
         ...process.env,
         DATABASE_URL: url,
-        // Pinned: a RESEND_API_KEY in the environment would otherwise make
-        // an e2e run send real email, and the console provider is how these
-        // scenarios read the reset link.
-        MAIL_PROVIDER: "console",
+        // The stand-in for Google, Facebook and Apple. Reaching the real
+        // three would mean driving their consent screens by hand.
+        IDENTITY_FAKE: "1",
+        // Where its own stand-in consent page lives, as the browser will
+        // reach it — the default assumes port 8000 and this is not that.
+        API_BASE_URL: API_URL,
         // Python block-buffers stdout into a pipe, so its output can sit
         // unflushed for as long as it takes to fill 8KB — long enough for a
         // step to read an empty log and conclude nothing was sent.

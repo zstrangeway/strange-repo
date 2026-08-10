@@ -10,10 +10,10 @@ Feature: One action, one story across both logs
   # gary-api puts on its own, for the same click. That needs both processes
   # running, so it lives in the full-stack tier with the other four.
 
-  Scenario: A sign up is one request id in two logs
+  Scenario: A sign in is one request id in two logs
     Given I am signed out
-    When I open the sign up page
-    And I sign up as "Ada" with email "ada@example.com" and password "a long enough password"
+    When I open the sign in page
+    And I sign in with google, agreeing as "1|ada@example.com|Ada"
     Then I should be on the home page
     And gary-web should have logged the call it made to gary-api
     And gary-api should have logged receiving that call
@@ -23,8 +23,8 @@ Feature: One action, one story across both logs
   # id on the line is the one gary-web minted.
   Scenario: A request id offered by the browser is not taken on trust
     Given I am signed out
-    When I open the sign up page
-    And I sign up as "Ada" with email "ada@example.com" and password "a long enough password"
+    When I open the sign in page
+    And I sign in with google, agreeing as "1|ada@example.com|Ada"
     And I open the home page with "x-request-id" set to "pasted-by-hand"
     Then gary-web should have logged the call it made to gary-api
     And no line in either log should have "request_id" set to "pasted-by-hand"

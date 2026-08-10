@@ -76,3 +76,22 @@ Feature: Signing in and out
     Given only google and apple are configured
     When I ask where to sign in
     Then the offered ways to sign in should be google and apple
+
+  # The stand-in provider is a real page at a real URL, because signing in is
+  # a browser navigation away from gary and back. A double that only answered
+  # API calls would leave that half of the flow unexercised.
+  Scenario: The stand-in provider shows a page a browser can use
+    When I GET "/auth/fake/google/authorize"
+    Then the response status should be 200
+    And the page should ask who I am
+
+  Scenario: Agreeing at the stand-in sends me back with a code
+    When I agree at google as "1234|ada@example.com|Ada Lovelace"
+    Then I should be sent back to "http://localhost:3000/signed-in" with a code
+
+  # Not merely hidden: a deployment with real providers must not carry a way
+  # to assert any identity you like.
+  Scenario: The stand-in is not there when the real providers are
+    Given the real providers are configured
+    When I GET "/auth/fake/google/authorize"
+    Then the response status should be 404

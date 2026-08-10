@@ -30,6 +30,7 @@ __all__ = [
     "Provider",
     "ProviderIdentity",
     "configured",
+    "faking",
     "provider",
     "report_configuration",
 ]
@@ -74,7 +75,8 @@ BUILDERS: dict[str, Callable[[], Provider]] = {
 }
 
 
-def _faking() -> bool:
+def faking() -> bool:
+    """Whether the spec double is standing in for every provider."""
     return os.environ.get("IDENTITY_FAKE") == "1"
 
 
@@ -91,7 +93,7 @@ def provider(name: str) -> Provider:
         known = ", ".join(configured())
         raise IdentityError(f"{name!r} is not a provider here. Try: {known}")
 
-    if _faking():
+    if faking():
         return FakeProvider(name)
 
     build = BUILDERS.get(name)
@@ -108,7 +110,7 @@ def report_configuration() -> None:
     the other two still sign people in — but it must not be discovered by a
     user clicking the button either.
     """
-    if _faking():
+    if faking():
         logger.warning("identity.faking", providers=configured())
         return
 

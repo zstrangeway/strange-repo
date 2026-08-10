@@ -256,3 +256,38 @@ def step_display_name(context, email, name):
 @then("the response should carry no token")
 def step_no_token(context):
     assert "token" not in context.response.json(), context.response.text
+
+
+@then("the page should ask who I am")
+def step_consent_page(context):
+    body = context.response.text
+    assert 'name="code"' in body, f"no way to say who you are in: {body[:200]}"
+    assert "<form" in body, "the page carries no form"
+
+
+@when('I agree at {provider} as "{code}"')
+def step_agree(context, provider, code):
+    context.response = context.client.post(
+        f"/auth/fake/{provider}/authorize",
+        params={"redirect_uri": REDIRECT_URI, "state": provider},
+        data={"code": code},
+        follow_redirects=False,
+    )
+
+
+@then('I should be sent back to "{where}" with a code')
+def step_sent_back(context, where):
+    assert context.response.status_code == 303, context.response.text
+    location = context.response.headers["location"]
+    assert location.startswith(where), f"sent to {location}"
+    assert "code=" in location, f"no code in {location}"
+
+
+@given("the real providers are configured")
+def step_real_providers(context):
+    import os
+
+    from gary_api import identity
+
+    os.environ["IDENTITY_FAKE"] = "0"
+    identity.provider.cache_clear()

@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from gary_api import auth, db, identity, logs
+from gary_api.identity import consent
 
 
 @asynccontextmanager
@@ -24,6 +25,8 @@ app.add_middleware(logs.RequestContext)
 # browser client calls it, and this is the line that has to change with it.
 
 app.include_router(auth.router)
+# 404s unless IDENTITY_FAKE is on, so mounting it always is safe.
+app.include_router(consent.router)
 
 
 @app.get("/health")
