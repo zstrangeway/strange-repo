@@ -1,26 +1,19 @@
-@import "tailwindcss";
+/* Everything visual lives in the shared library: the shadcn base layer, the
+   colour tokens, and the dark-mode rules. This file only adds what is
+   gary-web's own — the fonts the root layout loads. */
+@import "@gary/ui/globals.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* next/font defines --font-geist-sans and --font-geist-mono on <html>. This
+   points Tailwind's font-sans and font-mono utilities at them. `inline` means
+   the values are substituted into those utilities rather than emitted as
+   theme variables, so reach for the utility — var(--font-sans) resolves to
+   nothing. <body> carries font-sans in layout.tsx for that reason.
 
+   The fallbacks after each variable are load-bearing. next/font leaves the
+   variable undefined when it cannot reach Google Fonts at build time, and
+   with nothing behind it the whole app renders in the browser's default
+   serif — which looks like a styling bug rather than a missing font. */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }

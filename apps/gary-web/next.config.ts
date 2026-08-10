@@ -7,6 +7,9 @@ const nextConfig: NextConfig = {
   output: "standalone",
   // Trace from the workspace root so pnpm-linked dependencies are included.
   outputFileTracingRoot: path.join(import.meta.dirname, "../.."),
+  // @gary/ui is published as TypeScript source rather than a build step, so
+  // Next has to compile it the same way it compiles src/.
+  transpilePackages: ["@gary/ui"],
 };
 
 // org and project are deliberately not set here — they come from SENTRY_ORG

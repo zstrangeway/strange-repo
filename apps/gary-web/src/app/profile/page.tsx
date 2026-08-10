@@ -1,6 +1,15 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { Button } from "@gary/ui/components/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@gary/ui/components/card";
+
 import { currentUser } from "@/lib/session";
 
 import { signOut } from "../actions";
@@ -15,25 +24,47 @@ export default async function ProfilePage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-sm flex-col justify-center gap-8 p-8">
+    <main className="mx-auto flex min-h-screen w-full max-w-sm flex-col justify-center gap-6 p-6">
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold tracking-tight">Your profile</h1>
-        <p data-testid="profile-email" className="font-mono text-sm text-black/60 dark:text-white/60">
+        <p
+          data-testid="profile-email"
+          className="font-mono text-sm text-muted-foreground"
+        >
           {user.email}
         </p>
       </div>
 
-      <DisplayNameForm current={user.display_name} />
-      <ChangePasswordForm />
+      <Card>
+        <CardHeader>
+          <CardTitle>Display name</CardTitle>
+          <CardDescription>What gary calls you.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <DisplayNameForm current={user.display_name} />
+        </CardContent>
+      </Card>
 
-      <div className="flex items-center gap-4 text-sm">
-        <Link href="/" className="underline underline-offset-4">
-          Back home
-        </Link>
+      <Card>
+        <CardHeader>
+          <CardTitle>Password</CardTitle>
+          <CardDescription>
+            Changing it does not sign you out anywhere else.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ChangePasswordForm />
+        </CardContent>
+      </Card>
+
+      <div className="flex items-center gap-2">
+        <Button asChild variant="link">
+          <Link href="/">Back home</Link>
+        </Button>
         <form action={signOut}>
-          <button type="submit" data-testid="sign-out" className="underline underline-offset-4">
+          <Button type="submit" variant="link" data-testid="sign-out">
             Sign out
-          </button>
+          </Button>
         </form>
       </div>
     </main>

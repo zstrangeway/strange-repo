@@ -1,64 +1,78 @@
 "use client";
 
+import { useId } from "react";
+
+import { Alert, AlertDescription } from "@gary/ui/components/alert";
+import { Button } from "@gary/ui/components/button";
+import { Field as FieldRoot, FieldLabel } from "@gary/ui/components/field";
+import { Input } from "@gary/ui/components/input";
+
+// gary-web's own compositions, built from @gary/ui's shadcn primitives. What
+// lives here rather than in the library is the part the specs bind to — the
+// data-testid contract — and nothing else.
+
 export function Field({
   label,
   name,
   type = "text",
   autoComplete,
+  defaultValue,
+  labelHidden = false,
 }: {
   label: string;
   name: string;
   type?: string;
   autoComplete?: string;
+  defaultValue?: string;
+  labelHidden?: boolean;
 }) {
+  const id = useId();
+
   return (
-    <label className="flex flex-col gap-1 text-sm">
-      <span className="text-black/60 dark:text-white/60">{label}</span>
-      <input
+    <FieldRoot>
+      <FieldLabel htmlFor={id} className={labelHidden ? "sr-only" : undefined}>
+        {label}
+      </FieldLabel>
+      <Input
+        id={id}
         name={name}
         type={type}
         autoComplete={autoComplete}
+        defaultValue={defaultValue}
         data-testid={`field-${name}`}
-        className="rounded border border-black/15 bg-transparent px-3 py-2 text-base dark:border-white/20"
       />
-    </label>
+    </FieldRoot>
   );
 }
 
 export function Submit({ label, pending }: { label: string; pending: boolean }) {
   return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="rounded bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50"
-    >
+    <Button type="submit" disabled={pending}>
       {pending ? "Working…" : label}
-    </button>
+    </Button>
   );
 }
 
 export function Notice({ error, confirmation }: { error?: string; confirmation?: string }) {
   if (error) {
     return (
-      <p
-        data-testid="error"
-        role="alert"
-        className="rounded bg-red-100 px-3 py-2 text-sm text-red-800 dark:bg-red-950 dark:text-red-300"
-      >
-        {error}
-      </p>
+      <Alert data-testid="error" variant="destructive">
+        {/* The description carries the message and nothing else: a spec reads
+            this element's whole text and compares it to the expected string,
+            so an AlertTitle above it would be silently prepended to every
+            assertion. */}
+        <AlertDescription>{error}</AlertDescription>
+      </Alert>
     );
   }
 
   if (confirmation) {
     return (
-      <p
-        data-testid="confirmation"
-        role="status"
-        className="rounded bg-green-100 px-3 py-2 text-sm text-green-800 dark:bg-green-950 dark:text-green-300"
-      >
-        {confirmation}
-      </p>
+      // role overrides Alert's own "alert": a confirmation is not urgent, and
+      // role="status" is what announces it without interrupting.
+      <Alert data-testid="confirmation" role="status" variant="success">
+        <AlertDescription>{confirmation}</AlertDescription>
+      </Alert>
     );
   }
 

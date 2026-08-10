@@ -1,6 +1,8 @@
 import Link from "next/link";
 
 import { verifyEmail } from "../actions";
+import AuthShell from "../auth-shell";
+import { Notice } from "../form-parts";
 
 export const dynamic = "force-dynamic";
 
@@ -19,30 +21,18 @@ export default async function VerifyPage({ searchParams }: PageProps<"/verify">)
   const result = value ? await verifyEmail(value) : { error: DEAD_LINK };
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-sm flex-col justify-center gap-6 p-8">
-      <h1 className="text-2xl font-semibold tracking-tight">Confirm your address</h1>
-
-      {result.error ? (
-        <p
-          data-testid="error"
-          role="alert"
-          className="rounded bg-red-100 px-3 py-2 text-sm text-red-800 dark:bg-red-950 dark:text-red-300"
-        >
-          {result.error}
-        </p>
-      ) : (
-        <p
-          data-testid="confirmation"
-          role="status"
-          className="rounded bg-green-100 px-3 py-2 text-sm text-green-800 dark:bg-green-950 dark:text-green-300"
-        >
-          Thank you — your email address is confirmed.
-        </p>
-      )}
-
-      <Link href="/" className="text-sm underline underline-offset-4">
-        Go home
-      </Link>
-    </main>
+    <AuthShell
+      title="Confirm your address"
+      footer={
+        <Link href="/" className="text-foreground underline underline-offset-4">
+          Go home
+        </Link>
+      }
+    >
+      <Notice
+        error={result.error}
+        confirmation="Thank you — your email address is confirmed."
+      />
+    </AuthShell>
   );
 }

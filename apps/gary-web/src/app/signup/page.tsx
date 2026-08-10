@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { currentUser } from "@/lib/session";
 
+import AuthShell from "../auth-shell";
 import SignUpForm from "./form";
 
 export const dynamic = "force-dynamic";
@@ -13,15 +14,22 @@ export default async function SignUpPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-sm flex-col justify-center gap-6 p-8">
-      <h1 className="text-2xl font-semibold tracking-tight">Create an account</h1>
+    <AuthShell
+      title="Create an account"
+      description="A name, an email address, and a password is all it takes."
+      footer={
+        <p>
+          Already have one?{" "}
+          <Link
+            href="/login"
+            className="text-foreground underline underline-offset-4"
+          >
+            Sign in
+          </Link>
+        </p>
+      }
+    >
       <SignUpForm />
-      <p className="text-sm text-black/60 dark:text-white/60">
-        Already have one?{" "}
-        <Link href="/login" className="underline underline-offset-4">
-          Sign in
-        </Link>
-      </p>
-    </main>
+    </AuthShell>
   );
 }
