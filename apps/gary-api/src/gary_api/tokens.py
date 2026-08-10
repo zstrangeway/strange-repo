@@ -1,28 +1,11 @@
 import hashlib
 import secrets
 
-from argon2 import PasswordHasher
-from argon2.exceptions import VerificationError, VerifyMismatchError
-
-MINIMUM_LENGTH = 8
 TOKEN_BYTES = 32
-
-_hasher = PasswordHasher()
-
-
-def hash_password(password: str) -> str:
-    return _hasher.hash(password)
-
-
-def verify_password(password_hash: str, password: str) -> bool:
-    try:
-        return _hasher.verify(password_hash, password)
-    except (VerificationError, VerifyMismatchError):
-        return False
 
 
 def new_token() -> str:
-    """An opaque session or reset token.
+    """An opaque session token.
 
     secrets, not uuid4: these are bearer credentials and want a generator
     documented for that, rather than one whose job is uniqueness.

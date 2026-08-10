@@ -2,16 +2,15 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from gary_api import auth, db, logs, mail
+from gary_api import auth, db, identity, logs
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # uvicorn configures its own loggers and leaves the root one alone, so
-    # without this every record this app emits below WARNING is dropped —
-    # including the reset link the console mail provider exists to print.
+    # without this every record this app emits below WARNING is dropped.
     logs.configure()
-    mail.report_configuration()
+    identity.report_configuration()
     yield
 
 
@@ -20,11 +19,9 @@ app = FastAPI(title="gary-api", lifespan=lifespan)
 # Outermost of ours, so the request id is bound before anything else can log.
 app.add_middleware(logs.RequestContext)
 
-# No CORS middleware: nothing in a browser talks to gary-api any more.
-# gary-web calls it from its own server so that the session cookie belongs to
-# gary-web's origin — a cookie set here would be third-party to gary-web and
-# dropped by Safari and Firefox. /health is left to Fly's checker, which is
-# not a browser either.
+# No CORS middleware yet: gary-web still calls this from its own server, so
+# nothing in a browser talks to gary-api directly. That changes the day a
+# browser client calls it, and this is the line that has to change with it.
 
 app.include_router(auth.router)
 
