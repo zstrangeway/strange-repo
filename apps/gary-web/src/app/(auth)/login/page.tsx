@@ -13,10 +13,14 @@ export const dynamic = "force-dynamic";
 
 const NOWHERE_TO_GO = "gary is unavailable, try again shortly";
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: PageProps<"/login">) {
   if (await currentUser()) {
     redirect("/");
   }
+
+  const { error } = await searchParams;
 
   // The list comes from gary-api rather than being hard-coded here, so a
   // provider added or withdrawn there needs no change in this app.
@@ -28,6 +32,9 @@ export default async function LoginPage() {
       description="gary has no password of yours. Choose who should vouch for you."
     >
       <div className="flex flex-col gap-3">
+        <Notice
+          error={typeof error === "string" ? error : undefined}
+        />
         {providers.length === 0 ? <Notice error={NOWHERE_TO_GO} /> : null}
         {providers.map((provider) => (
           <Button

@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { useRouter } from "next/navigation";
+import { useActionState, useEffect } from "react";
 
 import { Button } from "@gary/ui/components/button";
 import { SubmitButton } from "@gary/ui/components/submit-button";
@@ -24,6 +25,13 @@ export default function ConnectedAccounts({
     disconnectAccount,
     {},
   );
+  const router = useRouter();
+
+  useEffect(() => {
+    if (state.confirmation) {
+      router.refresh();
+    }
+  }, [state.confirmation, router]);
   const connectedCount = connections.filter((row) => row.email).length;
 
   return (

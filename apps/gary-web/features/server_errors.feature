@@ -13,10 +13,8 @@ Feature: A server crash is logged, not only reported
   # Component, and Next hands that to onRequestError.
 
   Scenario: gary-api answers with something that is not JSON
-    Given an account already exists for "ada@example.com" with name "Ada" and password "a long enough password"
-    And I am signed out
-    When I open the sign in page
-    And I sign in with email "ada@example.com" and password "a long enough password"
+    Given I am signed in as "Ada"
+    When I open the home page
     Then the page shows "Welcome Home, Ada"
     When gary-api starts answering with something that is not JSON
     And I reload the page

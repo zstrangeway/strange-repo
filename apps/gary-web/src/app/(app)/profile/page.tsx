@@ -12,12 +12,16 @@ import { currentUser } from "@/lib/session";
 import { absoluteUrl } from "@/lib/urls";
 
 import { connectedAccounts, waysToSignIn } from "../../actions";
+import { Notice } from "../../form-parts";
 import ConnectedAccounts from "./connected";
 import { DisplayNameForm } from "./forms";
 
-export default async function ProfilePage() {
+export default async function ProfilePage({
+  searchParams,
+}: PageProps<"/profile">) {
   // See the note on the home page: the layout's guard does not stop this
   // from running, and currentUser is request-cached.
+  const { error, connected: justConnected } = await searchParams;
   const user = await currentUser();
   if (!user) {
     redirect("/login");
@@ -71,7 +75,13 @@ export default async function ProfilePage() {
             remove the last one.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-4">
+          <Notice
+            error={typeof error === "string" ? error : undefined}
+            confirmation={
+              typeof justConnected === "string" ? justConnected : undefined
+            }
+          />
           <ConnectedAccounts connections={connections} />
         </CardContent>
       </Card>

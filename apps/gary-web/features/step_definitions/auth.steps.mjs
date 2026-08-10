@@ -52,7 +52,7 @@ Given(
   },
 );
 
-Given("{word} will not say who I am", async function (provider) {
+Given("{word} will not say who I am", async function (_provider) {
   // Arranging nobody is how the stub produces a provider that refuses.
 });
 
@@ -78,6 +78,16 @@ Given(
     });
   },
 );
+
+// Kept for the specs that only need somebody signed in and do not care how.
+Given("I am signed in as {string}", async function (name) {
+  apiStub.nextPerson("google", { email: "ada@example.com", name });
+  await open("/login");
+  await through("google", "sign-in");
+  await world.page.waitForSelector('[data-testid="welcome"]', {
+    timeout: 15_000,
+  });
+});
 
 When("I sign in with {word}", async function (provider) {
   if (path() !== "/login") {
@@ -189,24 +199,34 @@ Then("{word} should not be offered", async function (provider) {
   assert.equal(found, null, `${provider} was offered and should not be`);
 });
 
+/** Polled rather than read once: connecting and disconnecting both change
+ *  what the server rendered, so the list arrives on a refresh rather than
+ *  with the click that caused it. */
+async function settlesTo(provider, connected) {
+  const selector = `[data-testid="connection-${provider}"]`;
+  try {
+    await world.page.waitForFunction(
+      ([where, want]) => {
+        const row = document.querySelector(where);
+        return row ? row.innerText.includes("Not connected") !== want : false;
+      },
+      [selector, connected],
+      { timeout: 15_000 },
+    );
+  } catch {
+    const text = await world.page.textContent(selector);
+    assert.fail(
+      `${provider} should read as ${connected ? "" : "not "}connected: ${text}`,
+    );
+  }
+}
+
 Then("{word} should be connected", async function (provider) {
-  const text = await world.page.textContent(
-    `[data-testid="connection-${provider}"]`,
-  );
-  assert.ok(
-    !text.includes("Not connected"),
-    `${provider} reads as not connected: ${text}`,
-  );
+  await settlesTo(provider, true);
 });
 
 Then("{word} should not be connected", async function (provider) {
-  const text = await world.page.textContent(
-    `[data-testid="connection-${provider}"]`,
-  );
-  assert.ok(
-    text.includes("Not connected"),
-    `${provider} reads as connected: ${text}`,
-  );
+  await settlesTo(provider, false);
 });
 
 Then("I cannot disconnect {word}", async function (provider) {

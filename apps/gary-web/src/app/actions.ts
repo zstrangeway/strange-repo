@@ -62,9 +62,7 @@ export async function completeSignIn(
   }
 
   await startSession(result.data);
-  // Outside the failure path on purpose: redirect works by throwing, so a
-  // try/catch around it would swallow the navigation.
-  redirect("/");
+  return {};
 }
 
 export async function signOut(): Promise<void> {
