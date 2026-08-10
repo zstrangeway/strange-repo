@@ -15,6 +15,11 @@ dependencies = [
     # Already present under fastapi[standard]; named here because the mail
     # providers call it directly rather than inheriting it by luck.
     "httpx>=0.28.1",
+    # Google and Facebook, behind one interface. Apple is not in its provider
+    # list, which is why gary_api/identity/apple.py exists.
+    "httpx-oauth>=0.17.0",
+    # Signs Apple's client secret (ES256) and verifies its id_token.
+    "pyjwt[crypto]>=2.10.1",
     "sqlalchemy[asyncio]>=2.0.51",
 ]
 
