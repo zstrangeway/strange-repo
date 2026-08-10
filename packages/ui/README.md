@@ -49,6 +49,7 @@ each built from the vendored primitives rather than from raw markup:
 | `SubmitButton` | A submit `Button` that disables itself and changes its label while a form is in flight |
 | `Notice`       | An `Alert` holding one line of prose — no title, no icon    |
 | `FormCard`     | A `Card` holding a single form, centred on its own page      |
+| `ThemeProvider` | Light/dark/system in localStorage, applied to `<html>`. Exports `useTheme`. The part of next-themes worth having, without the dependency |
 
 They spread their remaining props onto the element a caller would expect, so
 app-specific attributes — `data-testid`, `name`, `autoComplete` — pass

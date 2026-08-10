@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+
+import { ThemeProvider } from "@gary/ui/components/theme-provider";
+
 import "./globals.css";
 
 const geistSans = Geist({
@@ -23,7 +26,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col font-sans">{children}</body>
+      {/* Wrapped at the root, not around the sidebar: the control only exists
+          when signed in, but a stored choice has to be honoured everywhere,
+          or signing out would drop you onto a login page in the wrong
+          theme. */}
+      <body className="flex min-h-full flex-col font-sans">
+        <ThemeProvider>{children}</ThemeProvider>
+      </body>
     </html>
   );
 }

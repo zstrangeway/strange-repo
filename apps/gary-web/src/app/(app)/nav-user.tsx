@@ -19,6 +19,7 @@ import {
 } from "@gary/ui/components/sidebar";
 
 import { signOut } from "../actions";
+import ThemeMenu from "./theme-menu";
 
 function initials(name: string) {
   const letters = name
@@ -76,6 +77,8 @@ export default function NavUser({
                 </span>
               </div>
             </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <ThemeMenu />
             <DropdownMenuSeparator />
             {/* The form wraps the item rather than the other way round: the
                 menu item has to stay the thing with role="menuitem", and a
