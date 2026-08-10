@@ -1,7 +1,8 @@
 import Link from "next/link";
 
+import { FormCard } from "@gary/ui/components/form-card";
+
 import { verifyEmail } from "../actions";
-import AuthShell from "../auth-shell";
 import { Notice } from "../form-parts";
 
 export const dynamic = "force-dynamic";
@@ -21,8 +22,8 @@ export default async function VerifyPage({ searchParams }: PageProps<"/verify">)
   const result = value ? await verifyEmail(value) : { error: DEAD_LINK };
 
   return (
-    <AuthShell
-      title="Confirm your address"
+    <FormCard
+      title={<h1 className="text-2xl">Confirm your address</h1>}
       footer={
         <Link href="/" className="text-foreground underline underline-offset-4">
           Go home
@@ -33,6 +34,6 @@ export default async function VerifyPage({ searchParams }: PageProps<"/verify">)
         error={result.error}
         confirmation="Thank you — your email address is confirmed."
       />
-    </AuthShell>
+    </FormCard>
   );
 }

@@ -4,9 +4,10 @@ import { useRouter } from "next/navigation";
 import { useActionState, useEffect } from "react";
 
 import { FieldGroup } from "@gary/ui/components/field";
+import { SubmitButton } from "@gary/ui/components/submit-button";
 
 import { changePassword, updateDisplayName, type FormState } from "../actions";
-import { Field, Notice, Submit } from "../form-parts";
+import { Field, Notice } from "../form-parts";
 
 export function DisplayNameForm({ current }: { current: string }) {
   const [state, action, pending] = useActionState<FormState, FormData>(
@@ -36,7 +37,7 @@ export function DisplayNameForm({ current }: { current: string }) {
           defaultValue={current}
           labelHidden
         />
-        <Submit label="Save name" pending={pending} />
+        <SubmitButton label="Save name" pending={pending} />
       </FieldGroup>
     </form>
   );
@@ -64,7 +65,7 @@ export function ChangePasswordForm() {
           type="password"
           autoComplete="new-password"
         />
-        <Submit label="Change password" pending={pending} />
+        <SubmitButton label="Change password" pending={pending} />
       </FieldGroup>
     </form>
   );

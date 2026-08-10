@@ -1,8 +1,9 @@
 import Link from "next/link";
 
+import { FormCard } from "@gary/ui/components/form-card";
+
 import { callApi } from "@/lib/api";
 
-import AuthShell from "../auth-shell";
 import { Notice } from "../form-parts";
 import ResetForm from "./form";
 
@@ -21,8 +22,8 @@ export default async function ResetPage({ searchParams }: PageProps<"/reset">) {
     : ({ ok: false } as const);
 
   return (
-    <AuthShell
-      title="Set a new password"
+    <FormCard
+      title={<h1 className="text-2xl">Set a new password</h1>}
       footer={
         <Link
           href="/forgot"
@@ -33,6 +34,6 @@ export default async function ResetPage({ searchParams }: PageProps<"/reset">) {
       }
     >
       {usable.ok ? <ResetForm token={value} /> : <Notice error={DEAD_LINK} />}
-    </AuthShell>
+    </FormCard>
   );
 }

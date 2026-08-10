@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { FormCard } from "@gary/ui/components/form-card";
+
 import { currentUser } from "@/lib/session";
 
-import AuthShell from "../auth-shell";
 import SignInForm from "./form";
 
 export const dynamic = "force-dynamic";
@@ -18,8 +19,8 @@ export default async function LoginPage({
   const { reset } = await searchParams;
 
   return (
-    <AuthShell
-      title="Sign in to gary"
+    <FormCard
+      title={<h1 className="text-2xl">Sign in to gary</h1>}
       description="Enter your email and password to carry on."
       footer={
         <p>
@@ -34,6 +35,6 @@ export default async function LoginPage({
       }
     >
       <SignInForm resetDone={reset === "1"} />
-    </AuthShell>
+    </FormCard>
   );
 }

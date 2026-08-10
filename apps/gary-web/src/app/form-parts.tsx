@@ -1,68 +1,34 @@
 "use client";
 
-import { useId } from "react";
+import type { ComponentProps } from "react";
 
-import { Alert, AlertDescription } from "@gary/ui/components/alert";
-import { Button } from "@gary/ui/components/button";
-import { Field as FieldRoot, FieldLabel } from "@gary/ui/components/field";
-import { Input } from "@gary/ui/components/input";
+import { Notice as UiNotice } from "@gary/ui/components/notice";
+import { TextField } from "@gary/ui/components/text-field";
 
-// gary-web's own compositions, built from @gary/ui's shadcn primitives. What
-// lives here rather than in the library is the part the specs bind to — the
-// data-testid contract — and nothing else.
+// The only two things here are gary-web's own: the data-testid contract the
+// Gherkin steps bind to, and the FormState shape the server actions return.
+// There is no layout and no styling in this file on purpose — the moment
+// either shows up, it belongs in @gary/ui instead.
 
 export function Field({
-  label,
   name,
-  type = "text",
-  autoComplete,
-  defaultValue,
-  labelHidden = false,
+  ...props
+}: ComponentProps<typeof TextField> & { name: string }) {
+  return <TextField name={name} data-testid={`field-${name}`} {...props} />;
+}
+
+export function Notice({
+  error,
+  confirmation,
 }: {
-  label: string;
-  name: string;
-  type?: string;
-  autoComplete?: string;
-  defaultValue?: string;
-  labelHidden?: boolean;
+  error?: string;
+  confirmation?: string;
 }) {
-  const id = useId();
-
-  return (
-    <FieldRoot>
-      <FieldLabel htmlFor={id} className={labelHidden ? "sr-only" : undefined}>
-        {label}
-      </FieldLabel>
-      <Input
-        id={id}
-        name={name}
-        type={type}
-        autoComplete={autoComplete}
-        defaultValue={defaultValue}
-        data-testid={`field-${name}`}
-      />
-    </FieldRoot>
-  );
-}
-
-export function Submit({ label, pending }: { label: string; pending: boolean }) {
-  return (
-    <Button type="submit" disabled={pending}>
-      {pending ? "Working…" : label}
-    </Button>
-  );
-}
-
-export function Notice({ error, confirmation }: { error?: string; confirmation?: string }) {
   if (error) {
     return (
-      <Alert data-testid="error" variant="destructive">
-        {/* The description carries the message and nothing else: a spec reads
-            this element's whole text and compares it to the expected string,
-            so an AlertTitle above it would be silently prepended to every
-            assertion. */}
-        <AlertDescription>{error}</AlertDescription>
-      </Alert>
+      <UiNotice variant="destructive" data-testid="error">
+        {error}
+      </UiNotice>
     );
   }
 
@@ -70,9 +36,9 @@ export function Notice({ error, confirmation }: { error?: string; confirmation?:
     return (
       // role overrides Alert's own "alert": a confirmation is not urgent, and
       // role="status" is what announces it without interrupting.
-      <Alert data-testid="confirmation" role="status" variant="success">
-        <AlertDescription>{confirmation}</AlertDescription>
-      </Alert>
+      <UiNotice variant="success" role="status" data-testid="confirmation">
+        {confirmation}
+      </UiNotice>
     );
   }
 
