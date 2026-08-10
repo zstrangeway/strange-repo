@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { FormCard } from "@gary/ui/components/form-card";
+
 import { currentUser } from "@/lib/session";
 
-import AuthShell from "../auth-shell";
 import SignUpForm from "./form";
 
 export const dynamic = "force-dynamic";
@@ -14,8 +15,8 @@ export default async function SignUpPage() {
   }
 
   return (
-    <AuthShell
-      title="Create an account"
+    <FormCard
+      title={<h1 className="text-2xl">Create an account</h1>}
       description="A name, an email address, and a password is all it takes."
       footer={
         <p>
@@ -30,6 +31,6 @@ export default async function SignUpPage() {
       }
     >
       <SignUpForm />
-    </AuthShell>
+    </FormCard>
   );
 }

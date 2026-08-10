@@ -38,6 +38,23 @@ Some names are worth knowing before you write something yourself: `field`
 covers labelled inputs with descriptions and errors, `input-group` covers
 inputs with affixes, `empty` covers empty states.
 
+## The components that are not from the registry
+
+Four of them, each written here only after the registry came up empty, and
+each built from the vendored primitives rather than from raw markup:
+
+| Component      | What it is                                                  |
+| -------------- | ----------------------------------------------------------- |
+| `TextField`    | `Field` + `FieldLabel` + `Input`, with a generated id wiring the label to the control |
+| `SubmitButton` | A submit `Button` that disables itself and changes its label while a form is in flight |
+| `Notice`       | An `Alert` holding one line of prose — no title, no icon    |
+| `FormCard`     | A `Card` holding a single form, centred on its own page      |
+
+They spread their remaining props onto the element a caller would expect, so
+app-specific attributes — `data-testid`, `name`, `autoComplete` — pass
+straight through. That is the seam: nothing in this package should know an
+app's test selectors or its form-state shape.
+
 ## Editing a component
 
 These files are ours — that is the whole point of shadcn. Prefer extending a

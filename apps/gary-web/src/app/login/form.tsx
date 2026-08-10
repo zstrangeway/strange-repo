@@ -4,9 +4,10 @@ import Link from "next/link";
 import { useActionState } from "react";
 
 import { FieldGroup } from "@gary/ui/components/field";
+import { SubmitButton } from "@gary/ui/components/submit-button";
 
 import { signIn, type FormState } from "../actions";
-import { Field, Notice, Submit } from "../form-parts";
+import { Field, Notice } from "../form-parts";
 
 const RESET_DONE = "Your password has been changed, sign in with it";
 
@@ -37,7 +38,7 @@ export default function SignInForm({ resetDone }: { resetDone: boolean }) {
           type="password"
           autoComplete="current-password"
         />
-        <Submit label="Sign in" pending={pending} />
+        <SubmitButton label="Sign in" pending={pending} />
         <Link
           href="/forgot"
           className="text-sm text-muted-foreground underline underline-offset-4"
