@@ -6,8 +6,8 @@ import { useActionState } from "react";
 import { FieldGroup } from "@gary/ui/components/field";
 import { SubmitButton } from "@gary/ui/components/submit-button";
 
-import { signIn, type FormState } from "../actions";
-import { Field, Notice } from "../form-parts";
+import { signIn, type FormState } from "../../actions";
+import { Field, Notice } from "../../form-parts";
 
 const RESET_DONE = "Your password has been changed, sign in with it";
 

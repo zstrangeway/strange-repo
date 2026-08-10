@@ -5,8 +5,8 @@ import { useActionState } from "react";
 import { Notice as UiNotice } from "@gary/ui/components/notice";
 import { SubmitButton } from "@gary/ui/components/submit-button";
 
-import { resendVerification, type FormState } from "./actions";
-import { Notice } from "./form-parts";
+import { resendVerification, type FormState } from "../actions";
+import { Notice } from "../form-parts";
 
 export default function UnverifiedNotice() {
   const [state, action, pending] = useActionState<FormState, FormData>(

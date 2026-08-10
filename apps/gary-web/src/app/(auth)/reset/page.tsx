@@ -4,7 +4,7 @@ import { FormCard } from "@gary/ui/components/form-card";
 
 import { callApi } from "@/lib/api";
 
-import { Notice } from "../form-parts";
+import { Notice } from "../../form-parts";
 import ResetForm from "./form";
 
 export const dynamic = "force-dynamic";

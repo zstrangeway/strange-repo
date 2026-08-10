@@ -1,7 +1,5 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { Button } from "@gary/ui/components/button";
 import {
   Card,
   CardContent,
@@ -12,21 +10,20 @@ import {
 
 import { currentUser } from "@/lib/session";
 
-import { signOut } from "../actions";
 import { ChangePasswordForm, DisplayNameForm } from "./forms";
 
-export const dynamic = "force-dynamic";
-
 export default async function ProfilePage() {
+  // See the note on the home page: the layout's guard does not stop this
+  // from running, and currentUser is request-cached.
   const user = await currentUser();
   if (!user) {
     redirect("/login");
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-sm flex-col justify-center gap-6 p-6">
+    <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Your profile</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">Your profile</h1>
         <p
           data-testid="profile-email"
           className="font-mono text-sm text-muted-foreground"
@@ -56,17 +53,6 @@ export default async function ProfilePage() {
           <ChangePasswordForm />
         </CardContent>
       </Card>
-
-      <div className="flex items-center gap-2">
-        <Button asChild variant="link">
-          <Link href="/">Back home</Link>
-        </Button>
-        <form action={signOut}>
-          <Button type="submit" variant="link" data-testid="sign-out">
-            Sign out
-          </Button>
-        </form>
-      </div>
-    </main>
+    </div>
   );
 }
