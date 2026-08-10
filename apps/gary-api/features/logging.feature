@@ -89,11 +89,3 @@ Feature: Structured logs
 
   # The end-to-end suite reads the reset link out of this app's own output.
   # JSON escaping the body must not put the link out of its reach.
-  Scenario: The reset link the console mailer logs survives being JSON
-    Given mail is going to the console
-    And a user exists with email "ada@example.com" and password "a long enough password"
-    When I POST "/auth/password-reset" with:
-      """
-      {"email": "ada@example.com"}
-      """
-    Then a logged line should contain a reset link with a readable token

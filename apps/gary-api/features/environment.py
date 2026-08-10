@@ -1,16 +1,13 @@
 import asyncio
 import io
-import json
 import os
-import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 from starlette.testclient import TestClient
 
-from gary_api import db, logs, mail
+from gary_api import db, identity, logs
 from gary_api.app import app
 from gary_api.db import database_url
 from gary_api.models import Base
@@ -37,64 +34,12 @@ def _run(work):
     return asyncio.run(scoped())
 
 
-class FakeResend:
-    """A local stand-in for Resend's API, not for our own mail code.
-
-    The specs run the real ResendMailer over real HTTP against this, so what
-    they prove is what gary actually sends. Nothing here is registered into
-    PROVIDERS — the provider under test is the shipped one, selected the way
-    a deployment selects it.
-    """
-
-    def __init__(self):
-        self.sent = []
-        self.refusing = False
-        self.server = HTTPServer(("127.0.0.1", 0), self._handler())
-        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
-        self.thread.start()
-
-    @property
-    def url(self):
-        host, port = self.server.server_address
-        return f"http://{host}:{port}/emails"
-
-    def close(self):
-        self.server.shutdown()
-        self.server.server_close()
-        self.thread.join()
-
-    def _handler(fake):
-        class Handler(BaseHTTPRequestHandler):
-            def do_POST(self):
-                body = json.loads(
-                    self.rfile.read(int(self.headers["content-length"]))
-                )
-                if fake.refusing:
-                    self.send_response(500)
-                    self.end_headers()
-                    self.wfile.write(b"the fake provider is refusing everything")
-                    return
-
-                fake.sent.append(body)
-                self.send_response(200)
-                self.send_header("content-type", "application/json")
-                self.end_headers()
-                self.wfile.write(b'{"id": "sent"}')
-
-            def log_message(self, *args):
-                pass
-
-        return Handler
-
-
 def before_all(context):
-    # The real Resend provider, pointed at a local server. RESEND_API_URL is
-    # what keeps a real key in the environment from reaching Resend, so it is
-    # set before anything can resolve a mailer, and the key is overridden too.
-    context.mail = FakeResend()
-    os.environ["MAIL_PROVIDER"] = "resend"
-    os.environ["RESEND_API_KEY"] = "not-a-real-key"
-    os.environ["RESEND_API_URL"] = context.mail.url
+    # The fake identity provider stands in for Google, Facebook and Apple.
+    # Reaching the real three would need their consent screens driven by
+    # hand, and what these specs are about is what gary does with an answer,
+    # not whether Google can authenticate people.
+    os.environ["IDENTITY_FAKE"] = "1"
 
     async def build(engine):
         async with engine.begin() as connection:
@@ -109,17 +54,17 @@ def before_scenario(context, scenario):
     # scenario deliberately points db.engine at a dead database.
     db.engine = _engine()
 
-    context.mail.sent.clear()
-    context.mail.refusing = False
-    # Restored per scenario, not just once: one spec swaps in the console
-    # provider, and the next one along would otherwise inherit it.
-    os.environ["MAIL_PROVIDER"] = "resend"
-    mail.mailer.cache_clear()
+    # Cleared per scenario: provider() caches what it built, and a scenario
+    # that changes which providers are configured would otherwise leak into
+    # the next one.
+    os.environ["IDENTITY_FAKE"] = "1"
+    os.environ.pop("IDENTITY_PROVIDERS", None)
+    identity.provider.cache_clear()
 
     async def empty(engine):
         async with engine.begin() as connection:
-            # CASCADE reaches sessions and reset tokens through their
-            # foreign keys, so this cannot drift as tables are added.
+            # CASCADE reaches sessions and identities through their foreign
+            # keys, so this cannot drift as tables are added.
             await connection.execute(text("TRUNCATE users CASCADE"))
 
     _run(empty)
@@ -136,26 +81,13 @@ def before_scenario(context, scenario):
     context.response = None
     context.token = None
     context.other_token = None
-    context.first_token = None
-    context.first_verification = None
-    context.reset_token = None
-    context.mail_baseline = 0
-
-
-def before_step(context, step):
-    # "no email should be sent" means none sent by the action under test, not
-    # none in the whole scenario — arranging an account now mails too.
-    if step.step_type == "when":
-        context.mail_baseline = len(context.mail.sent)
+    context.identities = {}
+    context.accounts = {}
 
 
 def after_scenario(context, scenario):
     context.client.close()
-    mail.mailer.cache_clear()
-
-
-def after_all(context):
-    context.mail.close()
+    identity.provider.cache_clear()
 
 
 def sql(statement, **parameters):

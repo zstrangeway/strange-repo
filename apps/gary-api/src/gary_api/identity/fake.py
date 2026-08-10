@@ -26,12 +26,16 @@ class FakeProvider:
             f"?redirect_uri={quote(redirect_uri, safe='')}&state={quote(state, safe='')}"
         )
 
-    async def identify(self, code: str, redirect_uri: str) -> ProviderIdentity:
+    async def identify(
+        self, code: str, redirect_uri: str, display_name: str | None = None
+    ) -> ProviderIdentity:
         parts = code.split("|")
         if len(parts) != 3 or not all(part.strip() for part in parts):
             raise IdentityError(f"the fake provider cannot read {code!r} as an identity")
 
-        subject, email, display_name = (part.strip() for part in parts)
+        subject, email, from_code = (part.strip() for part in parts)
+        # Apple's name arrives alongside the code rather than in it, and wins
+        # when a caller was given one — matching how the real provider works.
         return ProviderIdentity(
-            subject=subject, email=email, display_name=display_name
+            subject=subject, email=email, display_name=display_name or from_code
         )

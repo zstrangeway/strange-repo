@@ -8,10 +8,10 @@ from gary_api.app import app
 
 
 class LifespanTests(unittest.TestCase):
-    def test_reports_the_mail_configuration_on_startup(self):
+    def test_reports_the_identity_configuration_on_startup(self):
         # Entering the client is what runs the lifespan; constructing one on
         # its own does not.
-        with patch("gary_api.mail.report_configuration") as report:
+        with patch("gary_api.identity.report_configuration") as report:
             with TestClient(app):
                 pass
 
@@ -26,9 +26,9 @@ class LoggingTests(unittest.TestCase):
     """Regression: gary-api's own log records went nowhere under uvicorn.
 
     uvicorn configures its own loggers and leaves the root one alone, so
-    anything below WARNING was dropped — including the reset link the console
-    mail provider exists to print. Password reset was unusable locally and
-    silent about why.
+    anything below WARNING was dropped. That hid the line saying which
+    identity providers came up configured, which is the one thing you want
+    to see at startup and the last thing you want to find out from a user.
     """
 
     def test_startup_makes_the_apps_own_info_records_visible(self):
@@ -46,7 +46,7 @@ class LoggingTests(unittest.TestCase):
 
         self.assertTrue(root.handlers, "nothing would print the app's records")
         self.assertLessEqual(
-            logging.getLogger("gary_api.mail.console").getEffectiveLevel(),
+            logging.getLogger("gary_api.identity").getEffectiveLevel(),
             logging.INFO,
-            "INFO records, including the reset link, would still be dropped",
+            "INFO records, including the provider report, would still be dropped",
         )

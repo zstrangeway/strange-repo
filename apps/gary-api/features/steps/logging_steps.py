@@ -6,7 +6,7 @@ import re
 import httpx
 from behave import given, then, when
 
-from gary_api import logs, mail
+from gary_api import logs
 from gary_api.app import app
 
 
@@ -44,15 +44,6 @@ def at(line, path):
 
 def _boom(text):
     raise ValueError(text)
-
-
-@given("mail is going to the console")
-def step_console_mail(context):
-    # The rest of the suite runs the real Resend provider against a local
-    # server. This scenario is about what the console provider writes, which
-    # is what a developer machine and the end-to-end run both use.
-    os.environ["MAIL_PROVIDER"] = "console"
-    mail.mailer.cache_clear()
 
 
 @given('LOG_LEVEL is "{level}"')

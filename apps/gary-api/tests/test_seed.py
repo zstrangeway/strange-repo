@@ -8,7 +8,6 @@ from sqlalchemy.pool import NullPool
 
 from gary_api import seed
 from gary_api.db import database_url
-from gary_api.passwords import verify_password
 
 
 class IsLocalTests(unittest.TestCase):
@@ -64,24 +63,27 @@ class SeedTests(unittest.TestCase):
         self.assertEqual(len(lines), len(seed.ACCOUNTS))
         self.assertTrue(all("created" in line for line in lines))
 
-        rows = self._sql("SELECT email, display_name, password_hash FROM users")
+        rows = self._sql("SELECT email, display_name FROM users")
         self.assertEqual(
             sorted(row[0] for row in rows), sorted(e for e, _ in seed.ACCOUNTS)
         )
-        for _, _, password_hash in rows:
-            self.assertTrue(verify_password(password_hash, seed.PASSWORD))
 
-    def test_rerunning_resets_rather_than_failing(self):
+        # Each account is reachable, which now means it has an identity to
+        # sign in through rather than a password to type.
+        identities = self._sql("SELECT provider, subject, email FROM identities")
+        self.assertEqual(len(identities), len(seed.ACCOUNTS))
+        self.assertTrue(all(row[0] == seed.PROVIDER for row in identities))
+
+    def test_rerunning_leaves_the_accounts_alone(self):
         self._run(seed.seed())
-        self._sql("UPDATE users SET display_name = 'Drifted'")
 
         lines = self._run(seed.seed())
 
-        self.assertTrue(all("reset" in line for line in lines))
-        # The point of re-running: a mangled local database comes back.
-        names = [row[0] for row in self._sql("SELECT display_name FROM users")]
-        self.assertNotIn("Drifted", names)
-        self.assertEqual(len(names), len(seed.ACCOUNTS))
+        self.assertTrue(all("present" in line for line in lines))
+        # Re-running must not quietly mint a second account per person: the
+        # lookup is by identity, so there is nothing new to create.
+        rows = self._sql("SELECT email FROM users")
+        self.assertEqual(len(rows), len(seed.ACCOUNTS))
 
 
 class MainTests(unittest.TestCase):
@@ -106,8 +108,9 @@ class MainTests(unittest.TestCase):
 
         said = " ".join(str(call.args[0]) for call in printed.call_args_list if call.args)
         self.assertIn("ada@example.com", said)
-        # A seed that does not say the password is a seed you cannot use.
-        self.assertIn(seed.PASSWORD, said)
+        # A seed that does not say how to sign in is a seed you cannot use.
+        for email, display_name in seed.ACCOUNTS:
+            self.assertIn(seed.sign_in_code(email, display_name), said)
 
 
 if __name__ == "__main__":
