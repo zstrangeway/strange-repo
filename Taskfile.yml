@@ -7,10 +7,14 @@ includes:
   gary-web:
     taskfile: ./apps/gary-web
     dir: ./apps/gary-web
+  ui:
+    taskfile: ./packages/ui
+    dir: ./packages/ui
 
 tasks:
   test:
     desc: Run every app's tests
     cmds:
       - task: gary-api:test
+      - task: ui:test
       - task: gary-web:test

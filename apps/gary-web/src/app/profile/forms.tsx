@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect } from "react";
 
+import { FieldGroup } from "@gary/ui/components/field";
+
 import { changePassword, updateDisplayName, type FormState } from "../actions";
 import { Field, Notice, Submit } from "../form-parts";
 
@@ -22,19 +24,20 @@ export function DisplayNameForm({ current }: { current: string }) {
   }, [state.confirmation, router]);
 
   return (
-    <form action={action} noValidate className="flex flex-col gap-3">
-      <h2 className="text-sm font-medium">Display name</h2>
-      <Notice error={state.error} confirmation={state.confirmation} />
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="sr-only">Display name</span>
-        <input
+    <form action={action} noValidate>
+      <FieldGroup className="gap-4">
+        <Notice error={state.error} confirmation={state.confirmation} />
+        {/* The card heading already says "Display name", so the field's own
+            label is there for screen readers rather than repeated on screen. */}
+        <Field
+          label="Display name"
           name="display_name"
+          autoComplete="name"
           defaultValue={current}
-          data-testid="field-display_name"
-          className="rounded border border-black/15 bg-transparent px-3 py-2 text-base dark:border-white/20"
+          labelHidden
         />
-      </label>
-      <Submit label="Save name" pending={pending} />
+        <Submit label="Save name" pending={pending} />
+      </FieldGroup>
     </form>
   );
 }
@@ -46,22 +49,23 @@ export function ChangePasswordForm() {
   );
 
   return (
-    <form action={action} noValidate className="flex flex-col gap-3">
-      <h2 className="text-sm font-medium">Password</h2>
-      <Notice error={state.error} confirmation={state.confirmation} />
-      <Field
-        label="Current password"
-        name="current_password"
-        type="password"
-        autoComplete="current-password"
-      />
-      <Field
-        label="New password"
-        name="new_password"
-        type="password"
-        autoComplete="new-password"
-      />
-      <Submit label="Change password" pending={pending} />
+    <form action={action} noValidate>
+      <FieldGroup className="gap-4">
+        <Notice error={state.error} confirmation={state.confirmation} />
+        <Field
+          label="Current password"
+          name="current_password"
+          type="password"
+          autoComplete="current-password"
+        />
+        <Field
+          label="New password"
+          name="new_password"
+          type="password"
+          autoComplete="new-password"
+        />
+        <Submit label="Change password" pending={pending} />
+      </FieldGroup>
     </form>
   );
 }

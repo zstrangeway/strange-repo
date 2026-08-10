@@ -2,7 +2,8 @@
 
 // The last boundary: catches what the root layout throws, and React render
 // errors that nothing below caught. It replaces the root layout when active,
-// so it has to bring its own <html> and <body>.
+// so it has to bring its own <html> and <body> — and its own stylesheet, for
+// the same reason: the layout's import goes with the layout.
 //
 // Not built from Sentry's template, which renders `next/error`'s default
 // export — this version of Next declares that export Pages Router only. The
@@ -11,6 +12,10 @@
 
 import * as Sentry from "@sentry/nextjs";
 import { useEffect } from "react";
+
+import { Button } from "@gary/ui/components/button";
+
+import "./globals.css";
 
 export default function GlobalError({
   error,
@@ -25,17 +30,13 @@ export default function GlobalError({
 
   return (
     <html lang="en">
-      <body className="flex min-h-screen flex-col items-center justify-center gap-6 p-8">
+      <body className="flex min-h-screen flex-col items-center justify-center gap-6 p-6 font-sans">
         <h2 className="text-2xl font-semibold tracking-tight">
           Something went wrong
         </h2>
-        <button
-          type="button"
-          onClick={() => retry()}
-          className="underline underline-offset-4"
-        >
+        <Button type="button" variant="outline" onClick={() => retry()}>
           Try again
-        </button>
+        </Button>
       </body>
     </html>
   );

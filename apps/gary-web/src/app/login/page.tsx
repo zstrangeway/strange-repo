@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { currentUser } from "@/lib/session";
 
+import AuthShell from "../auth-shell";
 import SignInForm from "./form";
 
 export const dynamic = "force-dynamic";
@@ -17,15 +18,22 @@ export default async function LoginPage({
   const { reset } = await searchParams;
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-sm flex-col justify-center gap-6 p-8">
-      <h1 className="text-2xl font-semibold tracking-tight">Sign in to gary</h1>
+    <AuthShell
+      title="Sign in to gary"
+      description="Enter your email and password to carry on."
+      footer={
+        <p>
+          No account?{" "}
+          <Link
+            href="/signup"
+            className="text-foreground underline underline-offset-4"
+          >
+            Sign up
+          </Link>
+        </p>
+      }
+    >
       <SignInForm resetDone={reset === "1"} />
-      <p className="text-sm text-black/60 dark:text-white/60">
-        No account?{" "}
-        <Link href="/signup" className="underline underline-offset-4">
-          Sign up
-        </Link>
-      </p>
-    </main>
+    </AuthShell>
   );
 }

@@ -31,6 +31,24 @@ Every bug gets a test before it gets a fix. Write the test, watch it fail for
 the reason you think it fails, then fix it and watch it pass. A fix you never
 saw fail is a guess that happens to be green.
 
+## UI components
+
+Never hand-write one. Work down this list and stop at the first hit:
+
+1. `packages/ui/src/components` — take what is there. "Close enough with a new
+   variant" counts as a hit; add the variant to that component's `cva` rather
+   than starting something new beside it.
+2. The shadcn registry —
+   `pnpm dlx shadcn@latest add <name> --cwd packages/ui` from the repo root.
+   Search it properly before deciding it has nothing: `field`, `input-group`
+   and `empty` all cover things people reach for a bespoke component to do.
+3. Only with both exhausted, write one — into `packages/ui`, built from the
+   primitives already there, and say in your summary that you had to.
+
+Vendored shadcn files are ours to edit; that is what shadcn is for. Comment
+anything that is not upstream's, so the next `add --overwrite` shows an honest
+diff.
+
 ## Dependencies
 
 Check what the project already pulls in before reaching for something new — an

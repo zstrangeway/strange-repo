@@ -20,6 +20,7 @@ WORKDIR /repo
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/gary-api/package.json apps/gary-api/
 COPY apps/gary-web/package.json apps/gary-web/
+COPY packages/ui/package.json packages/ui/
 
 RUN pnpm install --frozen-lockfile
 
@@ -39,6 +40,9 @@ RUN apt-get update \
 
 COPY --from=deps /repo/ ./
 COPY apps/gary-web apps/gary-web
+# The shared component library is compiled from source by `next build`
+# (transpilePackages), so the sources have to be in the build context too.
+COPY packages/ui packages/ui
 
 # Sentry's browser DSN has to be here rather than in `fly secrets`: NEXT_PUBLIC_
 # variables are inlined into the client bundle by `next build`, so a value that

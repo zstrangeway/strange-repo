@@ -1,0 +1,16 @@
+version: '3'
+
+tasks:
+  typecheck:
+    desc: Type-check the components
+    cmds:
+      - pnpm exec tsc --noEmit
+      - 'echo "@gary/ui: type-checked $(ls src/components/*.tsx | wc -l) components and $(ls src/lib/*.ts | wc -l) lib file(s)"'
+
+  test:
+    desc: Type-check, and say where these components' behaviour is actually covered
+    cmds:
+      - task: typecheck
+      # Named rather than left blank. A `test` task that exits 0 having run
+      # nothing reads exactly like a suite that passed.
+      - 'echo "@gary/ui: no unit tests here by design — these are presentational components with no logic of their own. What they render is covered end to end by gary-web (pnpm --filter gary-web test)."'
