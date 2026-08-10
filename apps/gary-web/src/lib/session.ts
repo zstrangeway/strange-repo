@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { cache } from "react";
 
 import { callApi, type SignedIn, type User } from "./api";
 
@@ -27,8 +28,14 @@ export async function sessionToken(): Promise<string | null> {
   return store.get(SESSION_COOKIE)?.value ?? null;
 }
 
-/** The signed-in user, or null. Null covers expired and revoked alike. */
-export async function currentUser(): Promise<User | null> {
+/**
+ * The signed-in user, or null. Null covers expired and revoked alike.
+ *
+ * Wrapped in React's cache so the several callers in one render — the app
+ * layout needs it for the sidebar, the page needs it for its content —
+ * share a single call to gary-api rather than asking it once each.
+ */
+export const currentUser = cache(async (): Promise<User | null> => {
   const token = await sessionToken();
   if (!token) {
     return null;
@@ -36,4 +43,4 @@ export async function currentUser(): Promise<User | null> {
 
   const result = await callApi<User>("/auth/me", { token });
   return result.ok ? result.data : null;
-}
+});

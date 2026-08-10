@@ -6,8 +6,8 @@ import { useActionState, useEffect } from "react";
 import { FieldGroup } from "@gary/ui/components/field";
 import { SubmitButton } from "@gary/ui/components/submit-button";
 
-import { changePassword, updateDisplayName, type FormState } from "../actions";
-import { Field, Notice } from "../form-parts";
+import { changePassword, updateDisplayName, type FormState } from "../../actions";
+import { Field, Notice } from "../../form-parts";
 
 export function DisplayNameForm({ current }: { current: string }) {
   const [state, action, pending] = useActionState<FormState, FormData>(

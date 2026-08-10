@@ -12,7 +12,9 @@ Feature: Home
     Given I am signed in as "Ada Lovelace" with email "ada@example.com"
     When I open the home page
     Then the page shows "Welcome Home, Ada Lovelace"
-    And the page does not show "ada@example.com"
+    # Scoped to the greeting: the sidebar's user menu shows the address on
+    # purpose, so "nowhere on the page" is no longer what this is asking.
+    And the welcome does not show "ada@example.com"
 
   Scenario: A signed-out visitor is sent to sign in
     Given I am signed out

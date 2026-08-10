@@ -142,7 +142,13 @@ When(
 );
 
 When("I sign out", async function () {
-  await submit("Sign out");
+  // Sign out moved into the sidebar's user menu when gary-web grew a real
+  // app layout, so it takes opening the menu first.
+  await world.page.getByTestId("user-menu").click();
+  await Promise.all([
+    world.page.waitForLoadState("networkidle"),
+    world.page.getByRole("menuitem", { name: "Sign out" }).click(),
+  ]);
 });
 
 When("I follow {string}", async function (label) {
@@ -187,6 +193,11 @@ Then("the page shows {string}", async function (expected) {
 Then("the page does not show {string}", async function (unwanted) {
   const body = await world.page.innerText("body");
   assert.ok(!body.includes(unwanted), `page showed ${unwanted}`);
+});
+
+Then("the welcome does not show {string}", async function (unwanted) {
+  const welcome = (await world.page.textContent('[data-testid="welcome"]')) ?? "";
+  assert.ok(!welcome.includes(unwanted), `the welcome showed ${unwanted}`);
 });
 
 Then(/^I should be on the (.+) page$/, async function (name) {

@@ -5,8 +5,8 @@ import { useActionState } from "react";
 import { FieldGroup } from "@gary/ui/components/field";
 import { SubmitButton } from "@gary/ui/components/submit-button";
 
-import { confirmPasswordReset, type FormState } from "../actions";
-import { Field, Notice } from "../form-parts";
+import { confirmPasswordReset, type FormState } from "../../actions";
+import { Field, Notice } from "../../form-parts";
 
 export default function ResetForm({ token }: { token: string }) {
   const [state, action, pending] = useActionState<FormState, FormData>(

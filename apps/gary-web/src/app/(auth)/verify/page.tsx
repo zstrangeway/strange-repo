@@ -2,8 +2,8 @@ import Link from "next/link";
 
 import { FormCard } from "@gary/ui/components/form-card";
 
-import { verifyEmail } from "../actions";
-import { Notice } from "../form-parts";
+import { verifyEmail } from "../../actions";
+import { Notice } from "../../form-parts";
 
 export const dynamic = "force-dynamic";
 
