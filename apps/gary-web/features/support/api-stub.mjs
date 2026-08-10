@@ -1,159 +1,162 @@
 import http from "node:http";
 import { randomUUID } from "node:crypto";
 
-// A stand-in for gary-api, holding accounts and sessions in memory. It exists
-// so the browser specs can drive real sign-in flows without a Postgres.
+// A stand-in for gary-api, holding accounts, identities and sessions in
+// memory, plus a stand-in for the providers themselves.
 //
 // It owes gary-api a contract, not an implementation: statuses and bodies
 // here must match what apps/gary-api's own specs assert, or these specs pass
 // against a service that does not exist.
+//
+// The provider half matters more than it looks. Signing in is a real browser
+// navigation out to somebody else and back, so a double that only answered
+// API calls would skip the half most likely to be wrong. /fake/{provider}
+// answers that navigation and bounces straight back with a code, which is
+// what a provider does once someone has agreed.
 
 const PORT = 8799;
-const MINIMUM_PASSWORD = 8;
 
 export const BASE_URL = `http://127.0.0.1:${PORT}`;
 
+const LABELS = { google: "Google", facebook: "Facebook", apple: "Apple" };
+
 let server = null;
-// When set, the stub answers 200 with a body that is not JSON. The realistic
-// version of this is a proxy error page or a truncated response — gary-web
-// parses it, throws inside a Server Component, and that is the path the
-// server.error spec exercises.
 let answeringWithGarbage = false;
-const users = new Map(); // email -> {id, email, display_name, password}
-const sessions = new Map(); // token -> email
-const resets = new Map(); // token -> {email, used, expired}
-const verifications = new Map(); // token -> {email, used, expired}
+let providers = ["google", "facebook", "apple"];
+
+const users = new Map(); // id -> {id, email, display_name}
+const identities = new Map(); // `${provider}:${subject}` -> {user_id, email}
+const sessions = new Map(); // token -> user_id
+// Who the next trip to a given provider will come back as. Set by a scenario
+// so it can say who is signing in at the moment it signs them in.
+const waiting = new Map(); // provider -> {subject, email, name}
 
 export function answerWithGarbage() {
   answeringWithGarbage = true;
 }
 
 export function reset() {
-  answeringWithGarbage = false;
   users.clear();
+  identities.clear();
   sessions.clear();
-  resets.clear();
-  verifications.clear();
+  waiting.clear();
+  providers = ["google", "facebook", "apple"];
+  answeringWithGarbage = false;
 }
 
-export function addUser(email, displayName, password, { verified = false } = {}) {
-  const key = email.toLowerCase();
-  users.set(key, {
-    id: randomUUID(),
-    email: key,
-    display_name: displayName,
-    password,
-    email_verified: verified,
+/** Who the next sign-in at this provider will be. */
+export function nextPerson(provider, { subject, email, name }) {
+  waiting.set(provider, { subject: subject ?? `subject-of-${email}`, email, name });
+}
+
+export function onlyProviders(names) {
+  providers = names;
+}
+
+/** An account that already exists, as if someone had signed in before. */
+export function addAccount(provider, { subject, email, name }) {
+  const user = { id: randomUUID(), email, display_name: name };
+  users.set(user.id, user);
+  identities.set(`${provider}:${subject ?? `subject-of-${email}`}`, {
+    user_id: user.id,
+    email,
+    provider,
+    connected_at: new Date().toISOString(),
   });
-  if (!verified) {
-    issueVerification(key);
+  return user;
+}
+
+export function accountFor(email) {
+  return [...users.values()].find((user) => user.email === email);
+}
+
+export function connectionsFor(userId) {
+  return [...identities.values()].filter((row) => row.user_id === userId);
+}
+
+function code(person) {
+  return `${person.subject}|${person.email}|${person.name}`;
+}
+
+function readCode(raw) {
+  const parts = String(raw).split("|");
+  if (parts.length !== 3 || !parts.every((part) => part.trim())) {
+    return null;
   }
+  const [subject, email, name] = parts.map((part) => part.trim());
+  return { subject, email, name };
 }
 
-function issueVerification(email) {
-  const token = randomUUID();
-  verifications.set(token, { email, used: false, expired: false });
-  return token;
-}
-
-export function hasUser(email) {
-  return users.has(email.toLowerCase());
-}
-
-export function verifyUser(email) {
-  users.get(email.toLowerCase()).email_verified = true;
-}
-
-export function lastVerificationToken() {
-  const live = [...verifications.entries()].filter(([, v]) => !v.used);
-  return live.length ? live[live.length - 1][0] : null;
-}
-
-export function expireVerification(token) {
-  const found = verifications.get(token);
-  if (found) {
-    found.expired = true;
-  }
-}
-
-export function markVerificationUsed(token) {
-  const found = verifications.get(token);
-  if (found) {
-    found.used = true;
-    users.get(found.email).email_verified = true;
-  }
-}
-
-export function lastResetToken() {
-  const live = [...resets.entries()].filter(([, value]) => !value.used);
-  return live.length ? live[live.length - 1][0] : null;
-}
-
-export function expireReset(token) {
-  const found = resets.get(token);
-  if (found) {
-    found.expired = true;
-  }
-}
-
-export function markResetUsed(token, newPassword) {
-  const found = resets.get(token);
-  if (found) {
-    found.used = true;
-    users.get(found.email).password = newPassword;
-  }
-}
-
-function publicUser(user) {
-  return {
-    id: user.id,
-    email: user.email,
-    display_name: user.display_name,
-    email_verified: user.email_verified,
-  };
-}
-
-function bearer(request) {
+function userFor(request) {
   const header = request.headers.authorization ?? "";
   if (!header.toLowerCase().startsWith("bearer ")) {
     return null;
   }
-  return sessions.get(header.slice(7).trim()) ?? null;
+  const id = sessions.get(header.slice(7).trim());
+  return id ? users.get(id) : null;
 }
 
-function issue(email) {
+function issue(user) {
   const token = randomUUID();
-  sessions.set(token, email);
-  const expires = new Date(Date.now() + 30 * 24 * 3600 * 1000);
-  return { token, expires_at: expires.toISOString() };
+  sessions.set(token, user.id);
+  return {
+    ...user,
+    token,
+    expires_at: new Date(Date.now() + 30 * 864e5).toISOString(),
+  };
 }
 
-function invalid(field, message) {
-  return { status: 422, body: { detail: [{ loc: ["body", field], msg: message }] } };
+function asIdentity(row) {
+  return {
+    provider: row.provider,
+    label: LABELS[row.provider] ?? row.provider,
+    email: row.email,
+    connected_at: row.connected_at,
+  };
 }
 
-function handle(method, path, body, request) {
-  if (method === "POST" && path === "/auth/register") {
-    if (!body.email?.includes("@")) return invalid("email", "not an email");
-    if ((body.password ?? "").length < MINIMUM_PASSWORD)
-      return invalid("password", "too short");
-    if (!body.display_name?.trim()) return invalid("display_name", "blank");
-
-    const key = body.email.toLowerCase();
-    if (users.has(key)) {
-      return { status: 409, body: { detail: "That email address is already registered" } };
-    }
-
-    addUser(key, body.display_name.trim(), body.password);
-    return { status: 201, body: { ...publicUser(users.get(key)), ...issue(key) } };
+function handle(method, path, body, request, query) {
+  if (method === "GET" && path === "/auth/providers") {
+    const redirectUri = query.get("redirect_uri") ?? "";
+    return {
+      status: 200,
+      body: providers.map((name) => ({
+        name,
+        label: LABELS[name],
+        authorization_url:
+          `${BASE_URL}/fake/${name}/authorize` +
+          `?redirect_uri=${encodeURIComponent(redirectUri)}`,
+      })),
+    };
   }
 
   if (method === "POST" && path === "/auth/sessions") {
-    const user = users.get((body.email ?? "").toLowerCase());
-    if (!user || user.password !== body.password) {
-      return { status: 401, body: { detail: "Invalid email or password" } };
+    const who = readCode(body.code);
+    if (!who) {
+      return {
+        status: 401,
+        body: {
+          detail: `Sign in with ${LABELS[body.provider] ?? body.provider}` +
+            " did not work, try again",
+        },
+      };
     }
-    return { status: 201, body: { ...publicUser(user), ...issue(user.email) } };
+
+    const key = `${body.provider}:${who.subject}`;
+    const held = identities.get(key);
+    if (held) {
+      return { status: 201, body: issue(users.get(held.user_id)) };
+    }
+
+    const user = { id: randomUUID(), email: who.email, display_name: who.name };
+    users.set(user.id, user);
+    identities.set(key, {
+      user_id: user.id,
+      email: who.email,
+      provider: body.provider,
+      connected_at: new Date().toISOString(),
+    });
+    return { status: 201, body: issue(user) };
   }
 
   if (method === "DELETE" && path === "/auth/sessions/current") {
@@ -162,93 +165,92 @@ function handle(method, path, body, request) {
     return { status: 204 };
   }
 
-  const email = bearer(request);
+  const user = userFor(request);
+
+  if (path.startsWith("/auth/me")) {
+    if (!user) {
+      return { status: 401, body: { detail: "Not signed in" } };
+    }
+  }
 
   if (method === "GET" && path === "/auth/me") {
-    if (!email) return { status: 401, body: { detail: "Not signed in" } };
-    return { status: 200, body: publicUser(users.get(email)) };
+    return { status: 200, body: user };
   }
 
   if (method === "PATCH" && path === "/auth/me") {
-    if (!email) return { status: 401, body: { detail: "Not signed in" } };
-    if (!body.display_name?.trim()) return invalid("display_name", "blank");
-
-    users.get(email).display_name = body.display_name.trim();
-    return { status: 200, body: publicUser(users.get(email)) };
-  }
-
-  if (method === "POST" && path === "/auth/me/password") {
-    if (!email) return { status: 401, body: { detail: "Not signed in" } };
-    const user = users.get(email);
-    if (user.password !== body.current_password) {
-      return { status: 403, body: { detail: "That is not your current password" } };
-    }
-    if ((body.new_password ?? "").length < MINIMUM_PASSWORD)
-      return invalid("new_password", "too short");
-
-    user.password = body.new_password;
-    return { status: 204 };
-  }
-
-  if (method === "POST" && path === "/auth/verify-email") {
-    const found = verifications.get(body.token);
-    if (!found || found.used || found.expired) {
+    const name = String(body.display_name ?? "").trim();
+    if (!name) {
       return {
-        status: 400,
+        status: 422,
         body: {
-          detail: "That verification link has expired or has already been used",
+          detail: [
+            { loc: ["body", "display_name"], msg: "Your display name cannot be blank" },
+          ],
         },
       };
     }
-    markVerificationUsed(body.token);
-    return { status: 204 };
+    user.display_name = name;
+    return { status: 200, body: user };
   }
 
-  if (method === "POST" && path === "/auth/verify-email/resend") {
-    if (!email) return { status: 401, body: { detail: "Not signed in" } };
-    if (!users.get(email).email_verified) {
-      issueVerification(email);
-    }
-    return { status: 204, status_override: 202 };
+  if (method === "GET" && path === "/auth/me/identities") {
+    return { status: 200, body: connectionsFor(user.id).map(asIdentity) };
   }
 
-  if (method === "POST" && path === "/auth/password-reset") {
-    const key = (body.email ?? "").toLowerCase();
-    if (users.has(key)) {
-      resets.set(randomUUID(), { email: key, used: false, expired: false });
-    }
-    // 202 either way: whether the address is known is not answerable here.
-    return { status: 204, status_override: 202 };
-  }
-
-  if (method === "GET" && path.startsWith("/auth/password-reset/")) {
-    const token = decodeURIComponent(path.slice("/auth/password-reset/".length));
-    const found = resets.get(token);
-    if (!found || found.used || found.expired) {
+  if (method === "POST" && path === "/auth/me/identities") {
+    const who = readCode(body.code);
+    if (!who) {
       return {
-        status: 400,
-        body: { detail: "That reset link has expired or has already been used" },
+        status: 401,
+        body: {
+          detail: `Sign in with ${LABELS[body.provider] ?? body.provider}` +
+            " did not work, try again",
+        },
       };
     }
-    return { status: 204 };
-  }
 
-  if (method === "POST" && path === "/auth/password-reset/confirm") {
-    const found = resets.get(body.token);
-    if (!found || found.used || found.expired) {
+    const key = `${body.provider}:${who.subject}`;
+    const held = identities.get(key);
+    if (held && held.user_id !== user.id) {
       return {
-        status: 400,
-        body: { detail: "That reset link has expired or has already been used" },
+        status: 409,
+        body: {
+          detail: `That ${LABELS[body.provider]} account is already connected` +
+            " to another gary account",
+        },
       };
     }
-    if ((body.new_password ?? "").length < MINIMUM_PASSWORD)
-      return invalid("new_password", "too short");
 
-    markResetUsed(body.token, body.new_password);
+    const row = held ?? {
+      user_id: user.id,
+      email: who.email,
+      provider: body.provider,
+      connected_at: new Date().toISOString(),
+    };
+    identities.set(key, row);
+    return { status: 201, body: asIdentity(row) };
+  }
+
+  if (method === "DELETE" && path.startsWith("/auth/me/identities/")) {
+    const provider = path.slice("/auth/me/identities/".length);
+    const mine = connectionsFor(user.id);
+    const found = mine.find((row) => row.provider === provider);
+    if (!found) {
+      return { status: 404, body: { detail: `${LABELS[provider]} is not connected` } };
+    }
+    if (mine.length === 1) {
+      return { status: 409, body: { detail: "That is your only way to sign in" } };
+    }
+
+    for (const [key, row] of identities) {
+      if (row === found) {
+        identities.delete(key);
+      }
+    }
     return { status: 204 };
   }
 
-  return { status: 404 };
+  return { status: 404, body: { detail: "Not found" } };
 }
 
 export async function start() {
@@ -268,7 +270,29 @@ export async function start() {
         body = {};
       }
 
-      const path = request.url.split("?")[0];
+      const url = new URL(request.url, BASE_URL);
+      const path = url.pathname;
+
+      // The provider half. A real one shows a consent screen; this one has
+      // nothing to ask, so it bounces straight back with the code for
+      // whoever the scenario said would be there.
+      const authorizing = path.match(/^\/fake\/([a-z]+)\/authorize$/);
+      if (authorizing) {
+        const provider = authorizing[1];
+        const back = new URL(url.searchParams.get("redirect_uri"));
+        const person = waiting.get(provider);
+        if (person) {
+          back.searchParams.set("code", code(person));
+        } else {
+          // Nobody arranged. A provider that will not say who you are is a
+          // real outcome, and the specs get it by not asking for anyone.
+          back.searchParams.set("error", "access_denied");
+        }
+        back.searchParams.set("state", url.searchParams.get("state") ?? provider);
+        response.writeHead(302, { location: back.toString() });
+        response.end();
+        return;
+      }
 
       if (answeringWithGarbage) {
         // 200 on purpose: a non-200 is a case callApi already handles. What
@@ -278,16 +302,15 @@ export async function start() {
         return;
       }
 
-      const result = handle(request.method, path, body, request);
-      const status = result.status_override ?? result.status;
+      const result = handle(request.method, path, body, request, url.searchParams);
 
       if (result.body === undefined) {
-        response.writeHead(status);
+        response.writeHead(result.status);
         response.end();
         return;
       }
 
-      response.writeHead(status, { "content-type": "application/json" });
+      response.writeHead(result.status, { "content-type": "application/json" });
       response.end(JSON.stringify(result.body));
     });
   });

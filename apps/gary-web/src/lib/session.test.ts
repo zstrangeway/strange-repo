@@ -32,7 +32,6 @@ describe("startSession", () => {
     id: "1",
     email: "ada@example.com",
     display_name: "Ada",
-    email_verified: false,
     token: "a-token",
     expires_at: "2030-01-01T00:00:00Z",
   };

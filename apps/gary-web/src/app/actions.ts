@@ -2,12 +2,14 @@
 
 import { redirect } from "next/navigation";
 
-import { callApi, type SignedIn, type User } from "@/lib/api";
 import {
-  endSession,
-  sessionToken,
-  startSession,
-} from "@/lib/session";
+  callApi,
+  type Identity,
+  type Provider,
+  type SignedIn,
+  type User,
+} from "@/lib/api";
+import { endSession, sessionToken, startSession } from "@/lib/session";
 
 export type FormState = { error?: string; confirmation?: string };
 
@@ -18,16 +20,40 @@ function text(form: FormData, field: string): string {
   return typeof value === "string" ? value : "";
 }
 
-export async function signUp(
-  _previous: FormState,
-  form: FormData,
+/**
+ * The ways in, and where each one sends you.
+ *
+ * Asked of gary-api rather than built here, so the day a fourth provider is
+ * added no client needs rebuilding — including the ones that are not this
+ * one.
+ */
+export async function waysToSignIn(redirectUri: string): Promise<Provider[]> {
+  const result = await callApi<Provider[]>(
+    `/auth/providers?redirect_uri=${encodeURIComponent(redirectUri)}`,
+  );
+  return result.ok ? result.data : [];
+}
+
+/**
+ * Redeem the code a provider handed back, and start a session.
+ *
+ * The code is exchanged from gary-web's server, never the browser: that is
+ * what keeps gary-api's client secrets off the client, and what lets the
+ * session cookie be first-party to gary-web.
+ */
+export async function completeSignIn(
+  provider: string,
+  code: string,
+  redirectUri: string,
+  displayName?: string,
 ): Promise<FormState> {
-  const result = await callApi<SignedIn>("/auth/register", {
+  const result = await callApi<SignedIn>("/auth/sessions", {
     method: "POST",
     body: {
-      email: text(form, "email"),
-      password: text(form, "password"),
-      display_name: text(form, "display_name"),
+      provider,
+      code,
+      redirect_uri: redirectUri,
+      display_name: displayName,
     },
   });
 
@@ -41,23 +67,6 @@ export async function signUp(
   redirect("/");
 }
 
-export async function signIn(
-  _previous: FormState,
-  form: FormData,
-): Promise<FormState> {
-  const result = await callApi<SignedIn>("/auth/sessions", {
-    method: "POST",
-    body: { email: text(form, "email"), password: text(form, "password") },
-  });
-
-  if (!result.ok) {
-    return { error: result.message };
-  }
-
-  await startSession(result.data);
-  redirect("/");
-}
-
 export async function signOut(): Promise<void> {
   const token = await sessionToken();
   // Drop the server session too, so the token is dead even if the cookie
@@ -65,71 +74,6 @@ export async function signOut(): Promise<void> {
   await callApi("/auth/sessions/current", { method: "DELETE", token });
   await endSession();
   redirect("/login");
-}
-
-export async function requestPasswordReset(
-  _previous: FormState,
-  form: FormData,
-): Promise<FormState> {
-  await callApi("/auth/password-reset", {
-    method: "POST",
-    body: { email: text(form, "email") },
-  });
-
-  // The same answer whether or not the address is known. Anything else makes
-  // this page a way to ask gary who has an account.
-  return {
-    confirmation: "If that address has an account, a reset link is on its way",
-  };
-}
-
-export async function confirmPasswordReset(
-  _previous: FormState,
-  form: FormData,
-): Promise<FormState> {
-  const result = await callApi("/auth/password-reset/confirm", {
-    method: "POST",
-    body: {
-      token: text(form, "token"),
-      new_password: text(form, "new_password"),
-    },
-  });
-
-  if (!result.ok) {
-    return { error: result.message };
-  }
-
-  redirect("/login?reset=1");
-}
-
-export async function verifyEmail(token: string): Promise<{ error?: string }> {
-  const result = await callApi("/auth/verify-email", {
-    method: "POST",
-    body: { token },
-  });
-
-  return result.ok ? {} : { error: result.message };
-}
-
-export async function resendVerification(
-  _previous: FormState,
-  _form: FormData,
-): Promise<FormState> {
-  const token = await sessionToken();
-  if (!token) {
-    return { error: NOT_SIGNED_IN };
-  }
-
-  const result = await callApi("/auth/verify-email/resend", {
-    method: "POST",
-    token,
-  });
-
-  if (!result.ok) {
-    return { error: result.message };
-  }
-
-  return { confirmation: "Sent — check your inbox for the link" };
 }
 
 export async function updateDisplayName(
@@ -154,20 +98,34 @@ export async function updateDisplayName(
   return { confirmation: "Your display name has been updated" };
 }
 
-export async function changePassword(
-  _previous: FormState,
-  form: FormData,
+export async function connectedAccounts(): Promise<Identity[]> {
+  const token = await sessionToken();
+  if (!token) {
+    return [];
+  }
+
+  const result = await callApi<Identity[]>("/auth/me/identities", { token });
+  return result.ok ? result.data : [];
+}
+
+export async function connectAccount(
+  provider: string,
+  code: string,
+  redirectUri: string,
+  displayName?: string,
 ): Promise<FormState> {
   const token = await sessionToken();
   if (!token) {
     return { error: NOT_SIGNED_IN };
   }
 
-  const result = await callApi("/auth/me/password", {
+  const result = await callApi<Identity>("/auth/me/identities", {
     method: "POST",
     body: {
-      current_password: text(form, "current_password"),
-      new_password: text(form, "new_password"),
+      provider,
+      code,
+      redirect_uri: redirectUri,
+      display_name: displayName,
     },
     token,
   });
@@ -176,5 +134,27 @@ export async function changePassword(
     return { error: result.message };
   }
 
-  return { confirmation: "Your password has been changed" };
+  return { confirmation: `${result.data.label} is connected` };
+}
+
+export async function disconnectAccount(
+  _previous: FormState,
+  form: FormData,
+): Promise<FormState> {
+  const token = await sessionToken();
+  if (!token) {
+    return { error: NOT_SIGNED_IN };
+  }
+
+  const provider = text(form, "provider");
+  const result = await callApi(`/auth/me/identities/${provider}`, {
+    method: "DELETE",
+    token,
+  });
+
+  if (!result.ok) {
+    return { error: result.message };
+  }
+
+  return { confirmation: "That way of signing in has been removed" };
 }

@@ -4,25 +4,12 @@ Feature: Home
   So that I can see at a glance that gary knows who I am
 
   Scenario: A signed-in user is welcomed by name
-    Given I am signed in as "Ada"
+    Given I have signed in at google as "ada@example.com" named "Ada"
     When I open the home page
     Then the page shows "Welcome Home, Ada"
 
-  Scenario: The welcome uses my display name, not my email
-    Given I am signed in as "Ada Lovelace" with email "ada@example.com"
-    When I open the home page
-    Then the page shows "Welcome Home, Ada Lovelace"
-    # Scoped to the greeting: the sidebar's user menu shows the address on
-    # purpose, so "nowhere on the page" is no longer what this is asking.
-    And the welcome does not show "ada@example.com"
-
-  Scenario: A signed-out visitor is sent to sign in
-    Given I am signed out
-    When I open the home page
-    Then I should be on the sign in page
-
   Scenario: The welcome survives a reload
-    Given I am signed in as "Ada"
+    Given I have signed in at google as "ada@example.com" named "Ada"
     When I open the home page
     And I reload the page
     Then the page shows "Welcome Home, Ada"

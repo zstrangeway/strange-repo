@@ -19,7 +19,21 @@ export type User = {
   id: string;
   email: string;
   display_name: string;
-  email_verified: boolean;
+};
+
+/** One way of signing in to an account. An account may have several. */
+export type Identity = {
+  provider: string;
+  label: string;
+  email: string;
+  connected_at: string;
+};
+
+/** A way of signing in that gary offers, and where to send someone for it. */
+export type Provider = {
+  name: string;
+  label: string;
+  authorization_url: string;
 };
 export type SignedIn = User & { token: string; expires_at: string };
 

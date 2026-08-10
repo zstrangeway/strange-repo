@@ -9,8 +9,11 @@ import {
 } from "@gary/ui/components/card";
 
 import { currentUser } from "@/lib/session";
+import { absoluteUrl } from "@/lib/urls";
 
-import { ChangePasswordForm, DisplayNameForm } from "./forms";
+import { connectedAccounts, waysToSignIn } from "../../actions";
+import ConnectedAccounts from "./connected";
+import { DisplayNameForm } from "./forms";
 
 export default async function ProfilePage() {
   // See the note on the home page: the layout's guard does not stop this
@@ -19,6 +22,24 @@ export default async function ProfilePage() {
   if (!user) {
     redirect("/login");
   }
+
+  // Connecting sends you out to the provider and back, the same as signing
+  // in — the callback tells the two apart by whether there is a session.
+  const back = await absoluteUrl("/profile/connected");
+  const [connected, offered] = await Promise.all([
+    connectedAccounts(),
+    waysToSignIn(back),
+  ]);
+
+  const connections = offered.map((provider) => {
+    const held = connected.find((row) => row.provider === provider.name);
+    return {
+      provider: provider.name,
+      label: provider.label,
+      email: held?.email ?? null,
+      authorizationUrl: `${provider.authorization_url}&state=${provider.name}`,
+    };
+  });
 
   return (
     <div className="flex flex-col gap-6">
@@ -44,13 +65,14 @@ export default async function ProfilePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Password</CardTitle>
+          <CardTitle>Ways to sign in</CardTitle>
           <CardDescription>
-            Changing it does not sign you out anywhere else.
+            Connect another and either will reach this account. You cannot
+            remove the last one.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ChangePasswordForm />
+          <ConnectedAccounts connections={connections} />
         </CardContent>
       </Card>
     </div>

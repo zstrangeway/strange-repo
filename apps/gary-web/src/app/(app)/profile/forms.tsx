@@ -6,7 +6,7 @@ import { useActionState, useEffect } from "react";
 import { FieldGroup } from "@gary/ui/components/field";
 import { SubmitButton } from "@gary/ui/components/submit-button";
 
-import { changePassword, updateDisplayName, type FormState } from "../../actions";
+import { updateDisplayName, type FormState } from "../../actions";
 import { Field, Notice } from "../../form-parts";
 
 export function DisplayNameForm({ current }: { current: string }) {
@@ -38,34 +38,6 @@ export function DisplayNameForm({ current }: { current: string }) {
           labelHidden
         />
         <SubmitButton label="Save name" pending={pending} />
-      </FieldGroup>
-    </form>
-  );
-}
-
-export function ChangePasswordForm() {
-  const [state, action, pending] = useActionState<FormState, FormData>(
-    changePassword,
-    {},
-  );
-
-  return (
-    <form action={action} noValidate>
-      <FieldGroup className="gap-4">
-        <Notice error={state.error} confirmation={state.confirmation} />
-        <Field
-          label="Current password"
-          name="current_password"
-          type="password"
-          autoComplete="current-password"
-        />
-        <Field
-          label="New password"
-          name="new_password"
-          type="password"
-          autoComplete="new-password"
-        />
-        <SubmitButton label="Change password" pending={pending} />
       </FieldGroup>
     </form>
   );
