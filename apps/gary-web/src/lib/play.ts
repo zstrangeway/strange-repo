@@ -137,12 +137,37 @@ export async function takeTurn(
   onEvent: (event: TurnEvent) => void,
   signal?: AbortSignal,
 ): Promise<{ ok: boolean; message?: string; code?: string }> {
+  return stream(`/campaigns/${campaignId}/turns`, { message }, onEvent, signal);
+}
+
+/**
+ * Have gary open the scene.
+ *
+ * The same frames as a turn, because it is one — the only difference is that
+ * nobody said anything to prompt it. Refused with `already_begun` if the
+ * campaign has started, which is what makes it safe to call on sight of an
+ * empty transcript rather than having to be certain first.
+ */
+export async function beginCampaign(
+  campaignId: string,
+  onEvent: (event: TurnEvent) => void,
+  signal?: AbortSignal,
+): Promise<{ ok: boolean; message?: string; code?: string }> {
+  return stream(`/campaigns/${campaignId}/opening`, undefined, onEvent, signal);
+}
+
+async function stream(
+  path: string,
+  body: unknown,
+  onEvent: (event: TurnEvent) => void,
+  signal?: AbortSignal,
+): Promise<{ ok: boolean; message?: string; code?: string }> {
   const token = storedToken();
   const request_id = requestId();
 
   let response: Response;
   try {
-    response = await fetch(`${baseUrl()}/campaigns/${campaignId}/turns`, {
+    response = await fetch(`${baseUrl()}${path}`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -150,12 +175,12 @@ export async function takeTurn(
         ...(token ? { authorization: `Bearer ${token}` } : {}),
         [REQUEST_ID_HEADER]: request_id,
       },
-      body: JSON.stringify({ message }),
+      body: body === undefined ? undefined : JSON.stringify(body),
       signal,
       cache: "no-store",
     });
   } catch (error) {
-    log.error("play.unreachable", { request_id, campaignId, error });
+    log.error("play.unreachable", { request_id, path, error });
     return { ok: false, message: UNAVAILABLE };
   }
 
@@ -178,7 +203,7 @@ export async function takeTurn(
   if (!response.body) {
     // A 200 with nothing to read. Not something gary-api does, but a proxy
     // that buffered the whole response away would look exactly like this.
-    log.error("play.no_body", { request_id, campaignId });
+    log.error("play.no_body", { request_id, path });
     return { ok: false, message: UNAVAILABLE };
   }
 
@@ -204,7 +229,7 @@ export async function takeTurn(
     // Includes the abort that unmounting causes, which is not worth
     // reporting to anyone: the page it would have rendered into is gone.
     if (!signal?.aborted) {
-      log.error("play.interrupted", { request_id, campaignId, error });
+      log.error("play.interrupted", { request_id, path, error });
       onEvent({ type: "error", detail: UNAVAILABLE });
     }
   } finally {

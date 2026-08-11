@@ -84,7 +84,17 @@ class CampaignResponse(BaseModel):
     system: str
     module: str
     title: str
+    # What the adventure is about, in the module's own words. Free, instant,
+    # and true before gary has written anything — a situation on screen while
+    # the opening is still arriving.
+    premise: str
+    # Where the module starts. The world holds this too, but a client should
+    # not have to ask twice to render a campaign nobody has opened yet.
+    place: str
     turns: int
+    # Whether anybody has spoken. False means gary has not opened the scene,
+    # which is what a client acts on rather than counting turns itself.
+    begun: bool
     # Resolved, never null: a client should not have to know what the
     # deployment's default is to render which model a campaign runs on.
     model: str
@@ -207,7 +217,10 @@ def _as_campaign(campaign: Campaign, turns: int = 0) -> dict:
         "system": campaign.system_slug,
         "module": campaign.module_slug,
         "title": module.title,
+        "premise": module.premise,
+        "place": module.opening,
         "turns": turns,
+        "begun": turns > 0,
         "model": campaign.model or narration.models.default(),
         "model_chosen": campaign.model is not None,
     }
@@ -240,6 +253,26 @@ def _runnable(identifier: str | None) -> str | None:
     except narration.models.ModelError as error:
         raise Refusal(
             status.HTTP_422_UNPROCESSABLE_ENTITY, "unsupported_model", str(error)
+        ) from error
+
+
+def _gary_for(campaign: Campaign) -> narration.Narrator:
+    """The narrator this campaign runs on, or a refusal saying why not.
+
+    A deployment with no key is what a fresh app is until its secrets are set.
+    Refused before a byte is sent, because this is one of the few things that
+    can still be said with a status — after the stream opens it cannot — and
+    because letting it escape reads as gary crashing rather than as gary not
+    being configured.
+    """
+    try:
+        return narration.narrator(campaign.model or narration.models.default())
+    except narration.NarrationError as error:
+        logger.error("gm.unconfigured", reason=str(error))
+        raise Refusal(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "gm_unavailable",
+            "gary cannot reach a model on this deployment",
         ) from error
 
 
@@ -328,12 +361,31 @@ async def start_campaign(
 
 @router.get("/campaigns")
 async def list_campaigns(database: Db, user: CurrentUser) -> list[CampaignResponse]:
-    rows = await database.scalars(
-        select(Campaign)
-        .where(Campaign.user_id == user.id)
-        .order_by(Campaign.created_at.desc())
+    rows = list(
+        await database.scalars(
+            select(Campaign)
+            .where(Campaign.user_id == user.id)
+            .order_by(Campaign.created_at.desc())
+        )
     )
-    return [_as_campaign(campaign) for campaign in rows]
+
+    # Counted here rather than left at the default, which is what this did
+    # before: every campaign in the list reported nought turns and none of
+    # them had begun. One grouped query rather than one per campaign, because
+    # this is the page signing in lands on.
+    counted = dict(
+        (
+            await database.execute(
+                select(Turn.campaign_id, func.count())
+                .where(Turn.campaign_id.in_([campaign.id for campaign in rows]))
+                .group_by(Turn.campaign_id)
+            )
+        ).all()
+    ) if rows else {}
+
+    return [
+        _as_campaign(campaign, counted.get(campaign.id, 0)) for campaign in rows
+    ]
 
 
 @router.get("/campaigns/{campaign_id}")
@@ -781,20 +833,7 @@ async def take_turn(
             "There is nobody in this campaign to play yet",
         )
 
-    try:
-        gary = narration.narrator(campaign.model or narration.models.default())
-    except narration.NarrationError as error:
-        # A deployment with no key, which is what a fresh app is until its
-        # secrets are set. Refused here, before a byte is sent, because this
-        # is one of the few things that can still be said with a status — and
-        # because letting it escape would read as gary crashing rather than
-        # gary not being configured.
-        logger.error("gm.unconfigured", reason=str(error))
-        raise Refusal(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            "gm_unavailable",
-            "gary cannot reach a model on this deployment",
-        ) from error
+    gary = _gary_for(campaign)
 
     said = gary.sanitise(request.message) or request.message
 
@@ -814,7 +853,7 @@ async def take_turn(
     await database.commit()
 
     return StreamingResponse(
-        _stream(campaign.id, scene.id, player_turn.id, request.message, gary),
+        _stream(campaign.id, scene.id, request.message, gary),
         media_type="text/event-stream",
         # Whatever sits in front of this must not collect the whole body
         # before passing it on, or streaming is a stream-shaped hole.
@@ -822,7 +861,72 @@ async def take_turn(
     )
 
 
-async def _stream(campaign_id, scene_id, player_turn_id, message, gary):
+# What gary is asked for when a campaign has a party and nothing has been
+# said. Not a player's message — there is no player message, and that is the
+# only thing unusual about an opening — but it arrives by the same route,
+# because everything else about it is an ordinary turn.
+OPENING = (
+    "Open the scene. The party has just arrived and nothing has happened yet. "
+    "Set the situation: where they are, what they can see and hear, and what "
+    "is immediately in front of them. Address the players as 'you' and give "
+    "them something worth reacting to. Do not ask them what they do — the "
+    "scene should make that obvious."
+)
+
+
+@router.post("/campaigns/{campaign_id}/opening")
+async def begin_campaign(
+    campaign_id: uuid.UUID, database: Db, user: CurrentUser
+) -> StreamingResponse:
+    """Have gary set the scene, once there is somebody to set it for.
+
+    A campaign with a party and nothing said is a table where everyone has sat
+    down and nobody has spoken. Somebody has to speak first, and it is not the
+    player.
+    """
+    campaign = await _mine(database, user, campaign_id)
+
+    party = list(
+        await database.scalars(
+            select(Character)
+            .where(Character.campaign_id == campaign.id)
+            .order_by(Character.created_at, Character.name)
+        )
+    )
+    if not party:
+        raise Refusal(
+            status.HTTP_409_CONFLICT,
+            "no_party",
+            "There is nobody in this campaign to play yet",
+        )
+
+    said = await database.scalar(
+        select(func.count()).select_from(Turn).where(Turn.campaign_id == campaign.id)
+    )
+    if said:
+        # Refused here rather than left to the client to avoid, because a
+        # reload and a second tab both reach this and neither knows about the
+        # other. Two openings would be two beginnings, and the second narrated
+        # to a table that had already started.
+        raise Refusal(
+            status.HTTP_409_CONFLICT,
+            "already_begun",
+            "This campaign has already begun",
+        )
+
+    gary = _gary_for(campaign)
+
+    scene = await scenes.current(database, campaign.id)
+    await database.commit()
+
+    return StreamingResponse(
+        _stream(campaign.id, scene.id, OPENING, gary),
+        media_type="text/event-stream",
+        headers={"cache-control": "no-cache", "x-accel-buffering": "no"},
+    )
+
+
+async def _stream(campaign_id, scene_id, message, gary):
     """The turn, as it happens.
 
     Opens its own session: this outlives the request handler, and the

@@ -84,6 +84,24 @@ with it; a campaign whose context never stops growing is worse than both.
 ⚠️ **Recaps still accumulate.** This makes growth roughly 50× slower, not
 zero. The next lever is recapping the recaps, and it is not built.
 
+### The opening
+
+A campaign with a party and nothing said is a table where everyone has sat
+down and nobody has spoken, so gary speaks first. `POST /campaigns/{id}/opening`
+is a turn like any other — streamed, stored, in the first scene, reaching the
+same engines — and the only unusual thing about it is having no player message.
+
+A second one is refused with `already_begun`, which is what makes it safe for a
+client to ask for on sight of an empty transcript rather than having to be
+certain first: a reload and a second tab both reach this and neither knows
+about the other. A failed opening leaves the campaign openable, because half a
+turn stored here would make it look begun and nothing would ever open it
+properly.
+
+`GET /campaigns/{id}` carries the module's `premise` and `place` alongside
+`begun`, so a client can put a situation on screen for free while the opening
+is still being written.
+
 ### Playing a turn
 
 `POST /campaigns/{id}/turns` answers `text/event-stream`:

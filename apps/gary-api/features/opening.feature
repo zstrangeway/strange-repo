@@ -96,6 +96,17 @@ Feature: The opening
     And the transcript should hold 0 turns
     And the campaign should still be waiting to begin
 
+  # The same refusal a turn gives, and the opening is the first thing anybody
+  # reaches — so on a deployment whose secrets are not set, this is the one
+  # that has to read properly.
+  Scenario: Opening on a deployment that cannot reach a model
+    Given I add "Bramble" the rogue
+    And this deployment has no model key
+    When I ask gary to begin
+    Then the response status should be 503
+    And the response code should be "gm_unavailable"
+    And the transcript should hold 0 turns
+
   # Free, instant, and true before gary has said a word: what the adventure is
   # about, in the module's own words. The page can show a situation while the
   # opening is still being written.

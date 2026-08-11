@@ -24,7 +24,7 @@ import {
   changeModel,
   worldOf,
 } from "@/lib/gary";
-import { takeTurn, type TurnEvent } from "@/lib/play";
+import { beginCampaign, takeTurn, type TurnEvent } from "@/lib/play";
 import { useSession } from "@/lib/use-session";
 
 import { Notice } from "../../../form-parts";
@@ -57,6 +57,10 @@ export default function CampaignPage({
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [busy, setBusy] = useState(false);
+  // Set the moment an opening is asked for, and never unset. A ref rather
+  // than state because two renders can both see "nothing said yet" before
+  // either sets it, and the point is to ask exactly once.
+  const opening = useRef(false);
   const [trouble, setTrouble] = useState<string | undefined>(undefined);
 
   // Which entry the frames arriving now belong to. A ref rather than state:
@@ -191,24 +195,12 @@ export default function CampaignPage({
     );
   }
 
-  async function say(message: string) {
-    setTrouble(undefined);
-    setBusy(true);
-    answering.current = null;
-
-    // Shown before the stream opens, because it is already true: gary-api
-    // stores the player's turn before it answers.
-    const mine: Entry = {
-      id: `said-${Date.now()}`,
-      role: "player",
-      text: message,
-      rolls: [],
-      complete: true,
-      sceneId: playing.current,
-    };
-    setEntries((held) => [...held, mine]);
-
-    const result = await takeTurn(id, message, fold);
+  /** Drive one stream to the end and tidy up after it, whichever kind. */
+  async function run(open: (onEvent: (event: TurnEvent) => void) => Promise<{
+    ok: boolean;
+    message?: string;
+  }>) {
+    const result = await open(fold);
     if (!result.ok) {
       setTrouble(result.message);
     }
@@ -233,6 +225,50 @@ export default function CampaignPage({
     // no other way to learn that happened.
     await Promise.all([loadWorld(), loadScenes()]);
   }
+
+  async function say(message: string) {
+    setTrouble(undefined);
+    setBusy(true);
+    answering.current = null;
+
+    // Shown before the stream opens, because it is already true: gary-api
+    // stores the player's turn before it answers.
+    setEntries((held) => [
+      ...held,
+      {
+        id: `said-${Date.now()}`,
+        role: "player",
+        text: message,
+        rolls: [],
+        complete: true,
+        sceneId: playing.current,
+      },
+    ]);
+
+    await run((onEvent) => takeTurn(id, message, onEvent));
+  }
+
+  // A table where everyone has sat down and nobody has spoken. Somebody has
+  // to go first and it is not the player, so gary opens as soon as there is
+  // anybody to open for — no button, because having made a character, being
+  // asked to also press start is the same emptiness in a smaller box.
+  //
+  // Safe to fire on sight: gary-api refuses a second opening outright, so a
+  // reload or another tab cannot produce two or spend twice.
+  useEffect(() => {
+    if (opening.current || !campaign || campaign.begun) {
+      return;
+    }
+    if (party.length === 0 || entries.length > 0) {
+      return;
+    }
+
+    opening.current = true;
+    setTrouble(undefined);
+    setBusy(true);
+    answering.current = null;
+    void run((onEvent) => beginCampaign(id, onEvent));
+  });
 
   if (missing) {
     return (
@@ -293,6 +329,19 @@ export default function CampaignPage({
             <CardTitle>The story so far</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-6">
+            {/* What the adventure is about, in the module's own words.
+                Shown while gary is still writing the opening, and kept after,
+                because a table has the premise in front of it all evening. */}
+            <div
+              className="rounded-lg border border-dashed p-4"
+              data-testid="premise"
+            >
+              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                {campaign.title}
+              </p>
+              <p className="mt-1 text-sm">{campaign.premise}</p>
+            </div>
+
             <Transcript
               entries={entries}
               scenes={scenes}
@@ -301,11 +350,13 @@ export default function CampaignPage({
             <Notice error={trouble} />
             <Composer
               busy={busy}
-              disabled={party.length === 0}
+              disabled={world === null || party.length === 0}
               hint={
-                party.length === 0
-                  ? "Add somebody to the party first"
-                  : undefined
+                world === null
+                  ? "Finding the table…"
+                  : party.length === 0
+                    ? "Add somebody to the party first"
+                    : undefined
               }
               onSay={say}
             />
@@ -328,6 +379,7 @@ export default function CampaignPage({
           campaignId={id}
           party={party}
           classes={classes}
+          loading={world === null}
           onAdded={loadWorld}
         />
       </div>

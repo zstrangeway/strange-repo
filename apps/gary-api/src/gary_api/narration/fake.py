@@ -124,6 +124,11 @@ LAST: Prompt | None = None
 # ordinary thing: a recap and nothing recorded.
 ON_CLOSE: list[str] | None = None
 
+# And the same for an opening, which has no player message either — the
+# instruction it answers is gary-api's, not anybody's. Read once and cleared,
+# so it belongs to the next narration and not to every one after it.
+ON_OPEN: list[str] | None = None
+
 # The last prompt a close pass was given, for the scenarios about which model
 # was asked and what it was shown.
 LAST_CLOSE: Prompt | None = None
@@ -141,8 +146,12 @@ class FakeNarrator:
         global LAST
         LAST = prompt
 
+        global ON_OPEN
         latest = prompt.message
-        asked = directives(latest)
+        # Whatever the message carries, plus anything a scenario arranged for
+        # a turn that has no message to carry it — an opening.
+        asked = directives(latest) + (ON_OPEN or [])
+        ON_OPEN = None
 
         if "fail" in asked:
             raise NarrationError("the narrator could not be reached")

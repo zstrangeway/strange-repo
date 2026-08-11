@@ -82,7 +82,14 @@ export type Campaign = {
   system: string;
   module: string;
   title: string;
+  /** What the adventure is about, in the module's own words — a situation on
+   *  screen before gary has written anything. */
+  premise: string;
+  /** Where the module starts. */
+  place: string;
   turns: number;
+  /** Whether anybody has spoken yet. False means gary has not opened. */
+  begun: boolean;
   model: string;
   /** False when the model came from the deployment rather than the campaign. */
   model_chosen: boolean;

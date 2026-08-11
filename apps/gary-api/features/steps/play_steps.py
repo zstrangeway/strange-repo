@@ -8,6 +8,7 @@ from behave import given, register_type, then, when
 from environment import sql, with_session
 from gary_api import dice, narration, world
 from gary_api.narration import fake
+from gary_api.narration.fake import DIRECTIVE
 
 # behave's placeholders are greedy, so `the {character_class}` would swallow
 # `rogue in "add-1e"` whole and two perfectly distinct steps would collide.
@@ -1067,3 +1068,90 @@ def step_recap_model_differs(context):
 @then("gary should not have been asked to close anything")
 def step_nothing_closed(context):
     assert fake.LAST_CLOSE is None, "a close pass ran on an empty scene"
+
+
+# ----------------------------------------------------------------- opening
+
+
+def _begin_campaign(context, campaign_id=None):
+    """Ask gary to open the scene, collecting the stream as a turn does."""
+    context.events = []
+    with context.client.stream(
+        "POST",
+        f"/campaigns/{campaign_id or _campaign_id(context)}/opening",
+        headers=_headers(context),
+    ) as response:
+        context.response = response
+        if response.status_code != 200:
+            response.read()
+            return
+
+        name = None
+        for line in response.iter_lines():
+            if line.startswith("event: "):
+                name = line[len("event: ") :].strip()
+            elif line.startswith("data: "):
+                context.events.append((name, json.loads(line[len("data: ") :])))
+
+
+@given("gary has begun")
+@when("I ask gary to begin")
+def step_begin(context):
+    _begin_campaign(context)
+
+
+@when('I ask gary to begin with "{directives}"')
+def step_begin_with(context, directives):
+    # An opening answers gary-api's instruction, not a player's message, so
+    # there is nothing for a scenario to write its directives into. Arranged
+    # rather than read, and cleared per scenario.
+    fake.ON_OPEN = [one.strip() for one in DIRECTIVE.findall(directives)]
+    _begin_campaign(context)
+
+
+@when("I ask gary to begin theirs")
+def step_begin_theirs(context):
+    _begin_campaign(context, context.other_campaign["id"])
+
+
+@then("the opening should be gary's")
+def step_opening_is_garys(context):
+    turns = context.client.get(
+        f"/campaigns/{_campaign_id(context)}/turns", headers=_headers(context)
+    ).json()
+    assert turns, "nothing was said at all"
+    assert turns[0]["role"] == "gm", f"the first turn was {turns[0]['role']}"
+    assert turns[0]["content"].strip(), "gary opened with nothing"
+
+
+@then("the opening should belong to the open scene")
+def step_opening_in_open_scene(context):
+    turns = context.client.get(
+        f"/campaigns/{_campaign_id(context)}/turns", headers=_headers(context)
+    ).json()
+    open_scene = [scene for scene in _scenes(context) if scene["open"]][0]
+    assert turns[0]["scene_id"] == open_scene["id"]
+
+
+@then("the campaign should still be waiting to begin")
+def step_still_waiting(context):
+    found = context.client.get(
+        f"/campaigns/{_campaign_id(context)}", headers=_headers(context)
+    ).json()
+    assert not found["begun"], "the campaign counts as begun after a failure"
+
+
+@then("the campaign should carry the module's premise")
+def step_campaign_premise(context):
+    premise = _body(context).get("premise") or ""
+    assert len(premise.split()) > 5, f"no premise worth reading: {premise!r}"
+
+
+@then("the campaign should say where it begins")
+def step_campaign_place(context):
+    assert (_body(context).get("place") or "").strip(), "nowhere to begin"
+
+
+@then("the campaign should say it has not begun")
+def step_campaign_not_begun(context):
+    assert _body(context)["begun"] is False

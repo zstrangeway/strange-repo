@@ -12,7 +12,12 @@ import {
   vi,
 } from "vitest";
 
-import { parseFrames, takeTurn, type TurnEvent } from "./play";
+import {
+  beginCampaign,
+  parseFrames,
+  takeTurn,
+  type TurnEvent,
+} from "./play";
 import { SESSION_KEY } from "./session";
 
 // A real server that writes frames one at a time, rather than a stubbed
@@ -29,7 +34,11 @@ let server: http.Server;
 let status = 200;
 let body: string | null = null;
 let writer: Writer | null = null;
-let received: { headers: http.IncomingHttpHeaders; body: string };
+let received: {
+  headers: http.IncomingHttpHeaders;
+  body: string;
+  url: string;
+};
 
 beforeAll(async () => {
   server = http.createServer((request, response) => {
@@ -39,6 +48,7 @@ beforeAll(async () => {
       received = {
         headers: request.headers,
         body: Buffer.concat(chunks).toString(),
+        url: request.url ?? "",
       };
 
       if (status !== 200) {
@@ -216,6 +226,44 @@ describe("parsing frames", () => {
     });
     expect(events[2]).toEqual({ type: "done", turn_id: "" });
     expect((events[3] as { detail: string }).detail).toContain("unavailable");
+  });
+});
+
+describe("opening a campaign", () => {
+  it("asks for the opening and carries the token", async () => {
+    writer = async (write) => {
+      await write(frame("turn", { turn_id: "t1", role: "gm" }));
+      await write(frame("narration", { text: "The causeway runs out." }));
+      await write(frame("done", { turn_id: "t1" }));
+    };
+
+    const seen: TurnEvent[] = [];
+    const result = await beginCampaign("c-1", (e) => seen.push(e));
+
+    expect(result.ok).toBe(true);
+    expect(received.url).toBe("/campaigns/c-1/opening");
+    expect(received.headers.authorization).toBe("Bearer a-token");
+    // No message: an opening answers nothing anybody said, which is the only
+    // thing unusual about it.
+    expect(received.body).toBe("");
+    expect(seen.map((e) => e.type)).toEqual(["turn", "narration", "done"]);
+  });
+
+  it("reports a campaign that has already begun", async () => {
+    status = 409;
+    body = JSON.stringify({
+      detail: "This campaign has already begun",
+      code: "already_begun",
+    });
+    const seen: TurnEvent[] = [];
+    const result = await beginCampaign("c-1", (e) => seen.push(e));
+
+    expect(seen).toEqual([]);
+    expect(result).toEqual({
+      ok: false,
+      message: "This campaign has already begun",
+      code: "already_begun",
+    });
   });
 });
 

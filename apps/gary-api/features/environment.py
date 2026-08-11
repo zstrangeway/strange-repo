@@ -85,6 +85,7 @@ def before_scenario(context, scenario):
     # directive it has to be arranged rather than read, and unlike every other
     # directive it can leak. Cleared here so it cannot.
     fake_narrator.ON_CLOSE = None
+    fake_narrator.ON_OPEN = None
     fake_narrator.LAST_CLOSE = None
 
     # The scene bound, back to its default per scenario. A spec that wants a

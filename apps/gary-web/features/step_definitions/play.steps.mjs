@@ -65,9 +65,25 @@ When("I open that campaign", async function () {
   await world.page.goto(`${world.baseUrl}/campaigns/${world.campaign.id}`, {
     waitUntil: "domcontentloaded",
   });
-  await world.page.waitForSelector('[data-testid="composer"]', {
-    timeout: 15_000,
-  });
+
+  // Opening a campaign with a party and nothing said now begins with gary
+  // opening the scene. Waited out rather than raced: a step that started
+  // typing here would be typing into a composer gary still had.
+  await world.page.waitForFunction(
+    () => {
+      const box = document.querySelector('[data-testid="composer"]');
+      if (!box) return false;
+      // Nobody at the table, so nothing will open and nothing will free the
+      // composer — it is disabled for an entirely different reason.
+      if (document.querySelector('[data-testid="no-party"]')) return true;
+      return (
+        box.disabled === false &&
+        !!document.querySelector('[data-testid="turn-gm"]')
+      );
+    },
+    undefined,
+    { timeout: 20_000 },
+  );
 });
 
 When("I choose the system {string}", choose);
@@ -280,4 +296,34 @@ Then("the page shows what happened in the scene before", async function () {
 
   assert.ok(recaps.length > 0, "no recap was shown");
   assert.ok(recaps[0].trim().length > 0, "the recap was blank");
+});
+
+// ----------------------------------------------------------------- opening
+
+Then("the page shows what the adventure is about", async function () {
+  // Free and instant, so it is on screen before gary has written a word —
+  // which is also what covers the seconds the opening takes to arrive.
+  const shown = await world.page.textContent('[data-testid="premise"]');
+  assert.ok(
+    (shown ?? "").trim().length > 20,
+    `no premise worth reading: ${shown}`,
+  );
+});
+
+Then("gary should open the scene without my asking", async function () {
+  // Nothing is typed and nothing is clicked between adding a character and
+  // this. If it needed either, the empty box is still there.
+  const answer = world.page.getByTestId("turn-gm").first();
+  await answer.waitFor({ timeout: 20_000 });
+  const said = (await answer.textContent()) ?? "";
+  assert.ok(said.includes("marsh"), `gary opened with nothing: ${said}`);
+});
+
+Then("the composer should be waiting for me afterwards", async function () {
+  await world.page.waitForFunction(
+    () =>
+      document.querySelector('[data-testid="composer"]')?.disabled === false,
+    undefined,
+    { timeout: 15_000 },
+  );
 });

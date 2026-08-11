@@ -259,8 +259,11 @@ function asCampaign(campaign) {
     system: campaign.system,
     module: campaign.module,
     title: moduleIn(campaign.system, campaign.module)?.title ?? "",
+    premise: moduleIn(campaign.system, campaign.module)?.premise ?? "",
+    place: moduleIn(campaign.system, campaign.module)?.opening ?? "",
     turns: [...turns.values()].filter((one) => one.campaign_id === campaign.id)
       .length,
+    begun: [...turns.values()].some((one) => one.campaign_id === campaign.id),
     // Resolved, never null — a client should not have to know what the
     // deployment's default is to render which model a campaign runs on.
     model: campaign.model ?? FALLBACK_MODEL,
@@ -703,9 +706,10 @@ function handle(method, path, body, request, query) {
  * are the contract this stub owes: an event name this invented would render
  * here and vanish in production.
  */
-async function stream(request, response, body, campaign) {
-  const said = String(body.message ?? "").trim();
-  if (!said) {
+async function stream(request, response, body, campaign, opening = false) {
+  // An opening answers no message — that is the only thing unusual about it.
+  const said = opening ? "" : String(body.message ?? "").trim();
+  if (!opening && !said) {
     response.writeHead(422, { "content-type": "application/json" });
     response.end(
       JSON.stringify({
@@ -730,17 +734,19 @@ async function stream(request, response, body, campaign) {
   // time is the transcript, so a turn that only existed on the wire would be
   // a turn the next one is never told about.
   const scene = openScene(campaign.id);
-  const mine = {
-    id: randomUUID(),
-    campaign_id: campaign.id,
-    scene_id: scene.id,
-    role: "player",
-    content: said,
-    complete: true,
-    rolls: [],
-    at: turns.size,
-  };
-  turns.set(mine.id, mine);
+  if (!opening) {
+    const mine = {
+      id: randomUUID(),
+      campaign_id: campaign.id,
+      scene_id: scene.id,
+      role: "player",
+      content: said,
+      complete: true,
+      rolls: [],
+      at: turns.size,
+    };
+    turns.set(mine.id, mine);
+  }
 
   response.writeHead(200, {
     "content-type": "text/event-stream",
@@ -799,7 +805,11 @@ async function stream(request, response, body, campaign) {
     await write("roll", doing.roll);
   }
 
-  const pieces = doing.narration ?? ["The door groans, ", "and gives."];
+  const pieces =
+    doing.narration ??
+    (opening
+      ? ["The causeway runs out into the marsh, ", "and the bell is ringing."]
+      : ["The door groans, ", "and gives."]);
   for (const piece of pieces) {
     answer.content += piece;
     await write("narration", { text: piece });
@@ -808,9 +818,16 @@ async function stream(request, response, body, campaign) {
   // Held open until the scenario says so. A turn that ended the instant it
   // began could not be asserted on mid-flight, and mid-flight is the only
   // place streaming is distinguishable from not streaming.
-  await new Promise((resolve) => {
-    release = resolve;
-  });
+  //
+  // Except an opening, which nobody asked for and no scenario watches
+  // mid-flight. Holding one would leave the composer occupied from the
+  // moment the page loads, and every step after that waiting on a turn
+  // gary was never going to finish.
+  if (!opening) {
+    await new Promise((resolve) => {
+      release = resolve;
+    });
+  }
 
   // Gary asking for a break: acted on once the turn is over, as gary-api
   // does it, and relayed on the same open stream.
@@ -916,7 +933,7 @@ export async function start() {
 
       // Taken before handle(), which answers with a whole body — a turn is
       // the one thing here that writes as it goes.
-      const playing = path.match(/^\/campaigns\/([^/]+)\/turns$/);
+      const playing = path.match(/^\/campaigns\/([^/]+)\/(turns|opening)$/);
       if (request.method === "POST" && playing) {
         const who = userFor(request);
         const campaign = campaigns.get(playing[1]);
@@ -931,8 +948,19 @@ export async function start() {
               code: "no_such_campaign",
             }),
           );
+        } else if (
+          playing[2] === "opening" &&
+          [...turns.values()].some((one) => one.campaign_id === campaign.id)
+        ) {
+          response.writeHead(409, { "content-type": "application/json" });
+          response.end(
+            JSON.stringify({
+              detail: "This campaign has already begun",
+              code: "already_begun",
+            }),
+          );
         } else {
-          void stream(request, response, body, campaign);
+          void stream(request, response, body, campaign, playing[2] === "opening");
         }
         return;
       }

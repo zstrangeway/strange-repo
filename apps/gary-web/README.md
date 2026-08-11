@@ -29,6 +29,18 @@ about a long campaign.
 Breaking a scene by hand is the one control here that is slow on purpose — it
 runs a whole pass through a model — and the button says so while it waits.
 
+## Being dropped into it
+
+Making a character is the last thing anybody should have to do before the game
+starts happening. So the campaign page asks gary to open the scene the moment
+there is a party and nothing said — no button, because having made a character,
+being asked to also press start is the same empty box in a smaller frame. It is
+safe to ask on sight: gary-api refuses a second opening, so a reload cannot
+produce two or spend twice.
+
+The module's premise is on screen immediately, which costs nothing and covers
+the seconds the opening takes to arrive.
+
 ## Streaming a turn
 
 A turn arrives as it is written, over SSE. **`EventSource` cannot be used**,

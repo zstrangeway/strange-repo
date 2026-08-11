@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@gary/ui/components/select";
+import { Skeleton } from "@gary/ui/components/skeleton";
 import { SubmitButton } from "@gary/ui/components/submit-button";
 
 import type { Member } from "@/lib/api";
@@ -36,11 +37,16 @@ export default function Party({
   campaignId,
   party,
   classes,
+  loading,
   onAdded,
 }: {
   campaignId: string;
   party: Member[];
   classes: string[];
+  /** True until the world has been asked. Not the same as an empty party,
+   *  and saying "nobody at the table" before looking is a page telling you
+   *  something it does not know. */
+  loading: boolean;
   onAdded: () => void;
 }) {
   const [error, setError] = useState<string | undefined>(undefined);
@@ -55,7 +61,9 @@ export default function Party({
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        {party.length === 0 ? (
+        {loading ? (
+          <Skeleton className="h-12 w-full" />
+        ) : party.length === 0 ? (
           <p className="text-sm text-muted-foreground" data-testid="no-party">
             Nobody at the table yet.
           </p>

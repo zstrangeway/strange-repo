@@ -128,8 +128,10 @@ export default function Transcript({
 }) {
   if (entries.length === 0 && scenes.length <= 1) {
     return (
+      // Not "say what you do": nothing has happened for anyone to react to
+      // yet, and the opening is on its way.
       <p className="text-sm text-muted-foreground" data-testid="nothing-said">
-        Nothing has happened yet. Say what you do.
+        gary is setting the scene…
       </p>
     );
   }
