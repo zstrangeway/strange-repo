@@ -4,7 +4,7 @@ import { Badge } from "@gary/ui/components/badge";
 import { Item, ItemContent, ItemDescription, ItemTitle } from "@gary/ui/components/item";
 
 import type { Roll, Scene } from "@/lib/api";
-import { workedOut } from "@/lib/rolls";
+import { abilityAside, workedOut } from "@/lib/rolls";
 
 /** One thing said, and anything the engines did while it was being said. */
 export type Entry = {
@@ -29,6 +29,7 @@ export type Entry = {
 // into the reason — "John falling damage" — where nothing could render it.
 function RolledDice({ roll }: { roll: Roll }) {
   const sum = workedOut(roll);
+  const ability = abilityAside(roll);
   const graded = roll.dc !== undefined && roll.dc !== null;
 
   return (
@@ -55,8 +56,8 @@ function RolledDice({ roll }: { roll: Roll }) {
             </span>
           ) : null}
           <span>{roll.reason || "a roll"}</span>
-          {roll.ability ? (
-            <span data-testid="roll-ability">· {roll.ability}</span>
+          {ability ? (
+            <span data-testid="roll-ability">· {ability}</span>
           ) : null}
           {sum ? (
             <span className="font-mono" data-testid="roll-sum">

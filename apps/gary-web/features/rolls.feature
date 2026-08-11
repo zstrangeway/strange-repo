@@ -39,3 +39,17 @@ Feature: Rolls on the table
     And I say "how sound are these planks" and gary rolls
     And gary finishes
     Then the roll should be labelled with nobody
+
+  # Every score on a new sheet is a ten, which is worth no modifier at all —
+  # so no check anybody had actually made had one, so the working was hidden
+  # on every one of them. A card reading "1d20 → 12 vs 12" asks you to take
+  # on trust that the 12 was the die and not something already adjusted, and
+  # a check decided by a single point is where that trust is worth least.
+  Scenario: A check with nothing to add still shows what it rolled
+    When I open that campaign's party
+    And I add "Bramble" the "rogue" as mine
+    And I take them in
+    And I say "what is in the water" and gary checks "Bramble" on a sheet of tens
+    And gary finishes
+    Then the roll should show what the dice came up
+    And the roll should say what it was against

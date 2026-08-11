@@ -176,6 +176,29 @@ When("I say {string} and gary rolls", async function (message) {
   await say(message);
 });
 
+When(
+  "I say {string} and gary checks {string} on a sheet of tens",
+  async function (message, who) {
+    // The check every character in a new campaign actually makes: an ability
+    // named, and a score of ten behind it, which is worth nothing. This is
+    // what was on screen when the working went missing.
+    apiStub.garyWill({
+      roll: {
+        notation: "1d20",
+        dice: [12],
+        modifier: 0,
+        total: 12,
+        character: who,
+        ability: "dex",
+        reason: "spotting the threat in the water",
+        dc: 12,
+        degree: "success",
+      },
+    });
+    await say(message);
+  },
+);
+
 When("I say {string} and gary checks {string}", async function (message, who) {
   // A graded check rather than a bare roll, and one with somebody's name on
   // it: the two halves of what a card has to be able to show.
@@ -445,12 +468,23 @@ Then("the roll should be labelled with nobody", async function () {
 
 Then("the roll should show how the total was reached", async function () {
   const shown = await world.page.textContent('[data-testid="roll-sum"]');
-  // Faces, what was added, and what that came to — so a call this close can
-  // be checked by eye rather than taken on trust.
-  assert.match(shown ?? "", /\d+\s*[+−]\s*\d+\s*=\s*\d+/, shown ?? "");
+  // Faces, what was added, which ability it came off, and what that came to
+  // — so a call this close can be checked by eye rather than taken on trust.
+  assert.match(
+    shown ?? "",
+    /rolled \d+ [+−] \d+ \w+ = \d+/,
+    shown ?? "",
+  );
 });
 
 Then("the roll should say what it was against", async function () {
   const shown = await world.page.textContent('[data-testid="roll-dc"]');
   assert.match(shown ?? "", /^\d+$/, shown ?? "");
+});
+
+Then("the roll should show what the dice came up", async function () {
+  // Not the arithmetic — there is none — but the faces. Without them a check
+  // decided by one point is a pair of numbers you have to take on trust.
+  const shown = await world.page.textContent('[data-testid="roll-sum"]');
+  assert.match(shown ?? "", /rolled \d+/, shown ?? "");
 });

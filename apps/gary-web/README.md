@@ -81,11 +81,18 @@ no way to tell which neck was out. Then what it was for, the ability behind
 it, and how the total was reached — `9 + 3 = 12` beside `1d20+3 → 12 vs 12` —
 so a call that close can be checked by eye rather than taken on trust.
 
-The arithmetic only appears when it says something the total does not.
-`rolled 9` beside `→ 9` is the same number printed twice, and a busy turn
-carries seven of them. That rule is `workedOut` in `src/lib/rolls.ts` rather
-than in the component, because it is the branchy part and `src/lib` is where
-the coverage gate can see it.
+A **graded check always shows its faces**, even when nothing was added to
+them. Suppressing that was the first version's mistake and it hid the working
+on every check anybody had actually made — a new sheet is straight tens, tens
+are worth no modifier, so no check ever had one. `1d20 → 12 vs 12` asks you to
+take on trust that the 12 was the die rather than something already adjusted,
+and a check decided by a single point is where that trust is worth least.
+
+A **bare roll** still stays quiet when it has nothing to add, because `rolled
+5` beside `1d6 → 5` is the same number twice and a busy turn carries seven of
+them. Both rules live in `src/lib/rolls.ts` rather than in the component,
+because they are the branchy part and `src/lib` is where the coverage gate can
+see them.
 
 If the narration ever arrives all at once in production while streaming fine
 locally, the thing in front of gary-api is buffering `text/event-stream`.
