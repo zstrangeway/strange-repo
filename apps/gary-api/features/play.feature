@@ -123,6 +123,18 @@ Feature: Playing
     Then the transcript should hold 2 turns
     And gary's turn should be marked incomplete
 
+  # A deployment with no key is a real state, not a hypothetical one: it is
+  # what a fresh Fly app is until its secrets are set. It has to read as gary
+  # not being configured rather than as gary crashing, and it has to be
+  # refused before the stream opens — after that there is no status left to
+  # say it with.
+  Scenario: Playing on a deployment that cannot reach a model
+    Given this deployment has no model key
+    When I say "I push open the door"
+    Then the response status should be 503
+    And the response code should be "gm_unavailable"
+    And the transcript should hold 0 turns
+
   Scenario: A campaign that does not exist
     When I say "I push open the door" in a campaign that does not exist
     Then the response status should be 404

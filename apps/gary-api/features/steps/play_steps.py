@@ -1022,6 +1022,15 @@ def step_close_hurts(context, name):
     fake.ON_CLOSE = [f"damage {name} 4"]
 
 
+@given("this deployment has no model key")
+def step_no_key(context):
+    # As a Fly app is before anybody sets its secrets. environment.py puts
+    # both back before the next scenario.
+    os.environ.pop("GM_FAKE", None)
+    os.environ.pop("OPENROUTER_API_KEY", None)
+    narration.narrator.cache_clear()
+
+
 @given("gary will roll dice when the scene closes")
 def step_close_rolls(context):
     fake.ON_CLOSE = ["roll 1d20+3 Perception"]

@@ -781,7 +781,21 @@ async def take_turn(
             "There is nobody in this campaign to play yet",
         )
 
-    gary = narration.narrator(campaign.model or narration.models.default())
+    try:
+        gary = narration.narrator(campaign.model or narration.models.default())
+    except narration.NarrationError as error:
+        # A deployment with no key, which is what a fresh app is until its
+        # secrets are set. Refused here, before a byte is sent, because this
+        # is one of the few things that can still be said with a status — and
+        # because letting it escape would read as gary crashing rather than
+        # gary not being configured.
+        logger.error("gm.unconfigured", reason=str(error))
+        raise Refusal(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "gm_unavailable",
+            "gary cannot reach a model on this deployment",
+        ) from error
+
     said = gary.sanitise(request.message) or request.message
 
     # A scene that has outgrown what may be sent every turn is broken here,
