@@ -54,6 +54,18 @@ Feature: The opening
     When I ask gary to begin
     Then gary should have been told what brought the party here
 
+  # The sequence that broke in play, and the one nothing here ran: every
+  # scenario above stops at the opening, and every scenario in play.feature
+  # starts without one. The join between them was untested, which is exactly
+  # where it went wrong — the first thing anybody says is an answer to an
+  # opening, and that is the turn that failed.
+  Scenario: Answering the opening
+    Given I add "Bramble" the rogue
+    And gary has begun
+    When I say "I head down the causeway"
+    Then the turn should stream to completion
+    And the transcript should hold 3 turns
+
   Scenario: The opening belongs to the first scene
     Given I add "Bramble" the rogue
     When I ask gary to begin
