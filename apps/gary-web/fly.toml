@@ -32,7 +32,10 @@ primary_region = "iad"
   # known to work; http://gary-api.flycast is the change to try if you want
   # gary-api off the internet. Must match the app name in
   # apps/gary-api/fly.toml either way.
-  GARY_API_URL = "https://gary-api.fly.dev"
+  # Kept for reference only. gary-web runs in the browser, so the API's
+  # address is baked in at build time — see NEXT_PUBLIC_GARY_API_URL in the
+  # Dockerfile. Changing it here alone changes nothing.
+  NEXT_PUBLIC_GARY_API_URL = "https://gary-api.fly.dev"
 
 [http_service]
   internal_port = 8080

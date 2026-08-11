@@ -1,23 +1,16 @@
 import path from "node:path";
 import { defineConfig } from "vitest/config";
 
-// The coverage gate is scoped to src/lib on purpose. Everything else in this
-// app is an async Server Component or a Server Action, and Next's own testing
-// guide says to cover those end to end rather than with unit tests — which the
-// Gherkin suite does. A gate that swept them in would report a number it had
-// not earned.
-//
-// Route handlers are the exception, and only for what end-to-end cannot reach:
-// they answer a provider's redirect, and the specs run without a proxy in
-// front, so nothing there can tell a URL built from the public host from one
-// built from the address the server is bound to. Those tests run; they are
-// still left out of what is measured, so the gate keeps meaning src/lib.
+// The coverage gate is scoped to src/lib on purpose. Everything under src/app
+// is a React component now, and the Gherkin suite drives those in a real
+// browser — which is the only place their behaviour is real. A gate that swept
+// them in would report a number it had not earned.
 export default defineConfig({
   resolve: {
     alias: { "@": path.resolve(import.meta.dirname, "src") },
   },
   test: {
-    include: ["src/lib/**/*.test.ts", "src/app/**/*.test.ts"],
+    include: ["src/lib/**/*.test.ts"],
     environment: "node",
     coverage: {
       // The provider Next's own Jest example picks.

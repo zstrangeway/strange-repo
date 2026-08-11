@@ -1,15 +1,13 @@
-import { redirect } from "next/navigation";
+"use client";
 
-import { currentUser } from "@/lib/session";
+import { useSession } from "@/lib/use-session";
 
-export default async function Home() {
-  // Guarded here as well as in the layout, not for belt and braces: Next
-  // renders a layout and its page concurrently, so this runs whether or not
-  // the layout has decided to redirect. currentUser is request-cached, so
-  // asking twice costs one call to gary-api.
-  const user = await currentUser();
+export default function Home() {
+  // The layout renders nothing until there is a user, so by the time this
+  // runs there is one. The check is for the type, not for the case.
+  const { user } = useSession();
   if (!user) {
-    redirect("/login");
+    return null;
   }
 
   return (

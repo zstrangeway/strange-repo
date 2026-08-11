@@ -1,11 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  context,
   getLogger,
-  newRequestId,
   requestId,
-  withContext,
   write,
 } from "./logger";
 
@@ -15,11 +12,11 @@ let err: string[];
 beforeEach(() => {
   out = [];
   err = [];
-  vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+  vi.spyOn(console, "log").mockImplementation((chunk) => {
     out.push(String(chunk));
     return true;
   });
-  vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
+  vi.spyOn(console, "error").mockImplementation((chunk) => {
     err.push(String(chunk));
     return true;
   });
@@ -45,7 +42,9 @@ describe("the shape of a line", () => {
     write("info", "api", "api.call");
 
     expect(out).toHaveLength(1);
-    expect(out[0].endsWith("\n")).toBe(true);
+    // One call per line. The console supplies the newline, so the line itself
+    // must not carry one or every entry would be double-spaced.
+    expect(out[0].endsWith("\n")).toBe(false);
     expect(lines()[0]).toMatchObject({
       level: "info",
       logger: "api",
@@ -144,7 +143,7 @@ describe("values JSON cannot hold", () => {
 
 describe("levels", () => {
   it("sends warning and error to stderr, and the rest to stdout", () => {
-    vi.stubEnv("LOG_LEVEL", "debug");
+    vi.stubEnv("NEXT_PUBLIC_LOG_LEVEL", "debug");
 
     const log = getLogger("api");
     log.debug("a");
@@ -156,8 +155,8 @@ describe("levels", () => {
     expect(lines(err).map((line) => line.message)).toEqual(["c", "d"]);
   });
 
-  it("drops anything below LOG_LEVEL", () => {
-    vi.stubEnv("LOG_LEVEL", "ERROR");
+  it("drops anything below NEXT_PUBLIC_LOG_LEVEL", () => {
+    vi.stubEnv("NEXT_PUBLIC_LOG_LEVEL", "ERROR");
 
     const log = getLogger("api");
     log.info("dropped");
@@ -167,8 +166,8 @@ describe("levels", () => {
     expect(lines(err).map((line) => line.message)).toEqual(["kept"]);
   });
 
-  it("falls back to info when LOG_LEVEL is not a level", () => {
-    vi.stubEnv("LOG_LEVEL", "chatty");
+  it("falls back to info when NEXT_PUBLIC_LOG_LEVEL is not a level", () => {
+    vi.stubEnv("NEXT_PUBLIC_LOG_LEVEL", "chatty");
 
     const log = getLogger("api");
     log.debug("dropped");
@@ -177,8 +176,8 @@ describe("levels", () => {
     expect(lines().map((line) => line.message)).toEqual(["kept"]);
   });
 
-  it("defaults to info when LOG_LEVEL is unset", () => {
-    vi.stubEnv("LOG_LEVEL", undefined);
+  it("defaults to info when NEXT_PUBLIC_LOG_LEVEL is unset", () => {
+    vi.stubEnv("NEXT_PUBLIC_LOG_LEVEL", undefined);
 
     getLogger("api").debug("dropped");
 
@@ -186,55 +185,12 @@ describe("levels", () => {
   });
 });
 
-describe("request context", () => {
-  it("is empty outside a bound block", () => {
-    expect(context()).toEqual({});
+describe("requestId", () => {
+  it("is a fresh id each time, since there is no request to bind one to", () => {
+    expect(requestId()).not.toBe(requestId());
   });
 
-  it("puts bound fields on every line inside the block", () => {
-    withContext({ request_id: "abc", tenant: "gary" }, () => {
-      write("info", "api", "api.call");
-    });
-
-    expect(lines()[0]).toMatchObject({ request_id: "abc", tenant: "gary" });
-  });
-
-  it("nests, and unwinds", () => {
-    withContext({ request_id: "abc" }, () => {
-      withContext({ step: "two" }, () => {
-        expect(context()).toEqual({ request_id: "abc", step: "two" });
-      });
-      expect(context()).toEqual({ request_id: "abc" });
-    });
-
-    expect(context()).toEqual({});
-  });
-
-  it("will not let a bound field overwrite a standard one either", () => {
-    withContext({ logger: "impostor" }, () => {
-      write("info", "api", "api.call");
-    });
-
-    expect(lines()[0]).toMatchObject({ logger: "api", logger_: "impostor" });
-  });
-
-  it("mints a fresh id each time", () => {
-    expect(newRequestId()).not.toEqual(newRequestId());
-  });
-
-  it("reuses the bound id when there is one", () => {
-    withContext({ request_id: "abc" }, () => {
-      expect(requestId()).toBe("abc");
-    });
-  });
-
-  it("mints one when nothing is bound, so a line still correlates", () => {
+  it("looks like the ids gary-api records", () => {
     expect(requestId()).toMatch(/^[0-9a-f-]{36}$/);
-  });
-
-  it("mints one when the bound id is not text", () => {
-    withContext({ request_id: 7 }, () => {
-      expect(requestId()).toMatch(/^[0-9a-f-]{36}$/);
-    });
   });
 });

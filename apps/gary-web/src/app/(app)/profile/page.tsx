@@ -1,5 +1,6 @@
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
 
 import {
   Card,
@@ -9,44 +10,55 @@ import {
   CardTitle,
 } from "@gary/ui/components/card";
 
-import { FLASH_COOKIE, readFlash } from "@/lib/flash";
-import { currentUser } from "@/lib/session";
-import { absoluteUrl, withState } from "@/lib/urls";
+import { clearFlash, peekFlash, type Flash } from "@/lib/flash";
+import { connectedAccounts, waysToSignIn } from "@/lib/gary";
+import { callbackUrl, withState } from "@/lib/urls";
+import { useSession } from "@/lib/use-session";
 
-import { connectedAccounts, waysToSignIn } from "../../actions";
-import { ClearFlash } from "../../clear-flash";
 import { Notice } from "../../form-parts";
-import ConnectedAccounts from "./connected";
+import ConnectedAccounts, { type Connection } from "./connected";
 import { DisplayNameForm } from "./forms";
 
-export default async function ProfilePage() {
-  // See the note on the home page: the layout's guard does not stop this
-  // from running, and currentUser is request-cached.
-  const { error, confirmation } = readFlash(
-    (await cookies()).get(FLASH_COOKIE)?.value,
-  );
-  const user = await currentUser();
+export default function ProfilePage() {
+  const { user } = useSession();
+  const [connections, setConnections] = useState<Connection[]>([]);
+  // Read while rendering, cleared afterwards. The read is pure, so React may
+  // do it as many times as it likes; the clearing is the effect.
+  const [flash] = useState<Flash>(peekFlash);
+  useEffect(() => clearFlash, []);
+
+  const load = useCallback(async () => {
+    // Connecting sends you out to the provider and back, the same as signing
+    // in — the callback tells the two apart by whether there is a session.
+    const back = callbackUrl("/profile/connected");
+    const [connected, offered] = await Promise.all([
+      connectedAccounts(),
+      waysToSignIn(back),
+    ]);
+
+    setConnections(
+      offered.map((provider) => {
+        const held = connected.find((row) => row.provider === provider.name);
+        return {
+          provider: provider.name,
+          label: provider.label,
+          email: held?.email ?? null,
+          authorizationUrl: withState(provider.authorization_url, provider.name),
+        };
+      }),
+    );
+  }, []);
+
+  useEffect(() => {
+    // Fetching on mount, which is what an effect is for. The rule below is
+    // aimed at state derived from other state; this is an external system.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load();
+  }, [load]);
+
   if (!user) {
-    redirect("/login");
+    return null;
   }
-
-  // Connecting sends you out to the provider and back, the same as signing
-  // in — the callback tells the two apart by whether there is a session.
-  const back = await absoluteUrl("/profile/connected");
-  const [connected, offered] = await Promise.all([
-    connectedAccounts(),
-    waysToSignIn(back),
-  ]);
-
-  const connections = offered.map((provider) => {
-    const held = connected.find((row) => row.provider === provider.name);
-    return {
-      provider: provider.name,
-      label: provider.label,
-      email: held?.email ?? null,
-      authorizationUrl: withState(provider.authorization_url, provider.name),
-    };
-  });
 
   return (
     <div className="flex flex-col gap-6">
@@ -79,9 +91,8 @@ export default async function ProfilePage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          {error || confirmation ? <ClearFlash /> : null}
-          <Notice error={error} confirmation={confirmation} />
-          <ConnectedAccounts connections={connections} />
+          <Notice error={flash.error} confirmation={flash.confirmation} />
+          <ConnectedAccounts connections={connections} onChange={load} />
         </CardContent>
       </Card>
     </div>

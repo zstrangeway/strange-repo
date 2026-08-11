@@ -1,19 +1,11 @@
-import { headers } from "next/headers";
-
 /** Where a provider should send someone back to, as an absolute URL.
  *
- * Derived from the request rather than an environment variable: the specs
- * run on a different port from development and both differ from production,
- * and a redirect_uri that disagrees with the one the provider was given is
- * rejected — silently enough to be hard to place.
+ * The browser knows its own origin, so there is nothing to derive and nothing
+ * to get wrong. This used to be built on the server from forwarded headers,
+ * which is how a redirect once pointed at 0.0.0.0.
  */
-export async function absoluteUrl(path: string): Promise<string> {
-  const received = await headers();
-  const host = received.get("host") ?? "localhost:3000";
-  // Fly terminates TLS and forwards the original scheme; locally there is
-  // none and the answer is http.
-  const scheme = received.get("x-forwarded-proto") ?? "http";
-  return `${scheme}://${host}${path}`;
+export function callbackUrl(path: string): string {
+  return `${window.location.origin}${path}`;
 }
 
 /** Which provider came back is carried in state, since one callback serves

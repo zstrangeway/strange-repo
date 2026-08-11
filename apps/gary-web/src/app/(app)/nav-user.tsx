@@ -18,7 +18,9 @@ import {
   useSidebar,
 } from "@gary/ui/components/sidebar";
 
-import { signOut } from "../actions";
+import { useRouter } from "next/navigation";
+
+import { signOut } from "@/lib/gary";
 import ThemeMenu from "./theme-menu";
 
 function initials(name: string) {
@@ -38,6 +40,7 @@ export default function NavUser({
   email: string;
 }) {
   const { isMobile } = useSidebar();
+  const router = useRouter();
 
   return (
     <SidebarMenu>
@@ -80,17 +83,19 @@ export default function NavUser({
             <DropdownMenuSeparator />
             <ThemeMenu />
             <DropdownMenuSeparator />
-            {/* The form wraps the item rather than the other way round: the
-                menu item has to stay the thing with role="menuitem", and a
-                form around it keeps the server action a real submission. */}
-            <form action={signOut}>
-              <DropdownMenuItem asChild>
-                <button type="submit" className="w-full" data-testid="sign-out">
-                  <LogOut />
-                  Sign out
-                </button>
-              </DropdownMenuItem>
-            </form>
+            <DropdownMenuItem asChild>
+              <button
+                type="button"
+                className="w-full"
+                data-testid="sign-out"
+                onClick={() => {
+                  void signOut().then(() => router.replace("/login"));
+                }}
+              >
+                <LogOut />
+                Sign out
+              </button>
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>

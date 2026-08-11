@@ -52,6 +52,13 @@ COPY packages/ui packages/ui
 ARG NEXT_PUBLIC_SENTRY_DSN=""
 ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN
 
+# Where gary-api answers, for the same reason and with the same consequence:
+# this app runs in the browser, so a value supplied at runtime arrives long
+# after the only moment it could have mattered. Wrong here and every call goes
+# to the wrong host with nothing in the server log to say so.
+ARG NEXT_PUBLIC_GARY_API_URL="https://gary-api.fly.dev"
+ENV NEXT_PUBLIC_GARY_API_URL=$NEXT_PUBLIC_GARY_API_URL
+
 # Which Sentry project the source maps belong to. Not secret, and not a
 # runtime concern — sentry-cli only needs them while the bundle is being built.
 ARG SENTRY_ORG=""

@@ -37,7 +37,7 @@ beforeAll(async () => {
 
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address() as AddressInfo;
-  vi.stubEnv("GARY_API_URL", `http://127.0.0.1:${port}`);
+  vi.stubEnv("NEXT_PUBLIC_GARY_API_URL", `http://127.0.0.1:${port}`);
 });
 
 afterAll(async () => {
@@ -57,11 +57,11 @@ const written: { stdout: string[]; stderr: string[] } = { stdout: [], stderr: []
 beforeEach(() => {
   written.stdout = [];
   written.stderr = [];
-  vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+  vi.spyOn(console, "log").mockImplementation((chunk) => {
     written.stdout.push(String(chunk));
     return true;
   });
-  vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
+  vi.spyOn(console, "error").mockImplementation((chunk) => {
     written.stderr.push(String(chunk));
     return true;
   });
@@ -135,7 +135,7 @@ describe("callApi", () => {
 
   it("reports gary-api being unreachable rather than throwing", async () => {
     // Nothing listens on port 1.
-    vi.stubEnv("GARY_API_URL", "http://127.0.0.1:1");
+    vi.stubEnv("NEXT_PUBLIC_GARY_API_URL", "http://127.0.0.1:1");
 
     const result = await callApi("/auth/me");
 
@@ -151,13 +151,13 @@ describe("callApi", () => {
     expect(line.request_id).toEqual(expect.any(String));
 
     const { port } = server.address() as AddressInfo;
-    vi.stubEnv("GARY_API_URL", `http://127.0.0.1:${port}`);
+    vi.stubEnv("NEXT_PUBLIC_GARY_API_URL", `http://127.0.0.1:${port}`);
   });
 
-  it("falls back to 127.0.0.1:8000 when GARY_API_URL is unset", async () => {
+  it("falls back to 127.0.0.1:8000 when NEXT_PUBLIC_GARY_API_URL is unset", async () => {
     // Undefined, not empty: an empty string is not nullish, so ?? would not
     // reach the default and the branch would go untested.
-    vi.stubEnv("GARY_API_URL", undefined);
+    vi.stubEnv("NEXT_PUBLIC_GARY_API_URL", undefined);
 
     // Nothing is listening there in a test run, so the transport failure is
     // the proof it used the default.
@@ -169,7 +169,7 @@ describe("callApi", () => {
     });
 
     const { port } = server.address() as AddressInfo;
-    vi.stubEnv("GARY_API_URL", `http://127.0.0.1:${port}`);
+    vi.stubEnv("NEXT_PUBLIC_GARY_API_URL", `http://127.0.0.1:${port}`);
   });
 });
 

@@ -1,9 +1,9 @@
-// Calls gary-api from gary-web's server, never from the browser. That is what
-// lets the session cookie belong to gary-web's own origin — a cookie set by
-// gary-api would be third-party here and dropped by Safari and Firefox.
+// Calls gary-api from the browser. Every request here is visible in devtools,
+// which is the point: there is no server in between to hide anything, and no
+// second log to correlate with.
 //
-// Worth knowing when debugging: none of these requests appear in browser
-// devtools. They are in the gary-web server log.
+// gary-api has to name this app's origin in BROWSER_ORIGINS or the browser
+// makes the call and then refuses to hand back the answer.
 
 import { getLogger, REQUEST_ID_HEADER, requestId } from "./logger";
 
@@ -38,9 +38,10 @@ export type Provider = {
 export type SignedIn = User & { token: string; expires_at: string };
 
 function baseUrl(): string {
-  // Read per request rather than at module load, so the deployed value is the
-  // one Fly injected and not whatever was set when the image was built.
-  return process.env.GARY_API_URL ?? "http://127.0.0.1:8000";
+  // Baked in at build time, not read at runtime: this code runs in a browser,
+  // which has no environment to read. Changing where gary-api lives means a
+  // rebuild, which is the honest cost of shipping a static app.
+  return process.env.NEXT_PUBLIC_GARY_API_URL ?? "http://127.0.0.1:8000";
 }
 
 /** Turns FastAPI's validation payload into something a person can act on. */

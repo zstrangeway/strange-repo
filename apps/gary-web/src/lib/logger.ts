@@ -5,12 +5,11 @@
 //    "message":"api.unreachable","app":"gary-web","request_id":"5f2c…",
 //    "error":{"type":"TypeError","message":"fetch failed","stack":"…"}}
 //
-// This is server-side only. Every caller is a Server Component, a Server
-// Action or middleware — none of it runs in the browser, and none of it
-// shows up in devtools.
-
-import { AsyncLocalStorage } from "node:async_hooks";
-import { randomUUID } from "node:crypto";
+// This runs in the browser, so the lines land in the devtools console rather
+// than in a file anyone collects. That is a real loss — nobody is reading
+// them after the fact — and the reason the shape is kept anyway is the
+// request id: it is the same id gary-api records, so a line copied out of a
+// console still finds its other half in gary-api's log.
 
 export const APP = "gary-web";
 export const REQUEST_ID_HEADER = "x-request-id";
@@ -25,12 +24,10 @@ export type Fields = Record<string, unknown>;
 // applies, so a line means the same thing whichever app wrote it.
 const RESERVED = new Set(["timestamp", "level", "logger", "message", "app"]);
 
-const store = new AsyncLocalStorage<Fields>();
-
 function floor(): number {
-  // Read per call rather than at module load: LOG_LEVEL comes from the
-  // deployment, and the value at build time is not it.
-  const configured = (process.env.LOG_LEVEL ?? "").toLowerCase();
+  // Inlined at build time, like every other setting this app has: there is no
+  // environment to read in a browser.
+  const configured = (process.env.NEXT_PUBLIC_LOG_LEVEL ?? "").toLowerCase();
   return configured in LEVELS ? LEVELS[configured as Level] : LEVELS.info;
 }
 
@@ -63,7 +60,12 @@ function merge(into: Fields, fields: Fields): void {
   }
 }
 
-export function write(level: Level, logger: string, message: string, fields: Fields = {}): void {
+export function write(
+  level: Level,
+  logger: string,
+  message: string,
+  fields: Fields = {},
+): void {
   if (LEVELS[level] < floor()) {
     return;
   }
@@ -76,7 +78,6 @@ export function write(level: Level, logger: string, message: string, fields: Fie
     app: APP,
   };
   const payload: Fields = { ...core };
-  merge(payload, store.getStore() ?? {});
   merge(payload, fields);
 
   let line: string;
@@ -90,14 +91,15 @@ export function write(level: Level, logger: string, message: string, fields: Fie
     // that could not be serialised a moment ago.
     line = JSON.stringify({
       ...core,
-      fields_unserialisable: error instanceof Error ? error.message : String(error),
+      fields_unserialisable:
+        error instanceof Error ? error.message : String(error),
     });
   }
 
-  // warning and error to stderr, the rest to stdout — the split every log
-  // collector already understands.
-  const sink = LEVELS[level] >= LEVELS.warning ? process.stderr : process.stdout;
-  sink.write(`${line}\n`);
+  // warning and error to console.error, the rest to console.log — the split
+  // devtools already understands, and the one the specs read.
+  const sink = LEVELS[level] >= LEVELS.warning ? console.error : console.log;
+  sink(line);
 }
 
 export type Logger = {
@@ -116,28 +118,14 @@ export function getLogger(name: string): Logger {
   };
 }
 
-/** The fields currently bound. Empty outside a bound block. */
-export function context(): Fields {
-  return { ...(store.getStore() ?? {}) };
-}
-
-/** Add fields to every line logged inside `run`, however deep. */
-export function withContext<T>(fields: Fields, run: () => T): T {
-  return store.run({ ...(store.getStore() ?? {}), ...fields }, run);
-}
-
-export function newRequestId(): string {
-  return randomUUID();
-}
-
 /**
- * The id for the work in flight, minting one if nothing bound it.
+ * An id for one call, handed to gary-api so both records of it agree.
  *
- * The fallback matters: a page that forgets to establish a context still
- * gets a line that correlates with gary-api's, rather than one with no id
- * at all. It only costs the grouping of several calls under one id.
+ * Minted per call now rather than bound for the length of a request: there is
+ * no request here to bind it to. Several calls made for one click therefore
+ * carry different ids, which is a real loss of grouping — what survives is
+ * the pairing of gary-web's line with gary-api's for the same call.
  */
 export function requestId(): string {
-  const bound = store.getStore()?.request_id;
-  return typeof bound === "string" ? bound : newRequestId();
+  return crypto.randomUUID();
 }

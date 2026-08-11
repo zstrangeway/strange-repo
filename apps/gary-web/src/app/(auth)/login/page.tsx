@@ -1,31 +1,39 @@
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import { Button } from "@gary/ui/components/button";
 import { FormCard } from "@gary/ui/components/form-card";
 
-import { FLASH_COOKIE, readFlash } from "@/lib/flash";
-import { currentUser } from "@/lib/session";
-import { absoluteUrl, withState } from "@/lib/urls";
+import type { Provider } from "@/lib/api";
+import { clearFlash, peekFlash, type Flash } from "@/lib/flash";
+import { me, waysToSignIn } from "@/lib/gary";
+import { callbackUrl, withState } from "@/lib/urls";
 
-import { waysToSignIn } from "../../actions";
-import { ClearFlash } from "../../clear-flash";
 import { Notice } from "../../form-parts";
-
-export const dynamic = "force-dynamic";
 
 const NOWHERE_TO_GO = "gary is unavailable, try again shortly";
 
-export default async function LoginPage() {
-  if (await currentUser()) {
-    redirect("/");
-  }
+export default function LoginPage() {
+  const router = useRouter();
+  const [providers, setProviders] = useState<Provider[] | null>(null);
+  // Read while rendering, cleared afterwards. The read is pure, so React may
+  // do it as many times as it likes; the clearing is the effect.
+  const [flash] = useState<Flash>(peekFlash);
+  useEffect(() => clearFlash, []);
 
-  const { error } = readFlash((await cookies()).get(FLASH_COOKIE)?.value);
-
-  // The list comes from gary-api rather than being hard-coded here, so a
-  // provider added or withdrawn there needs no change in this app.
-  const providers = await waysToSignIn(await absoluteUrl("/signed-in"));
+  useEffect(() => {
+    void me().then((user) => {
+      if (user) {
+        router.replace("/");
+        return;
+      }
+      // The list comes from gary-api rather than being hard-coded here, so a
+      // provider added or withdrawn there needs no change in this app.
+      void waysToSignIn(callbackUrl("/signed-in")).then(setProviders);
+    });
+  }, [router]);
 
   return (
     <FormCard
@@ -33,10 +41,9 @@ export default async function LoginPage() {
       description="gary has no password of yours. Choose who should vouch for you."
     >
       <div className="flex flex-col gap-3">
-        {error ? <ClearFlash /> : null}
-        <Notice error={error} />
-        {providers.length === 0 ? <Notice error={NOWHERE_TO_GO} /> : null}
-        {providers.map((provider) => (
+        <Notice error={flash.error} />
+        {providers?.length === 0 ? <Notice error={NOWHERE_TO_GO} /> : null}
+        {(providers ?? []).map((provider) => (
           <Button
             key={provider.name}
             asChild

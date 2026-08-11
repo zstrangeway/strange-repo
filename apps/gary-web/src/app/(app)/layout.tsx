@@ -1,4 +1,7 @@
-import { redirect } from "next/navigation";
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useEffect, type ReactNode } from "react";
 
 import { Separator } from "@gary/ui/components/separator";
 import {
@@ -7,23 +10,36 @@ import {
   SidebarTrigger,
 } from "@gary/ui/components/sidebar";
 
-import { currentUser } from "@/lib/session";
+import { SessionProvider, useSession } from "@/lib/use-session";
 
 import AppSidebar from "./app-sidebar";
 import PageTitle from "./page-title";
 
-// The session is read per request, so nothing under here can be prerendered.
-export const dynamic = "force-dynamic";
+export default function AppLayout({ children }: { children: ReactNode }) {
+  return (
+    <SessionProvider>
+      <Guarded>{children}</Guarded>
+    </SessionProvider>
+  );
+}
 
-export default async function AppLayout({
-  children,
-}: LayoutProps<"/">) {
-  // The guard lives here rather than in each page: every route inside this
-  // group is signed-in-only, and a page that forgets the check would be a
-  // page that quietly leaks.
-  const user = await currentUser();
+// The guard lives here rather than in each page: every route inside this
+// group is signed-in-only, and a page that forgets the check would be a page
+// that quietly leaks.
+function Guarded({ children }: { children: ReactNode }) {
+  const { user, loading } = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace("/login");
+    }
+  }, [loading, user, router]);
+
+  // Nothing at all until gary-api has answered. Rendering the frame first
+  // would show a sidebar with nobody in it, then snatch it away.
   if (!user) {
-    redirect("/login");
+    return null;
   }
 
   return (

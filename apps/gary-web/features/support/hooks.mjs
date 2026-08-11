@@ -68,7 +68,7 @@ BeforeAll(async function () {
     "node_modules/.bin/next",
     ["dev", "--port", String(WEB_PORT)],
     {
-      env: { ...process.env, GARY_API_URL: apiUrl },
+      env: { ...process.env, NEXT_PUBLIC_GARY_API_URL: apiUrl },
       // Piped rather than ignored: gary-web logs its calls to gary-api here,
       // and nowhere else. None of it reaches the browser, so a scenario that
       // wants to see it has to read the server's own output.

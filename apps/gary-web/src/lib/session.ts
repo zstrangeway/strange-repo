@@ -1,46 +1,27 @@
-import { cookies } from "next/headers";
-import { cache } from "react";
+// Where the session token lives now that gary-web has no server of its own.
+//
+// localStorage, deliberately. It survives a refresh and a new tab, which is
+// what "stay signed in" means to a person. The cost is that any script running
+// on this page can read it, so an XSS bug is a stolen session rather than a
+// defaced page — the trade a browser-only client makes in exchange for not
+// having a server to hold an httpOnly cookie.
 
-import { callApi, type SignedIn, type User } from "./api";
+export const SESSION_KEY = "gary_session";
 
-export const SESSION_COOKIE = "gary_session";
-
-/** Set on gary-web's own origin, so it is first-party and survives Safari. */
-export async function startSession(signedIn: SignedIn): Promise<void> {
-  const store = await cookies();
-  store.set(SESSION_COOKIE, signedIn.token, {
-    httpOnly: true,
-    sameSite: "lax",
-    // Off over plain HTTP or the cookie is silently dropped in development.
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    expires: new Date(signedIn.expires_at),
-  });
+/** Guarded because this module is imported during the build, where there is
+ *  no window and touching localStorage would throw. */
+function storage(): Storage | null {
+  return typeof window === "undefined" ? null : window.localStorage;
 }
 
-export async function endSession(): Promise<void> {
-  const store = await cookies();
-  store.delete(SESSION_COOKIE);
+export function storedToken(): string | null {
+  return storage()?.getItem(SESSION_KEY) ?? null;
 }
 
-export async function sessionToken(): Promise<string | null> {
-  const store = await cookies();
-  return store.get(SESSION_COOKIE)?.value ?? null;
+export function storeToken(token: string): void {
+  storage()?.setItem(SESSION_KEY, token);
 }
 
-/**
- * The signed-in user, or null. Null covers expired and revoked alike.
- *
- * Wrapped in React's cache so the several callers in one render — the app
- * layout needs it for the sidebar, the page needs it for its content —
- * share a single call to gary-api rather than asking it once each.
- */
-export const currentUser = cache(async (): Promise<User | null> => {
-  const token = await sessionToken();
-  if (!token) {
-    return null;
-  }
-
-  const result = await callApi<User>("/auth/me", { token });
-  return result.ok ? result.data : null;
-});
+export function clearToken(): void {
+  storage()?.removeItem(SESSION_KEY);
+}
