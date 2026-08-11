@@ -8,7 +8,7 @@ from sqlalchemy.pool import NullPool
 from starlette.testclient import TestClient
 
 from gary_api import db, identity, logs
-from gary_api.app import app
+from gary_api.app import app, create_app
 from gary_api.db import database_url
 from gary_api.models import Base
 
@@ -77,7 +77,18 @@ def before_scenario(context, scenario):
     context.log = io.StringIO()
     logs.configure(stream=context.log)
 
+    # Cleared for the same reason as the providers: the origins a browser
+    # may call from are fixed when the app is built.
+    os.environ.pop("BROWSER_ORIGINS", None)
+
     context.client = TestClient(app)
+
+    def rebuild_app():
+        """Stand up a second app, for a scenario that changed its settings."""
+        context.client.close()
+        context.client = TestClient(create_app())
+
+    context.rebuild_app = rebuild_app
     context.response = None
     context.token = None
     context.other_token = None
