@@ -1,13 +1,19 @@
 # gary-api
 
-A FastAPI service backed by Postgres. It owns accounts, sessions and password
-reset; gary-web calls it from its own server and never from a browser.
+A FastAPI service backed by Postgres. It owns accounts, the identities that
+reach them, and sessions. It holds no passwords: Google, Facebook and Apple
+authenticate people and gary trusts the result.
 
-Passwords are argon2id. Session and reset tokens are random and stored only as
-SHA-256 digests, so a copy of the database is not enough to impersonate anyone.
-Sign-in answers identically for a wrong password and an unknown address, and
-password reset answers identically whether or not the address is known —
-either difference would turn the endpoint into a way to ask who has an account.
+Clients are anything — gary-web is a browser app, and an iOS or Android one
+would call the same endpoints the same way. Sessions are bearer tokens, never
+cookies, which is what keeps that true. `BROWSER_ORIGINS` names the origins a
+browser may call from; without it the browser makes the call and then refuses
+to hand back the answer.
+
+Session tokens are random and stored only as SHA-256 digests, so a copy of the
+database is not enough to impersonate anyone. Two providers naming the same
+address are two accounts, deliberately: gary cannot verify an address, so
+treating a match as proof would be a way into someone else's account.
 
 `GET /health` reports its own state and the database's, always at 200 — the app
 answering is the signal that it is up, and the body carries what it depends on.
@@ -28,11 +34,10 @@ pnpm --filter gary-api revision "add widgets"     # generate one
 pnpm --filter gary-api seed                       # local accounts
 ```
 
-`seed` migrates, then creates or resets `ada@`, `alan@` and `grace@example.com`
-— all with the password it prints. Re-running is safe and puts a mangled local
-database back rather than failing on the duplicate email. It refuses to run
-unless `DATABASE_URL` looks local, because those accounts have a published
-password.
+`seed` migrates, then creates or resets `ada@`, `alan@` and `grace@example.com`.
+Re-running is safe and puts a mangled local database back rather than failing on
+the duplicate email. It refuses to run unless `DATABASE_URL` looks local,
+because those accounts are reachable with a published sign-in code.
 
 Deploys run `alembic upgrade head` as Fly's `release_command`, before the new
 version takes traffic. That gates the deploy on reaching the database, so an
@@ -52,11 +57,17 @@ class and one line in `PROVIDERS`.
 | `RESEND_API_KEY` | required by `resend`, and selects it on its own |
 | `MAIL_FROM` | sender address, defaults to Resend's shared test sender |
 
+**Nothing sends mail today.** Password reset was the only thing that did, and
+it left with the passwords. The layer is kept because the first feature that
+needs to tell someone something will want it, and because deleting and
+rewriting it costs more than leaving it — but no code path reaches it, so none
+of the settings below currently do anything.
+
 With nothing set, the console provider logs the message rather than sending it,
-so a developer with no credentials still sees the reset link in full. A
-misconfigured provider is logged at startup as an error but does **not** stop
-gary booting: mail matters only for password reset, and taking the service down
-over it would fail Fly's health check and block the deploy that fixes it.
+so a developer with no credentials sees it in full. A misconfigured provider is
+logged at startup as an error but does **not** stop gary booting: taking the
+service down over mail would fail Fly's health check and block the deploy that
+fixes it.
 
 HTTP rather than SMTP because Fly blocks outbound port 25 and 587 is unreliable
 there — an SMTP provider works locally and then silently times out in
@@ -65,12 +76,11 @@ production.
 The default sender needs no DNS but **only delivers to the address that owns the
 Resend account**.
 
-> **TODO: verify a sending domain and set `MAIL_FROM` before anyone but the
-> Resend account owner signs up.** Until then every outbound email — verify
-> your address, address confirmed, reset requested, password changed — is
-> accepted by gary and quietly dropped for everyone else. They see a
-> confirmation and get nothing, and locking themselves out of an account
-> whose reset link cannot reach them is the likely first symptom.
+> **TODO: verify a sending domain and set `MAIL_FROM` before anything here
+> sends to a real person.** The default sender accepts every message and
+> quietly drops it for anyone but the Resend account owner, so the failure
+> is invisible from gary's side. Nothing sends mail today, which is the
+> only reason this is not already a problem.
 >
 > ```sh
 > flyctl secrets set MAIL_FROM='gary <no-reply@your-domain>' -a gary-api

@@ -4,7 +4,7 @@ A pnpm + uv monorepo.
 
 | App | Stack | What it is |
 | --- | --- | --- |
-| [`apps/gary-api`](apps/gary-api) | FastAPI + Postgres | Accounts, sessions and password reset |
+| [`apps/gary-api`](apps/gary-api) | FastAPI + Postgres | Accounts, provider identities and sessions |
 | [`apps/gary-web`](apps/gary-web) | Next.js | Signs you in and welcomes you home |
 
 ## Working on it
@@ -36,11 +36,11 @@ The third tier exists because the first two can both be green while gary is
 broken: the stub was written from the same understanding that produced
 gary-api, so it cannot notice the two drifting apart. Rename a field in
 gary-api's sign-in response and every spec in the first two tiers still
-passes. It is deliberately four scenarios — it costs a Postgres and a Python
+passes. It is deliberately few — it costs a Postgres and a Python
 process, and its job is to catch drift, not to cover behaviour.
 
 gary-web's coverage gate covers `src/lib` and nothing else, deliberately. The
-rest of that app is async Server Components and Server Actions, and [Next's own
+rest of that app is React components, and [Next's own
 testing guide](https://nextjs.org/docs/app/guides/testing) says to cover those
 end to end rather than with unit tests. A gate that swept them in would report
 a number it had not earned; the Gherkin suites are what cover them.
@@ -49,9 +49,9 @@ Ephemeral means the database, not the server: the run creates
 `gary_e2e_<random>` on whatever `DATABASE_URL` points at, migrates it with the
 real Alembic migrations, empties it between scenarios, and drops it at the
 end. So it needs no Docker, and works against a local Postgres or a CI service
-container alike. It also reads the password reset link out of gary-api's own
-log rather than being handed one, which is the only test that exercises the
-mail seam end to end.
+container alike. The providers are still stood in for, but by gary-api's own
+stand-in rather than the suite's — a real page at a real URL that the browser
+navigates to and back from, exactly as it would with Google.
 
 Per-app commands live in each app's `Taskfile.yml` and are reachable as
 `pnpm --filter <app> <script>`, or `pnpm exec task --list` to see them all.
@@ -87,12 +87,14 @@ it for the length of the request, and puts it on every line logged during it —
 including lines from libraries that know nothing about any of this. One id
 therefore finds one user action in both logs.
 
-The id is gary-web's, never the browser's. A trace id a visitor can set is one
-a visitor can collide with someone else's.
+The id is minted per call, in the browser, because there is no request to bind
+one to any more. Several calls behind one click therefore carry different ids —
+what survives is the pairing of each call with gary-api's record of it.
 
-**gary-web's log lines are in the gary-web server's output, not the browser
-console.** Same reason its gary-api calls do not appear in devtools: none of
-this runs in the browser.
+**gary-web's log lines are in the browser console, and nobody collects them.**
+That is a real loss and the reason the shape is kept anyway: an id read off a
+console still finds its other half in gary-api's log. It also means gary-api
+records whatever id it is handed, and a browser is what hands it over.
 
 ## Deploying
 
@@ -109,8 +111,8 @@ already exist, then deploys. Nothing needs running by hand.
 Fly app names are globally unique, so `gary-api` and `gary-web` may already be
 taken. If either is, change `app` in that app's `fly.toml` and the matching
 name in the workflow's `Ensure the Fly app exists` step — and for gary-api,
-`GARY_API_URL` in `apps/gary-web/fly.toml` too, since that embeds the API's app
-name as `http://<gary-api-app-name>.internal:8080`.
+`NEXT_PUBLIC_GARY_API_URL` in `apps/gary-web/Dockerfile` and `BROWSER_ORIGINS`
+in `apps/gary-api/fly.toml`, since those two name each other.
 
 Apps are created in the `FLY_ORG` organisation set at the top of the workflow,
 which defaults to `personal`.
@@ -148,27 +150,27 @@ flyctl tokens create deploy --name github-actions
 
 ### How the two apps find each other
 
-Nothing in the browser talks to gary-api. gary-web calls it from its own
-server, and the browser only ever talks to gary-web.
+The browser talks to both. gary-web is a static app, so every call to gary-api
+is made from the page, and gary-api must be publicly reachable.
 
-That is not a preference, it is what makes sessions work. gary-web and gary-api
-are different sites, so a cookie set by gary-api would be third-party to
-gary-web — blocked outright by Safari and Firefox, partitioned by Chrome. A
-shared parent domain does not rescue it either, because `fly.dev` is on the
-public suffix list. So gary-web owns the session cookie on its own origin and
-holds the gary-api token inside it.
+Two settings have to agree, and neither says anything useful when they do not:
 
-Two things follow. gary-api needs no CORS, because there is no cross-origin
-browser request left to allow. And `GARY_API_URL` could now be a Fly-private
-address, since only a server resolves it — it is left public because this repo
-has been round the houses with Flycast already.
+- `NEXT_PUBLIC_GARY_API_URL` — where gary-web looks for gary-api. Inlined by
+  `next build`, so it is a **build arg** in `apps/gary-web/Dockerfile`. Setting
+  it on the running app changes nothing; a browser has no environment to read.
+- `BROWSER_ORIGINS` — the origins gary-api answers, in `apps/gary-api/fly.toml`.
+  Named rather than `*`, because the answer to a signed-in request is somebody's
+  account.
 
-**These calls do not appear in browser devtools.** You will see gary-web's own
-request and nothing else; the gary-api call is in the gary-web server log.
-Worth knowing before spending an hour in the network tab.
+Get either wrong and the app renders nothing at all, with the reason only in
+the browser console. It is the first thing to check when a deploy looks blank.
 
-`GARY_API_URL` is read per request rather than being a `NEXT_PUBLIC_` variable
-— those are inlined at build time, which would bake the value into the image.
+The session is a gary-api token in `localStorage`, not a cookie. A cookie set
+by gary-api would be third-party to gary-web and dropped by Safari and Firefox
+— `fly.dev` is on the public suffix list, so a shared parent domain does not
+rescue it either. Bearer tokens sidestep that entirely, at the cost of living
+somewhere script can read them.
 
-gary-api emails password reset links, so it needs `WEB_BASE_URL` pointing at
-gary-web. That one is opened by a person, so it must be the public URL.
+**gary-web's own log lines are in the browser console.** There is no server to
+collect them. What survives is the `x-request-id` on each call, which gary-api
+records too — so a line copied out of a console still finds its other half.
