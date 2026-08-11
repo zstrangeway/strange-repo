@@ -256,6 +256,36 @@ describe("error messages", () => {
     });
   });
 
+  it("shows our words for a refusal gary-api put a code on", async () => {
+    nextReply = {
+      status: 409,
+      body: JSON.stringify({
+        detail: "That is your only way to sign in",
+        code: "last_identity",
+      }),
+    };
+    const result = await callApi("/auth/me/identities/google", {
+      method: "DELETE",
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      code: "last_identity",
+      message: "That is your only way to sign in, so it cannot be removed.",
+    });
+  });
+
+  it("treats a body of literal null as no body", async () => {
+    // JSON.parse("null") succeeds and returns null, which is not a shape
+    // anything here can read fields off.
+    nextReply = { status: 500, body: "null" };
+
+    expect(await callApi("/auth/me")).toMatchObject({
+      ok: false,
+      message: "gary is unavailable, try again shortly",
+    });
+  });
+
   it("falls back when an error body is not JSON at all", async () => {
     expect(
       await messageFor({ status: 502, body: "<html>bad gateway</html>", contentType: "text/html" }),

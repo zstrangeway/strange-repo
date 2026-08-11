@@ -19,6 +19,23 @@ LABELS = {"google": "Google", "facebook": "Facebook", "apple": "Apple"}
 
 ONLY_WAY_IN = "That is your only way to sign in"
 
+
+class Refusal(HTTPException):
+    """A refusal that says why twice: once in English, once for a machine.
+
+    The sentence is for a log and for a client with nothing better to show.
+    The code is what a client acts on — an iOS app cannot branch on an English
+    sentence, and a client that renders gary-api's wording is one whose
+    screens change when this file does.
+
+    Rendered by the handler registered in app.create_app; HTTPException on its
+    own serialises only the detail.
+    """
+
+    def __init__(self, status_code: int, code: str, detail: str) -> None:
+        super().__init__(status_code, detail)
+        self.code = code
+
 logger = logs.get_logger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -150,8 +167,10 @@ async def _identify(request: SignInRequest) -> identity.ProviderIdentity:
     except identity.IdentityError as error:
         logger.warning("identity.unknown_provider", provider=request.provider,
                        reason=str(error))
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, f"{request.provider} is not a way to sign in"
+        raise Refusal(
+            status.HTTP_400_BAD_REQUEST,
+            "unknown_provider",
+            f"{request.provider} is not a way to sign in",
         ) from error
 
     try:
@@ -162,8 +181,9 @@ async def _identify(request: SignInRequest) -> identity.ProviderIdentity:
         return await provider.identify(request.code, request.redirect_uri)
     except identity.IdentityError as error:
         logger.warning("identity.refused", provider=request.provider, reason=str(error))
-        raise HTTPException(
+        raise Refusal(
             status.HTTP_401_UNAUTHORIZED,
+            "provider_refused",
             f"Sign in with {label(request.provider)} did not work, try again",
         ) from error
 
@@ -281,8 +301,9 @@ async def connect_identity(
             # Already yours. Connecting twice is not an error to anyone.
             return IdentityResponse(**_as_identity(existing))
 
-        raise HTTPException(
+        raise Refusal(
             status.HTTP_409_CONFLICT,
+            "identity_taken",
             f"That {label(request.provider)} account is already connected"
             " to another gary account",
         )
@@ -299,8 +320,9 @@ async def connect_identity(
     except IntegrityError as error:
         # Lost the race against another request connecting the same identity.
         await database.rollback()
-        raise HTTPException(
+        raise Refusal(
             status.HTTP_409_CONFLICT,
+            "identity_taken",
             f"That {label(request.provider)} account is already connected"
             " to another gary account",
         ) from error
@@ -315,14 +337,16 @@ async def disconnect_identity(provider: str, database: Db, user: CurrentUser) ->
     rows = list(user.identities)
     found = next((row for row in rows if row.provider == provider), None)
     if found is None:
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND, f"{label(provider)} is not connected"
+        raise Refusal(
+            status.HTTP_404_NOT_FOUND,
+            "not_connected",
+            f"{label(provider)} is not connected",
         )
 
     # Removing the last one would leave an account nobody can ever reach —
     # there is no password to fall back on.
     if len(rows) == 1:
-        raise HTTPException(status.HTTP_409_CONFLICT, ONLY_WAY_IN)
+        raise Refusal(status.HTTP_409_CONFLICT, "last_identity", ONLY_WAY_IN)
 
     await database.delete(found)
     await database.commit()

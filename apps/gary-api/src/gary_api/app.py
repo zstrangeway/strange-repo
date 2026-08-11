@@ -1,8 +1,10 @@
 import os
 from contextlib import asynccontextmanager
+from typing import cast
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from gary_api import auth, db, identity, logs
 from gary_api.identity import consent
@@ -61,12 +63,25 @@ def create_app() -> FastAPI:
         allow_headers=["authorization", "content-type", REQUEST_ID_HEADER],
     )
 
+    # HTTPException serialises its detail and nothing else, so a refusal's
+    # code needs saying explicitly. Registered here rather than in auth so the
+    # shape of an error response is decided in one place for the whole app.
+    app.add_exception_handler(auth.Refusal, _render_refusal)
+
     app.include_router(auth.router)
     # 404s unless IDENTITY_FAKE is on, so mounting it always is safe.
     app.include_router(consent.router)
     app.add_api_route("/health", health, methods=["GET"])
 
     return app
+
+
+async def _render_refusal(_request: Request, error: Exception) -> JSONResponse:
+    refusal = cast(auth.Refusal, error)
+    return JSONResponse(
+        status_code=refusal.status_code,
+        content={"detail": refusal.detail, "code": refusal.code},
+    )
 
 
 async def health() -> dict[str, str]:

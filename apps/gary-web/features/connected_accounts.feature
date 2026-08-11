@@ -34,7 +34,9 @@ Feature: Connected accounts
     And facebook will say I am "someone@example.com" named "Someone"
     When I open the profile page
     And I connect facebook
-    Then the page shows an error "That Facebook account is already connected to another gary account"
+    # gary-web's words, not gary-api's. The API says which provider; this app
+    # does not need to, because the row it is next to already says so.
+    Then the page shows an error "That account is already connected to another gary account."
     And the address bar carries no message
     And facebook should not be connected
 

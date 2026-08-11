@@ -35,7 +35,8 @@ Feature: Connected accounts
     Then the response status should be 409
     And the response body should be:
       """
-      {"detail": "That Facebook account is already connected to another gary account"}
+      {"detail": "That Facebook account is already connected to another gary account",
+       "code": "identity_taken"}
       """
     And facebook should not be connected
 
@@ -49,7 +50,7 @@ Feature: Connected accounts
     Then the response status should be 409
     And the response body should be:
       """
-      {"detail": "That is your only way to sign in"}
+      {"detail": "That is your only way to sign in", "code": "last_identity"}
       """
     And google should be connected
 
@@ -73,3 +74,8 @@ Feature: Connected accounts
     Given I am signed out
     When I connect facebook as "ada@example.com" named "Ada Lovelace"
     Then the response status should be 401
+
+  Scenario: Disconnecting one that was never connected
+    When I disconnect facebook
+    Then the response status should be 404
+    And the response code should be "not_connected"

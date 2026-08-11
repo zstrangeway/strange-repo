@@ -143,6 +143,7 @@ function handle(method, path, body, request, query) {
         body: {
           detail: `Sign in with ${LABELS[body.provider] ?? body.provider}` +
             " did not work, try again",
+          code: "provider_refused",
         },
       };
     }
@@ -210,6 +211,7 @@ function handle(method, path, body, request, query) {
         body: {
           detail: `Sign in with ${LABELS[body.provider] ?? body.provider}` +
             " did not work, try again",
+          code: "provider_refused",
         },
       };
     }
@@ -222,6 +224,7 @@ function handle(method, path, body, request, query) {
         body: {
           detail: `That ${LABELS[body.provider]} account is already connected` +
             " to another gary account",
+          code: "identity_taken",
         },
       };
     }
@@ -241,10 +244,19 @@ function handle(method, path, body, request, query) {
     const mine = connectionsFor(user.id);
     const found = mine.find((row) => row.provider === provider);
     if (!found) {
-      return { status: 404, body: { detail: `${LABELS[provider]} is not connected` } };
+      return {
+        status: 404,
+        body: {
+          detail: `${LABELS[provider]} is not connected`,
+          code: "not_connected",
+        },
+      };
     }
     if (mine.length === 1) {
-      return { status: 409, body: { detail: "That is your only way to sign in" } };
+      return {
+        status: 409,
+        body: { detail: "That is your only way to sign in", code: "last_identity" },
+      };
     }
 
     for (const [key, row] of identities) {

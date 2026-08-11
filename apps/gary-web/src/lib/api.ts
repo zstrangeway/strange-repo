@@ -6,13 +6,20 @@
 // makes the call and then refuses to hand back the answer.
 
 import { getLogger, REQUEST_ID_HEADER, requestId } from "./logger";
+import { messageFor as copyFor } from "./messages";
 
 const UNAVAILABLE = "gary is unavailable, try again shortly";
 
 const log = getLogger("api");
 
 export type ApiOk<T> = { ok: true; data: T };
-export type ApiError = { ok: false; status: number; message: string };
+export type ApiError = {
+  ok: false;
+  status: number;
+  message: string;
+  /** gary-api's machine-readable reason, where it has one. */
+  code?: string;
+};
 export type ApiResult<T> = ApiOk<T> | ApiError;
 
 export type User = {
@@ -66,21 +73,26 @@ function validationMessage(detail: unknown): string {
   return first.msg ?? "That does not look right, please check and try again";
 }
 
-async function messageFor(response: Response): Promise<string> {
-  let detail: unknown;
+async function refusalFrom(
+  response: Response,
+): Promise<{ message: string; code?: string }> {
+  let body: { detail?: unknown; code?: unknown } = {};
   try {
-    detail = (await response.json())?.detail;
+    body = (await response.json()) ?? {};
   } catch {
-    detail = undefined;
+    body = {};
   }
 
+  const code = typeof body.code === "string" ? body.code : undefined;
+
   if (response.status === 422) {
-    return validationMessage(detail);
+    // Validation has no code: the useful part is which field, which the
+    // payload already carries.
+    return { message: validationMessage(body.detail) };
   }
-  if (typeof detail === "string") {
-    return detail;
-  }
-  return UNAVAILABLE;
+
+  const said = typeof body.detail === "string" ? body.detail : UNAVAILABLE;
+  return { message: copyFor(code, said), code };
 }
 
 export async function callApi<T>(
@@ -134,7 +146,8 @@ export async function callApi<T>(
   });
 
   if (!response.ok) {
-    return { ok: false, status: response.status, message: await messageFor(response) };
+    const refusal = await refusalFrom(response);
+    return { ok: false, status: response.status, ...refusal };
   }
 
   // 204 is not the only empty success: the reset endpoints answer 202 with no

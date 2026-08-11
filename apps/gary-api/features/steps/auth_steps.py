@@ -291,3 +291,17 @@ def step_real_providers(context):
 
     os.environ["IDENTITY_FAKE"] = "0"
     identity.provider.cache_clear()
+
+
+@then('the response code should be "{expected}"')
+def step_response_code(context, expected):
+    actual = context.response.json().get("code")
+    assert actual == expected, f"code was {actual!r}, expected {expected!r}"
+
+
+@then("the response should still say why in words")
+def step_response_prose(context):
+    detail = context.response.json().get("detail")
+    assert isinstance(detail, str) and detail.strip(), (
+        f"no sentence to fall back on: {context.response.text}"
+    )

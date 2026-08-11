@@ -33,14 +33,24 @@ Feature: Signing in and out
     Then the response status should be 401
     And the response body should be:
       """
-      {"detail": "Sign in with Google did not work, try again"}
+      {"detail": "Sign in with Google did not work, try again",
+       "code": "provider_refused"}
       """
     And I should not be signed in
 
   Scenario: A provider gary does not offer is refused
     When I sign in at myspace as "ada@example.com" named "Ada"
     Then the response status should be 400
+    And the response code should be "unknown_provider"
     And I should not be signed in
+
+  # The prose is for a log and for a client with nothing better to show. The
+  # code is what a client acts on — an iOS app cannot branch on an English
+  # sentence, and gary-web should not be putting gary-api's wording on screen.
+  Scenario: Every refusal carries something other than prose
+    When I sign in at google with a code it will not accept
+    Then the response code should be "provider_refused"
+    And the response should still say why in words
 
   Scenario: Signing out ends this session
     Given I am signed in at google as "ada@example.com" named "Ada"
