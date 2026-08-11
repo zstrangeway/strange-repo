@@ -77,9 +77,9 @@ distinction the whole design rests on.
 
 A card leads with **whose** roll it is, because that was what was missing: a
 turn where four people crossed a collapsing causeway showed seven numbers and
-no way to tell which neck was out. Then what it was for, the ability behind
-it, and how the total was reached — `9 + 3 = 12` beside `1d20+3 → 12 vs 12` —
-so a call that close can be checked by eye rather than taken on trust.
+no way to tell which neck was out. Then what it was for and how the total was
+reached — `rolled 9 + 3 dex = 12` beside `1d20+3 → 12 vs 12` — so a call that
+close can be checked by eye rather than taken on trust.
 
 A **graded check always shows its faces**, even when nothing was added to
 them. Suppressing that was the first version's mistake and it hid the working
