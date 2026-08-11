@@ -87,6 +87,10 @@ def before_scenario(context, scenario):
     fake_narrator.ON_CLOSE = None
     fake_narrator.ON_OPEN = None
     fake_narrator.LAST_CLOSE = None
+    # Written by the double rather than arranged, but it leaks the same way:
+    # a scenario asserting what gary was told would otherwise be able to pass
+    # on the previous scenario's answer.
+    fake_narrator.LAST_RESULTS = None
 
     # The scene bound, back to its default per scenario. A spec that wants a
     # four-turn scene sets it and must not hand that to the next one.

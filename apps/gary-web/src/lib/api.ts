@@ -143,7 +143,13 @@ export type Roll = {
   /** Set when the roll was a check rather than a bare roll. */
   dc?: number | null;
   degree?: string | null;
-  character?: string;
+  /** Whose roll it was. Null for a roll about the world rather than about a
+   *  person — how sound the timbers are, what the weather does. */
+  character?: string | null;
+  /** Which ability the modifier came off, when one did. Kept so a card can
+   *  say "+3 dex" rather than "+3": a number with no provenance is a number
+   *  somebody has to take on trust. */
+  ability?: string | null;
 };
 
 /** A bounded stretch of play, and the unit of gary's memory: it is told this

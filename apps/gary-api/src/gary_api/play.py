@@ -630,6 +630,11 @@ async def read_transcript(
                     "reason": roll.reason,
                     "dc": roll.dc,
                     "degree": roll.degree,
+                    # The same shape the stream sent, so a reload shows what
+                    # was on screen a moment ago rather than a plainer
+                    # version of it.
+                    "character": roll.character.name if roll.character else None,
+                    "ability": roll.ability,
                 }
                 for roll in turn.rolls
             ],
@@ -755,82 +760,113 @@ async def _run(
             _frame("world", {"kind": kind, **payload})
         ]
 
+    def rolled(made, who: Character | None, graded=None, ability=None) -> dict:
+        """Write one roll down and describe it, whoever it belonged to.
+
+        One place, so what is stored and what is streamed cannot drift: the
+        frame said who made a check long before the row had anywhere to keep
+        it, and a reload lost the name every time.
+        """
+        reason = graded.reason if graded else made.reason
+        database.add(
+            Roll(
+                turn_id=turn_id,
+                character_id=who.id if who else None,
+                notation=made.notation,
+                dice=list(made.dice),
+                modifier=made.modifier,
+                ability=ability,
+                total=made.total,
+                reason=reason,
+                dc=graded.dc if graded else None,
+                degree=graded.degree.value if graded else None,
+            )
+        )
+        described = {
+            "notation": made.notation,
+            "dice": list(made.dice),
+            "modifier": made.modifier,
+            "total": made.total,
+            "reason": reason,
+            # Named rather than identified: everything downstream of this is
+            # something a person reads.
+            "character": who.name if who else None,
+            "ability": ability,
+        }
+        if graded:
+            described["dc"] = graded.dc
+            described["degree"] = graded.degree.value
+        return described
+
     try:
         if call.name == "roll":
+            # Whose it is, when it is anybody's. A roll about how sound the
+            # timbers are belongs to nobody, and saying otherwise would be
+            # inventing a fact to fill a field.
+            named = (arguments.get("character") or "").strip()
+            who = _named(party, named) if named else None
+
             made = dice.roll(arguments.get("notation", ""), arguments.get("reason", ""))
-            database.add(
-                Roll(
-                    turn_id=turn_id,
-                    notation=made.notation,
-                    dice=list(made.dice),
-                    modifier=made.modifier,
-                    total=made.total,
-                    reason=made.reason,
-                )
-            )
+            payload = rolled(made, who)
             await database.flush()
             return narration.Result(
-                call, f"{made.notation} came up {made.total}"
-            ), [
-                _frame(
-                    "roll",
-                    {
-                        "notation": made.notation,
-                        "dice": list(made.dice),
-                        "modifier": made.modifier,
-                        "total": made.total,
-                        "reason": made.reason,
-                    },
-                )
-            ]
+                call,
+                f"{made.notation} came up {made.total}"
+                + (f" for {who.name}" if who else ""),
+            ), [_frame("roll", payload)]
 
         if call.name == "check":
             # The rules grade it, not gary and not this module. A system with
             # four degrees returns four here without anything else changing.
             ruleset = systems.ruleset(campaign.system_slug)
-            character = _named(party, arguments.get("character", ""))
+
+            # Everyone facing the same thing, in one call. Resolved before
+            # anything is rolled, because a check is all or nothing: half of
+            # it applied says two of them crossed and the fiction says they
+            # went together.
+            names = arguments.get("characters") or []
+            if isinstance(names, str):
+                names = [names]
+            if not names:
+                raise world.WorldError("a check needs somebody to make it")
+            facing = [_named(party, str(name)) for name in names]
+
             dc = arguments.get("dc")
             if isinstance(dc, bool) or not isinstance(dc, int):
                 raise world.WorldError(f"{dc!r} is not a difficulty class")
-            modifier = arguments.get("modifier") or 0
-            if isinstance(modifier, bool) or not isinstance(modifier, int):
-                raise world.WorldError(f"{modifier!r} is not a modifier")
 
-            outcome = ruleset.resolve(
-                dc=dc, modifier=modifier, reason=arguments.get("reason", "")
-            )
-            database.add(
-                Roll(
-                    turn_id=turn_id,
-                    notation=outcome.roll.notation,
-                    dice=list(outcome.roll.dice),
-                    modifier=outcome.roll.modifier,
-                    total=outcome.roll.total,
-                    reason=outcome.reason,
-                    dc=outcome.dc,
-                    degree=outcome.degree.value,
+            # An ability, not a modifier. What a score is worth is a rule the
+            # ruleset owns, and the score itself is on a sheet the narrator
+            # does not — which is why gary is never asked for the number.
+            ability = (arguments.get("ability") or "").strip().lower() or None
+            if ability and ability not in ruleset.abilities:
+                raise world.WorldError(
+                    f"{ability!r} is not an ability in this system"
                 )
-            )
+
+            reason = arguments.get("reason", "")
+            said, frames = [], []
+            for character in facing:
+                modifier = (
+                    ruleset.modifier((character.abilities or {}).get(ability, 10))
+                    if ability
+                    else 0
+                )
+                outcome = ruleset.resolve(dc=dc, modifier=modifier, reason=reason)
+                frames.append(
+                    _frame("roll", rolled(outcome.roll, character, outcome, ability))
+                )
+                said.append(
+                    f"{character.name}'s {outcome.reason or 'check'} was a "
+                    f"{outcome.degree.value} "
+                    f"({outcome.roll.total} against {outcome.dc})"
+                )
+
             await database.flush()
-            return narration.Result(
-                call,
-                f"{character.name}'s {outcome.reason or 'check'} was a "
-                f"{outcome.degree.value} ({outcome.roll.total} against {dc})",
-            ), [
-                _frame(
-                    "roll",
-                    {
-                        "notation": outcome.roll.notation,
-                        "dice": list(outcome.roll.dice),
-                        "modifier": outcome.roll.modifier,
-                        "total": outcome.roll.total,
-                        "reason": outcome.reason,
-                        "dc": outcome.dc,
-                        "degree": outcome.degree.value,
-                        "character": character.name,
-                    },
-                )
-            ]
+            # One summary covering all of them, because one call asked. A
+            # model told only about the last of four would narrate the other
+            # three from memory.
+            return narration.Result(call, "; ".join(said)), frames
 
         if call.name == "move_party":
             place = arguments.get("place", "")

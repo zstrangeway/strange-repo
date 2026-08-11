@@ -48,13 +48,45 @@ class CallTests(unittest.TestCase):
     def test_a_check(self):
         call = fake._call("check Bramble 15 Perception")
         self.assertEqual(call.name, "check")
-        self.assertEqual(call.arguments["character"], "Bramble")
+        self.assertEqual(call.arguments["characters"], ["Bramble"])
         self.assertEqual(call.arguments["dc"], 15)
+        self.assertNotIn("ability", call.arguments)
+
+    def test_a_check_of_several_people_at_once(self):
+        call = fake._call("check Bramble,John 12 avoid collapse")
+        self.assertEqual(call.arguments["characters"], ["Bramble", "John"])
+        self.assertEqual(call.arguments["dc"], 12)
+
+    def test_a_check_against_an_ability(self):
+        # Told from the difficulty by not being a number, which is the only
+        # thing separating them in a directive.
+        call = fake._call("check John dex 12 avoid collapse")
+        self.assertEqual(call.arguments["ability"], "dex")
+        self.assertEqual(call.arguments["dc"], 12)
+        self.assertEqual(call.arguments["reason"], "avoid collapse")
 
     def test_a_check_with_a_difficulty_that_is_not_a_number(self):
         # Left as written rather than coerced, so it reaches the same refusal
-        # a real model's nonsense would.
-        self.assertEqual(fake._call("check Bramble hard Spot").arguments["dc"], "hard")
+        # a real model's nonsense would. Read as the ability here, which is
+        # what "hard" looks like in that position, and refused all the same.
+        call = fake._call("check Bramble hard Spot")
+        self.assertEqual(call.arguments["ability"], "hard")
+
+    def test_a_roll_for_somebody(self):
+        call = fake._call("roll John 1d6 falling damage")
+        self.assertEqual(call.arguments["character"], "John")
+        self.assertEqual(call.arguments["notation"], "1d6")
+        self.assertEqual(call.arguments["reason"], "falling damage")
+
+    def test_a_roll_for_nobody_in_particular(self):
+        call = fake._call("roll 1d20 the timbers")
+        self.assertNotIn("character", call.arguments)
+        self.assertEqual(call.arguments["notation"], "1d20")
+
+    def test_a_roll_with_nothing_after_the_dice(self):
+        call = fake._call("roll 1d20")
+        self.assertEqual(call.arguments["notation"], "1d20")
+        self.assertEqual(call.arguments["reason"], "")
 
     def test_a_move(self):
         self.assertEqual(

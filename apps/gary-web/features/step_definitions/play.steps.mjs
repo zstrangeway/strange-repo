@@ -176,6 +176,22 @@ When("I say {string} and gary rolls", async function (message) {
   await say(message);
 });
 
+When("I say {string} and gary checks {string}", async function (message, who) {
+  // A graded check rather than a bare roll, and one with somebody's name on
+  // it: the two halves of what a card has to be able to show.
+  apiStub.garyWill({
+    roll: {
+      ...A_ROLL,
+      character: who,
+      ability: "dex",
+      reason: "avoid collapse",
+      dc: 12,
+      degree: "success",
+    },
+  });
+  await say(message);
+});
+
 When("I say {string} and gary falls over", async function (message) {
   apiStub.garyWill({ fail: "gary is unavailable, try again shortly" });
   await say(message);
@@ -411,4 +427,30 @@ Then("the composer should be waiting for me afterwards", async function () {
     undefined,
     { timeout: 15_000 },
   );
+});
+
+// -------------------------------------------------------------------- rolls
+
+Then("the roll should be labelled {string}", async function (who) {
+  const shown = await world.page.textContent('[data-testid="roll-character"]');
+  assert.equal(shown?.trim(), who, "the roll did not say whose it was");
+});
+
+Then("the roll should be labelled with nobody", async function () {
+  // A roll about how sound the planks are belongs to nobody, and a name
+  // invented to fill the space would be worse than the space.
+  const found = await world.page.$('[data-testid="roll-character"]');
+  assert.equal(found, null, "a roll about the world was given an owner");
+});
+
+Then("the roll should show how the total was reached", async function () {
+  const shown = await world.page.textContent('[data-testid="roll-sum"]');
+  // Faces, what was added, and what that came to — so a call this close can
+  // be checked by eye rather than taken on trust.
+  assert.match(shown ?? "", /\d+\s*[+−]\s*\d+\s*=\s*\d+/, shown ?? "");
+});
+
+Then("the roll should say what it was against", async function () {
+  const shown = await world.page.textContent('[data-testid="roll-dc"]');
+  assert.match(shown ?? "", /^\d+$/, shown ?? "");
 });

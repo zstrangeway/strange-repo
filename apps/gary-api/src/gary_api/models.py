@@ -260,9 +260,20 @@ class Roll(Base):
     turn_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("turns.id", ondelete="CASCADE")
     )
+    # Whose roll it was, when it was anybody's. Null for a roll about the
+    # world rather than about a person — how sound the timbers are, what the
+    # weather does — and null rather than a name so that "show me everything
+    # that happened to John" is a join instead of a string match.
+    character_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL"), nullable=True
+    )
     notation: Mapped[str] = mapped_column(String(32))
     dice: Mapped[list[int]] = mapped_column(JSONB)
     modifier: Mapped[int] = mapped_column(Integer, default=0)
+    # Which ability the modifier came off, when one did. Kept so a card can
+    # say "+3 dex" rather than "+3" — a number with no provenance is a number
+    # somebody has to take on trust.
+    ability: Mapped[str | None] = mapped_column(String(20), nullable=True)
     total: Mapped[int] = mapped_column(Integer)
     reason: Mapped[str] = mapped_column(String(120), default="")
     # Set when the roll was a check rather than a bare roll. The degree is
@@ -274,6 +285,7 @@ class Roll(Base):
     )
 
     turn: Mapped[Turn] = relationship(back_populates="rolls")
+    character: Mapped[Character | None] = relationship(lazy="selectin")
 
 
 class WorldEvent(Base):

@@ -84,6 +84,15 @@ class Ruleset(Protocol):
         """Roll this system's check die against a difficulty and grade it."""
         ...
 
+    def modifier(self, score: int) -> int:
+        """What an ability score is worth on a check, in this system.
+
+        Here rather than at the caller because it is a rule, and rules differ:
+        this is the whole argument for a system package instead of a paragraph
+        in a prompt.
+        """
+        ...
+
     def briefing(self) -> str:
         """What the model is told about running this system.
 
@@ -117,6 +126,10 @@ class D20Ruleset:
 
     def grade(self, made: Roll, dc: int) -> Degree:
         raise NotImplementedError
+
+    def modifier(self, score: int) -> int:
+        """The third-edition-onward formula, which 5e and Pathfinder kept."""
+        return (score - 10) // 2
 
     def briefing(self) -> str:
         listed = ", ".join(degree.value for degree in self.degrees)

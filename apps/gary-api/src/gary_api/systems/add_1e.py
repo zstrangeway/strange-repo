@@ -50,3 +50,16 @@ class ADnD1e(TwoDegrees):
             opening="the antechamber, the key cold in your hand",
         ),
     )
+
+    def modifier(self, score: int) -> int:
+        """Nothing, and deliberately.
+
+        First edition has no single ability modifier to apply. It has a
+        different table per ability — strength gives hit and damage
+        adjustments off its own row, dexterity gives reaction and missile
+        adjustments off another — and no general ability check to spend one
+        on. Returning `(score - 10) // 2` here would be quietly running third
+        edition's rule in a first edition game, which is the drift the engines
+        exist to stop. Zero until somebody types the real tables in.
+        """
+        return 0

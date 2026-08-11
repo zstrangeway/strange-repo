@@ -51,6 +51,41 @@ in `REGISTRY`. Nothing outside the package names a system —
 3.5e grade a check two ways; Pathfinder 2e grades it four, with the natural-20
 shift, and nothing between the model and the engine knows the difference.
 
+### What a roll says
+
+A roll carries **whose it is** and **what it was against**. Both `roll` and
+`check` take a character; `roll`'s is optional, because a roll about how sound
+the timbers are belongs to nobody and a name invented to fill the field would
+be worse than the gap. It is stored as `rolls.character_id`, so "everything
+that happened to John" is a join rather than a string match.
+
+Before this, only `check` carried a name and only as far as the engine — the
+`rolls` table had nowhere to keep it, so the stream said whose a check was and
+a reload did not. Gary had noticed and was working around it by writing the
+name into the reason: *"John falling damage"*, a mechanical fact in a
+free-text field where nothing can check it.
+
+**`check` takes a list.** One hazard at one difficulty is one thing happening,
+however many people are standing in it. Asked one at a time it cost a round
+trip each, and a party of four crossing rotten planks reached the round cap
+describing a single moment. Each of them still rolls separately and is stored
+separately; what changed is how many times gary has to ask. A name nobody at
+the table has refuses the whole call — half a check applied says two of them
+crossed when the fiction says they went together.
+
+**A check names an ability, never a modifier.** `check` was offered
+`character`, `dc` and `reason` and no modifier at all, so every check ever
+graded was a flat d20 — a fighter and a wizard fell off the same plank equally
+often. The fix is not to let gary supply the number: what a score is worth is
+a rule, and the score is on a sheet gary does not own. Gary names `dex`, the
+sheet gives the score, and `Ruleset.modifier()` says what that is worth.
+
+Which makes it per-system, and it is: `add-1e` returns 0 from `modifier()` on
+purpose. First edition has a different table per ability and no general
+ability check to spend one on, so handing back `(score - 10) // 2` would be
+quietly running third edition in a first edition game. Zero until somebody
+types the real tables in.
+
 ### Who plays whom
 
 Exactly one character in a campaign is the player's; the rest are companions,

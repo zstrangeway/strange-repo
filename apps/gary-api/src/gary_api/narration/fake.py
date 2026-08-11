@@ -10,7 +10,9 @@ stored, so a transcript never contains one, and a player who types square
 brackets at a real narrator is just a player typing square brackets.
 
     [[roll 1d20+3 Perception]]      ask for a roll
+    [[roll John 1d6 falling]]       ask for one that is somebody's
     [[check Bramble 15 Perception]] ask the rules for a graded check
+    [[check Bramble,John dex 12 x]] ask for one from several, against dex
     [[move the belfry stair]]       move the party
     [[remember bell-rings=4]]       set a fact
     [[damage Bramble 4]]            take hit points off
@@ -49,6 +51,15 @@ from gary_api.narration.base import (
 
 DIRECTIVE = re.compile(r"\[\[([^\]]+)\]\]")
 
+# Dice, roughly: enough to tell "1d6" from "John" and nothing more. What the
+# dice are actually worth is dice.py's to say, and a directive that gets it
+# wrong should reach the same refusal a model's would.
+_DICE = re.compile(r"^\d*d\d", re.IGNORECASE)
+
+
+def _is_number(word: str) -> bool:
+    return word.lstrip("-").isdigit()
+
 REFUSAL = (
     "Gary would rather not narrate that. Try something else and the game "
     "carries on."
@@ -70,21 +81,41 @@ def _call(directive: str) -> Call | None:
     head = head.lower()
 
     if head == "roll":
-        notation, _, reason = rest.partition(" ")
-        return Call("roll", {"notation": notation, "reason": reason.strip()})
-    if head == "check":
-        character, _, tail = rest.partition(" ")
-        dc, _, reason = tail.partition(" ")
+        # An optional name in front of the dice, so "roll 1d6 falling" and
+        # "roll John 1d6 falling" are both sayable. Told apart by which one
+        # looks like dice, because that is unambiguous and a name is not.
+        first, _, tail = rest.partition(" ")
+        if _DICE.match(first) or not tail:
+            return Call("roll", {"notation": first, "reason": tail.strip()})
+        notation, _, reason = tail.partition(" ")
         return Call(
-            "check",
+            "roll",
             {
-                "character": character,
-                # Left as written rather than coerced. A dc the rules cannot
-                # read should reach the same refusal a model's would.
-                "dc": int(dc) if dc.lstrip("-").isdigit() else dc,
+                "notation": notation,
                 "reason": reason.strip(),
+                "character": first,
             },
         )
+    if head == "check":
+        # names [ability] dc reason — the ability is optional, and told from
+        # the dc by not being a number.
+        names, _, tail = rest.partition(" ")
+        ability, _, rest_of = tail.partition(" ")
+        if _is_number(ability):
+            ability, dc, reason = "", ability, rest_of
+        else:
+            dc, _, reason = rest_of.partition(" ")
+
+        call = {
+            "characters": [one for one in names.split(",") if one],
+            # Left as written rather than coerced. A dc the rules cannot read
+            # should reach the same refusal a model's would.
+            "dc": int(dc) if _is_number(dc) else dc,
+            "reason": reason.strip(),
+        }
+        if ability:
+            call["ability"] = ability
+        return Call("check", call)
     if head == "move":
         return Call("move_party", {"place": rest})
     if head == "remember":
@@ -134,6 +165,12 @@ ON_OPEN: list[str] | None = None
 # was asked and what it was shown.
 LAST_CLOSE: Prompt | None = None
 
+# What the engines handed back the last time this double asked for anything.
+# Read by the scenarios about one call covering several people: a summary that
+# mentions only the last of four is a model narrating the other three from
+# memory, and nothing else can see that happen.
+LAST_RESULTS: list[Result] | None = None
+
 
 class FakeNarrator:
     name = "fake"
@@ -177,6 +214,8 @@ class FakeNarrator:
         calls = [call for call in (_call(one) for one in asked) if call]
         if calls:
             results = yield Calls(calls)
+            global LAST_RESULTS
+            LAST_RESULTS = list(results or [])
             for result in results or []:
                 if mute:
                     continue

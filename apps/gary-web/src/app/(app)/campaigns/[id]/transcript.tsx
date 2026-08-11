@@ -4,6 +4,7 @@ import { Badge } from "@gary/ui/components/badge";
 import { Item, ItemContent, ItemDescription, ItemTitle } from "@gary/ui/components/item";
 
 import type { Roll, Scene } from "@/lib/api";
+import { workedOut } from "@/lib/rolls";
 
 /** One thing said, and anything the engines did while it was being said. */
 export type Entry = {
@@ -21,7 +22,15 @@ export type Entry = {
 // made up, and the whole design rests on that distinction: gary asks, the API
 // rolls, the rules grade it. So it gets its own element with the notation and
 // the dice on show, and a degree beside it when the rules graded one.
+//
+// Whose it is leads, because that was the missing piece: a turn where a party
+// of four crossed a collapsing causeway showed seven numbers and no way to
+// tell which neck was out. Gary was working around it by writing the name
+// into the reason — "John falling damage" — where nothing could render it.
 function RolledDice({ roll }: { roll: Roll }) {
+  const sum = workedOut(roll);
+  const graded = roll.dc !== undefined && roll.dc !== null;
+
   return (
     <Item variant="muted" size="sm" data-testid="roll">
       <ItemContent>
@@ -29,13 +38,31 @@ function RolledDice({ roll }: { roll: Roll }) {
           <span data-testid="roll-notation">{roll.notation}</span>
           {" → "}
           <span data-testid="roll-total">{roll.total}</span>
+          {graded ? (
+            <span className="text-muted-foreground">
+              {" vs "}
+              <span data-testid="roll-dc">{roll.dc}</span>
+            </span>
+          ) : null}
         </ItemTitle>
-        <ItemDescription>
-          {roll.reason || "a roll"}
-          {roll.dc === undefined || roll.dc === null
-            ? ""
-            : ` against ${roll.dc}`}
-          {roll.dice.length > 0 ? ` · rolled ${roll.dice.join(", ")}` : ""}
+        <ItemDescription className="flex flex-wrap items-center gap-x-1.5">
+          {roll.character ? (
+            <span
+              className="font-medium text-foreground"
+              data-testid="roll-character"
+            >
+              {roll.character}
+            </span>
+          ) : null}
+          <span>{roll.reason || "a roll"}</span>
+          {roll.ability ? (
+            <span data-testid="roll-ability">· {roll.ability}</span>
+          ) : null}
+          {sum ? (
+            <span className="font-mono" data-testid="roll-sum">
+              · {sum}
+            </span>
+          ) : null}
         </ItemDescription>
       </ItemContent>
       {roll.degree ? (

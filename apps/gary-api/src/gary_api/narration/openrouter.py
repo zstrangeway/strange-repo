@@ -83,7 +83,53 @@ WRAP_UP = (
 # What every tool takes, in the shape OpenAI-compatible APIs want. Built from
 # narration.TOOLS so a tool that exists in the contract cannot be missing from
 # what the model is offered.
-NUMBERS = {"dc", "modifier", "amount", "minutes"}
+NUMBERS = {"dc", "amount", "minutes"}
+LISTS = {"characters"}
+
+DESCRIBED = {
+    "notation": "Dice to roll, as NdM+K — for example 1d20+3.",
+    "reason": "What the roll or check is for, in a word or two.",
+    "character": (
+        "Whose roll this is, by name. Leave it out for a roll about the "
+        "world rather than about a person."
+    ),
+    "characters": (
+        "Everyone making this check, by name. One call covers all of them: "
+        "each rolls separately and brings their own modifier."
+    ),
+    "ability": (
+        "Which ability this is against, if any — for example dex. The "
+        "modifier comes from their sheet; you never supply one."
+    ),
+    "dc": "The difficulty class to beat.",
+    "place": "Where the party now is.",
+    "key": "A short name for the fact.",
+    "value": "What the fact says.",
+    "amount": "How many hit points.",
+    "condition": "The condition, in one word.",
+    "minutes": "How many minutes passed.",
+    "title": "A short name for the scene beginning.",
+}
+
+# Fields a call may leave out. Not the same as fields that do not matter: a
+# roll about the weather has nobody to name, and a check on nothing in
+# particular has no ability behind it. Demanding either would make the model
+# make one up, which is the failure this whole arrangement exists to prevent.
+OPTIONAL = {"character", "ability"}
+
+
+def described_as(field: str) -> dict:
+    """One argument, in JSON Schema."""
+    if field in LISTS:
+        return {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": DESCRIBED[field],
+        }
+    return {
+        "type": "integer" if field in NUMBERS else "string",
+        "description": DESCRIBED[field],
+    }
 
 
 def schema(offered: tuple[str, ...] | None = None) -> list[dict]:
@@ -94,25 +140,13 @@ def schema(offered: tuple[str, ...] | None = None) -> list[dict]:
     usefully call at a given moment is better withheld than described and
     then refused.
     """
-    described = {
-        "notation": "Dice to roll, as NdM+K — for example 1d20+3.",
-        "reason": "What the roll or check is for, in a word or two.",
-        "character": "The name of the character it applies to.",
-        "dc": "The difficulty class to beat.",
-        "modifier": "The character's modifier for this check.",
-        "place": "Where the party now is.",
-        "key": "A short name for the fact.",
-        "value": "What the fact says.",
-        "amount": "How many hit points.",
-        "condition": "The condition, in one word.",
-        "minutes": "How many minutes passed.",
-        "title": "A short name for the scene beginning.",
-    }
     purpose = {
         "roll": "Roll dice. You never invent a number yourself — call this.",
         "check": (
             "Make a check against a difficulty. The rules grade it and tell "
-            "you the degree of success; you never decide that yourself."
+            "you the degree of success; you never decide that yourself. When "
+            "several people face the same thing, name them all in one call "
+            "rather than calling this once each."
         ),
         "move_party": "Record that the party has moved somewhere new.",
         "remember": "Record a fact about the world so it is still true later.",
@@ -131,13 +165,7 @@ def schema(offered: tuple[str, ...] | None = None) -> list[dict]:
     for name, fields in TOOLS.items():
         if offered is not None and name not in offered:
             continue
-        properties = {
-            field: {
-                "type": "integer" if field in NUMBERS else "string",
-                "description": described[field],
-            }
-            for field in fields
-        }
+        properties = {field: described_as(field) for field in fields}
         built.append(
             {
                 "type": "function",
@@ -147,11 +175,12 @@ def schema(offered: tuple[str, ...] | None = None) -> list[dict]:
                     "parameters": {
                         "type": "object",
                         "properties": properties,
-                        # Only what a call cannot do without. A modifier the
-                        # model has no view on should be omitted rather than
+                        # Only what a call cannot do without. Anything the
+                        # model may have no view on — whose roll it is, which
+                        # ability applies — should be omitted rather than
                         # invented to satisfy a schema.
                         "required": [
-                            field for field in fields if field != "modifier"
+                            field for field in fields if field not in OPTIONAL
                         ],
                     },
                 },

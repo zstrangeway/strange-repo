@@ -73,6 +73,20 @@ as its own element rather than as prose — rendering it as a sentence would
 make it indistinguishable from a number the model made up, which is the
 distinction the whole design rests on.
 
+## Reading a roll
+
+A card leads with **whose** roll it is, because that was what was missing: a
+turn where four people crossed a collapsing causeway showed seven numbers and
+no way to tell which neck was out. Then what it was for, the ability behind
+it, and how the total was reached — `9 + 3 = 12` beside `1d20+3 → 12 vs 12` —
+so a call that close can be checked by eye rather than taken on trust.
+
+The arithmetic only appears when it says something the total does not.
+`rolled 9` beside `→ 9` is the same number printed twice, and a busy turn
+carries seven of them. That rule is `workedOut` in `src/lib/rolls.ts` rather
+than in the component, because it is the branchy part and `src/lib` is where
+the coverage gate can see it.
+
 If the narration ever arrives all at once in production while streaming fine
 locally, the thing in front of gary-api is buffering `text/event-stream`.
 

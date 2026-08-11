@@ -100,21 +100,39 @@ class RefusedCallTests(unittest.TestCase):
 
     def test_a_difficulty_that_is_not_a_number(self):
         result, frames = self.run_call(
-            "check", {"character": "Bramble", "dc": "hard", "reason": "Spot"}
+            "check", {"characters": ["Bramble"], "dc": "hard", "reason": "Spot"}
         )
         self.assertTrue(result.failed)
         self.assertIn("difficulty class", result.summary)
         self.assertTrue(frames)
 
-    def test_a_modifier_that_is_not_a_number(self):
+    def test_an_ability_this_system_does_not_have(self):
+        # Gary names an ability and the sheet supplies the number, so the one
+        # thing it can get wrong here is naming an ability that does not
+        # exist. Refused rather than silently rolled flat, which would look
+        # exactly like a check nobody meant to modify.
         result, _ = self.run_call(
-            "check", {"character": "Bramble", "dc": 15, "modifier": "lots"}
+            "check", {"characters": ["Bramble"], "ability": "luck", "dc": 15}
         )
         self.assertTrue(result.failed)
-        self.assertIn("modifier", result.summary)
+        self.assertIn("luck", result.summary)
+
+    def test_a_check_with_nobody_in_it(self):
+        result, _ = self.run_call("check", {"characters": [], "dc": 15})
+        self.assertTrue(result.failed)
+        self.assertIn("somebody", result.summary)
 
     def test_a_character_who_is_not_here(self):
-        result, _ = self.run_call("check", {"character": "Nobody", "dc": 15})
+        result, _ = self.run_call("check", {"characters": ["Nobody"], "dc": 15})
+        self.assertTrue(result.failed)
+        self.assertIn("Nobody", result.summary)
+
+    def test_one_name_rather_than_a_list_is_taken_as_one_name(self):
+        # Models do this. Refusing would be technically correct and would
+        # cost the player a turn over a bracket.
+        result, _ = self.run_call(
+            "check", {"characters": "Nobody", "dc": 15}
+        )
         self.assertTrue(result.failed)
         self.assertIn("Nobody", result.summary)
 

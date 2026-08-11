@@ -1304,3 +1304,131 @@ def step_world_says_mine(context, name):
 def step_world_says_garys(context, name):
     found = [one for one in _body(context)["party"] if one["name"] == name]
     assert found and found[0]["played_by"] == "gary"
+
+
+# ------------------------------------------------------------------- rolls
+#
+# Whose a roll was, and what it was against. A number in the middle of a
+# story means nothing on its own, and gary was working around that by writing
+# the name into the reason — "John falling damage" — which is a mechanical
+# fact in a free-text field where nothing can check it.
+
+
+def _with_ability(context, name, character_class, ability, score, mine):
+    """Somebody with a score worth a modifier, so a check can prove it used one."""
+    context.response = context.client.post(
+        f"/campaigns/{_campaign_id(context)}/characters",
+        json={
+            "name": name,
+            "character_class": character_class,
+            "abilities": {ability: score},
+            "mine": mine,
+        },
+        headers=_headers(context),
+    )
+    assert context.response.status_code == 201, context.response.text
+    context.characters[name] = _body(context)
+
+
+@given('"{name}" the {character_class:Class} has {ability} {score:d}')
+def step_character_with_ability(context, name, character_class, ability, score):
+    _with_ability(context, name, character_class, ability, score, False)
+
+
+@given('"{name}" the {character_class:Class} has {ability} {score:d}, and is mine')
+def step_my_character_with_ability(context, name, character_class, ability, score):
+    _with_ability(context, name, character_class, ability, score, True)
+
+
+@then('the roll should have been made for "{who}"')
+def step_roll_for(context, who):
+    rolls = _of(context, "roll")
+    assert rolls, "nothing was rolled"
+    assert any(roll.get("character") == who for roll in rolls), rolls
+
+
+@then("the roll should have been made for nobody")
+def step_roll_for_nobody(context):
+    rolls = _of(context, "roll")
+    assert rolls, "nothing was rolled"
+    for roll in rolls:
+        assert roll.get("character") is None, roll
+
+
+@then('the roll should still say it was for "{who}"')
+def step_roll_still_for(context, who):
+    """After a reload, which is the half that was missing.
+
+    The stream carried a name and the table did not, so the moment a page was
+    refreshed the roll was back to a bare number.
+    """
+    rolls = [roll for turn in _body(context) for roll in turn["rolls"]]
+    assert rolls, "the transcript carried no rolls"
+    assert any(roll.get("character") == who for roll in rolls), rolls
+
+
+@then("there should be {count:d} rolls")
+def step_roll_count(context, count):
+    rolls = _of(context, "roll")
+    assert len(rolls) == count, [roll.get("character") for roll in rolls]
+
+
+@then("there should be no rolls")
+def step_no_rolls_at_all(context):
+    assert not _of(context, "roll"), _of(context, "roll")
+    rows = sql(
+        "SELECT r.id FROM rolls r JOIN turns t ON t.id = r.turn_id"
+        " WHERE t.campaign_id = :id",
+        id=_campaign_id(context),
+    )
+    assert not rows, "a refused check still wrote rolls down"
+
+
+@then("gary should have been told both results")
+def step_told_both(context):
+    """One call, one answer, covering everybody in it.
+
+    A model told only about the last of four would narrate the other three
+    from memory, which is the whole failure this design exists to prevent.
+    """
+    summary = fake.LAST_RESULTS
+    assert summary, "gary was told nothing"
+    said = " ".join(result.summary for result in summary)
+    for who in ("Bramble", "John"):
+        assert who in said, said
+
+
+@then("the roll should be refused")
+def step_roll_refused(context):
+    refusals = [
+        data
+        for name, data in context.events
+        if name == "error" and data.get("code") == "refused_tool"
+    ]
+    assert refusals, [name for name, _ in context.events]
+    context.refusal = refusals[-1]
+
+
+@then('the refusal should name "{what}"')
+def step_refusal_names(context, what):
+    assert what in context.refusal["detail"], context.refusal
+
+
+@then("the check should have used a modifier of {modifier:d}")
+def step_check_modifier(context, modifier):
+    rolls = _of(context, "roll")
+    assert rolls, "nothing was rolled"
+    assert all(roll["modifier"] == modifier for roll in rolls), rolls
+
+
+@then('the roll should read "{notation}"')
+def step_roll_reads(context, notation):
+    rolls = _of(context, "roll")
+    assert any(roll["notation"] == notation for roll in rolls), rolls
+
+
+@then('"{who}" should have rolled "{notation}"')
+def step_who_rolled(context, who, notation):
+    rolls = [roll for roll in _of(context, "roll") if roll.get("character") == who]
+    assert rolls, f"{who} rolled nothing"
+    assert all(roll["notation"] == notation for roll in rolls), rolls

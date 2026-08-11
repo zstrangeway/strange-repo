@@ -29,8 +29,15 @@ class NarrationError(Exception):
 # and the real thing cannot drift: a tool the spec exercises but the model is
 # never offered is a tool that does not exist.
 TOOLS = {
-    "roll": ("notation", "reason"),
-    "check": ("character", "dc", "reason"),
+    "roll": ("notation", "reason", "character"),
+    # Several at once, because one hazard at one difficulty is one thing
+    # happening no matter how many people are standing in it. Asked for one at
+    # a time it cost a round trip each, and a party of four crossing rotten
+    # planks reached the round cap describing a single moment.
+    #
+    # An ability rather than a modifier: what a score is worth is a rule, and
+    # the score itself is on a sheet the narrator does not own.
+    "check": ("characters", "ability", "dc", "reason"),
     "move_party": ("place",),
     "remember": ("key", "value"),
     "damage": ("character", "amount"),
