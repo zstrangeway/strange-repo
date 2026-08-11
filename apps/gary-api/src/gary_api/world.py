@@ -136,6 +136,12 @@ async def record(
     turn_id: uuid.UUID | None = None,
 ) -> WorldEvent:
     """Write one thing that happened."""
+    # Checked before the database is touched, not after. A refusal is the
+    # common case when a model is proposing these, and doing the work first
+    # only to throw it away is both slower and easier to misread as a write
+    # that half happened.
+    cleaned = clean(kind, payload)
+
     highest = await database.scalar(
         select(func.coalesce(func.max(WorldEvent.seq), 0)).where(
             WorldEvent.campaign_id == campaign_id
@@ -146,7 +152,7 @@ async def record(
         campaign_id=campaign_id,
         seq=(highest or 0) + 1,
         kind=kind,
-        payload=clean(kind, payload),
+        payload=cleaned,
         turn_id=turn_id,
     )
     database.add(event)
@@ -224,7 +230,10 @@ def project(characters: list[Character], events: list[WorldEvent]) -> World:
             elif kind == AFFLICTED:
                 if payload["condition"] not in member.conditions:
                     member.conditions.append(payload["condition"])
-            elif kind == RELIEVED:
+            else:
+                # RELIEVED, and nothing else: clean() refuses any kind not in
+                # KINDS before it is written, so the chain is exhaustive and
+                # an elif here would leave an unreachable branch.
                 if payload["condition"] in member.conditions:
                     member.conditions.remove(payload["condition"])
 

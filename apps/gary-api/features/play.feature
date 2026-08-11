@@ -111,12 +111,78 @@ Feature: Playing
   # A turn cut off halfway is kept and marked, not silently dropped. Dropping
   # it would leave the next turn being told a story that never happened; and
   # keeping it unmarked would claim gary finished a sentence it did not.
-  Scenario: I close the tab mid-turn
-    When I say "I push open the door [[stall]]"
-    And I stop listening
+  #
+  # Driven through the endpoint rather than through the test client, which
+  # cannot do this one: its transport has no backpressure, so a reader that
+  # walks away does not stop the writer and the turn runs forever. The
+  # endpoint, its generator and the clause that marks the turn are all the
+  # real ones — only the socket is missing, and the socket is the part that
+  # cannot be faked.
+  Scenario: A turn cut off halfway is kept and marked
+    When gary is interrupted halfway through "I push open the door [[stall]]"
     Then the transcript should hold 2 turns
     And gary's turn should be marked incomplete
 
   Scenario: A campaign that does not exist
     When I say "I push open the door" in a campaign that does not exist
     Then the response status should be 404
+
+  # The rules grade a check; gary does not. This is the difference between a
+  # GM bound by a system and a GM describing one.
+  Scenario: The rules grade the check
+    When I say "I search the room [[check Bramble 15 Perception]]"
+    Then the turn should stream to completion
+    And the check should have been recorded against 15
+    And the degree should be one this system grades
+
+  # Same tool, same narrator, a system that grades four ways instead of two —
+  # and nothing between them knows the difference.
+  Scenario: A system that grades four ways grades four ways
+    Given I started "Salt in the wind" on "pathfinder-2e" running "salt-and-cinder"
+    And I add "Ket" the rogue
+    When I say "I search the quay [[check Ket 15 Perception]]"
+    Then the turn should stream to completion
+    And the degree should be one this system grades
+    And this system should grade 4 ways
+
+  Scenario: Gary moves the party, and the world keeps them moved
+    When I say "I climb the stair [[move the belfry stair]]"
+    Then the turn should stream to completion
+    And the world should say the party is at "the belfry stair"
+
+  Scenario: Gary remembers something, and it outlives the turn
+    When I say "The bell rings again [[remember bell-rings=4]]"
+    Then the turn should stream to completion
+    And the world should remember "bell-rings" as "4"
+
+  Scenario: Gary takes hit points off, and the world keeps them off
+    When I say "The step gives way [[damage Bramble 4]]"
+    Then the turn should stream to completion
+    And the world should have "Bramble" 4 hit points down
+
+  # The engine refusing the model is the point of having an engine. Gary
+  # cannot hurt somebody who is not at the table, however plausibly it narrates.
+  Scenario: Gary cannot touch somebody who is not here
+    When I say "Something bites [[damage Nobody 4]]"
+    Then the stream should carry an error
+    And the world should have "Bramble" at full hit points
+
+  Scenario: What gary changed is in the history, against the turn that did it
+    When I say "I climb the stair [[move the belfry stair]]"
+    Then the turn should stream to completion
+    And the move should be recorded against gary's turn
+
+  Scenario: Gary marks a condition, and the world holds it
+    When I say "The shape turns to face you [[afflict Bramble frightened]]"
+    Then the turn should stream to completion
+    And the world should have "Bramble" "frightened"
+
+  Scenario: Gary lets time pass, and the world counts it
+    When I say "You rest a while [[time 30]]"
+    Then the turn should stream to completion
+    And the world should say 30 minutes have passed
+
+  Scenario: A check gary cannot grade
+    When I say "I look about [[check Bramble hard Perception]]"
+    Then the stream should carry an error
+    And no roll should have been recorded

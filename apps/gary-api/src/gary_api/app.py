@@ -6,7 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from gary_api import auth, db, dice, identity, logs, play
+from gary_api import auth, db, dice, identity, logs, narration, play
 from gary_api.identity import consent
 
 
@@ -16,6 +16,7 @@ async def lifespan(app: FastAPI):
     # without this every record this app emits below WARNING is dropped.
     logs.configure()
     identity.report_configuration()
+    narration.report_configuration()
     # Seeded only when the environment says to, which is how a spec asserts a
     # number rather than merely that a number arrived.
     dice.configure()

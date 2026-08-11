@@ -9,7 +9,7 @@ from starlette.testclient import TestClient
 
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from gary_api import db, dice, identity, logs
+from gary_api import db, dice, identity, logs, narration
 from gary_api.app import app, create_app
 from gary_api.db import database_url
 from gary_api.models import Base
@@ -70,6 +70,14 @@ def before_scenario(context, scenario):
     os.environ["DICE_SEED"] = "1234"
     dice.configure()
 
+    # The stand-in for the model, for the same reason as the identity double:
+    # what these specs are about is what gary does with a narration, not
+    # whether a model can write one. Cleared per scenario because narrator()
+    # caches what it built.
+    os.environ["GM_FAKE"] = "1"
+    os.environ.pop("GM_MODEL", None)
+    narration.narrator.cache_clear()
+
     async def empty(engine):
         async with engine.begin() as connection:
             # CASCADE reaches sessions and identities through their foreign
@@ -109,6 +117,7 @@ def before_scenario(context, scenario):
 def after_scenario(context, scenario):
     context.client.close()
     identity.provider.cache_clear()
+    narration.narrator.cache_clear()
 
 
 def sql(statement, **parameters):

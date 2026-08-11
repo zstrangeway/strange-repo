@@ -1,10 +1,12 @@
+import json
 import uuid
 
 import parse
 from behave import given, register_type, then, when
 
-from environment import with_session
-from gary_api import world
+from environment import sql, with_session
+from gary_api import dice, world
+from gary_api.narration import fake
 
 # behave's placeholders are greedy, so `the {character_class}` would swallow
 # `rogue in "add-1e"` whole and two perfectly distinct steps would collide.
@@ -407,3 +409,319 @@ def step_history_ordered(context):
     sequence = [event["seq"] for event in _body(context)]
     assert sequence == sorted(sequence), sequence
     assert len(set(sequence)) == len(sequence), f"repeated sequence numbers: {sequence}"
+
+
+# ----------------------------------------------------------------- playing
+
+
+def _say(context, message, campaign_id, stop_after=None):
+    """Take a turn and collect the stream.
+
+    Frames are collected as they arrive rather than read at the end, because
+    what several of these scenarios are about is that they arrive at all
+    rather than in one lump at the close.
+    """
+    context.events = []
+    if not hasattr(context, "all_rolls"):
+        context.all_rolls = []
+
+    with context.client.stream(
+        "POST",
+        f"/campaigns/{campaign_id}/turns",
+        json={"message": message},
+        headers=_headers(context),
+    ) as response:
+        context.response = response
+        if response.status_code != 200:
+            # Read it while the connection is open, so the shared steps that
+            # assert on the body still have one to read.
+            response.read()
+            return
+
+        name = None
+        for line in response.iter_lines():
+            if line.startswith("event: "):
+                name = line[len("event: ") :].strip()
+            elif line.startswith("data: "):
+                context.events.append((name, json.loads(line[len("data: ") :])))
+                if stop_after is not None and len(context.events) >= stop_after:
+                    # Walk away mid-turn, as a closed tab does.
+                    break
+
+    context.all_rolls += [
+        data["total"] for kind, data in context.events if kind == "roll"
+    ]
+
+
+def _of(context, kind):
+    return [data for name, data in context.events if name == kind]
+
+
+@given('I said "{message}"')
+@when('I say "{message}"')
+def step_say(context, message):
+    _say(context, message, _campaign_id(context))
+
+
+@when('I say "{message}" in that campaign')
+def step_say_in_that(context, message):
+    _say(context, message, _campaign_id(context))
+
+
+@when('I say "{message}" in their campaign')
+def step_say_in_theirs(context, message):
+    _say(context, message, context.other_campaign["id"])
+
+
+@when('I say "{message}" in a campaign that does not exist')
+def step_say_nowhere(context, message):
+    _say(context, message, NOWHERE)
+
+
+@when('gary is interrupted halfway through "{message}"')
+def step_interrupted(context, message):
+    """Read a few frames, then walk away — as a closed tab does.
+
+    Through the endpoint rather than the client, because the test client's
+    transport has no backpressure: a reader that stops reading does not stop
+    the writer, so the turn would run forever instead of being cut off. What
+    is exercised here is the real endpoint and the real generator; closing it
+    early is exactly what Starlette does when a socket goes away.
+    """
+    from gary_api import play
+    from gary_api.models import Campaign, User
+
+    campaign_id = uuid.UUID(_campaign_id(context))
+
+    async def work(session):
+        campaign = await session.get(Campaign, campaign_id)
+        user = await session.get(User, campaign.user_id)
+        response = await play.take_turn(
+            campaign_id, play.NewTurn(message=message), session, user
+        )
+
+        frames = response.body_iterator
+        seen = 0
+        async for _ in frames:
+            seen += 1
+            if seen >= 3:
+                break
+        await frames.aclose()
+
+    with_session(work)
+
+
+@then("the turn should stream to completion")
+def step_streamed(context):
+    assert context.response.status_code == 200, context.response.status_code
+    assert _of(context, "done"), [name for name, _ in context.events]
+
+
+@then('the narration should mention "{word}"')
+def step_narration_mentions(context, word):
+    said = "".join(data["text"] for data in _of(context, "narration"))
+    assert word.lower() in said.lower(), said
+
+
+@then("the narration should arrive in more than one piece")
+def step_narration_in_pieces(context):
+    pieces = _of(context, "narration")
+    assert len(pieces) > 1, f"arrived in {len(pieces)} piece(s)"
+
+
+@then("the transcript should hold {count:d} turn")
+@then("the transcript should hold {count:d} turns")
+def step_transcript_length(context, count):
+    rows = sql(
+        "SELECT role, content, complete FROM turns WHERE campaign_id = :id"
+        " ORDER BY created_at, id",
+        id=_campaign_id(context),
+    )
+    assert len(rows) == count, [(row[0], row[1][:30]) for row in rows]
+
+
+@then("gary's turn should be marked incomplete")
+def step_incomplete(context):
+    rows = sql(
+        "SELECT complete FROM turns WHERE campaign_id = :id AND role = 'gm'",
+        id=_campaign_id(context),
+    )
+    assert rows, "gary took no turn at all"
+    assert not rows[-1][0], "gary's turn was marked finished"
+
+
+@then('a roll of "{notation}" should have been made for "{reason}"')
+def step_roll_made(context, notation, reason):
+    rolls = _of(context, "roll")
+    assert any(
+        roll["notation"] == notation and roll["reason"] == reason for roll in rolls
+    ), rolls
+
+
+@then("the roll should be recorded against gary's turn")
+def step_roll_recorded(context):
+    rows = sql(
+        "SELECT r.notation FROM rolls r JOIN turns t ON t.id = r.turn_id"
+        " WHERE t.campaign_id = :id AND t.role = 'gm'",
+        id=_campaign_id(context),
+    )
+    assert rows, "no roll was written down"
+
+
+@then("the move should be recorded against gary's turn")
+def step_move_recorded(context):
+    rows = sql(
+        "SELECT e.kind FROM world_events e JOIN turns t ON t.id = e.turn_id"
+        " WHERE t.campaign_id = :id AND t.role = 'gm'",
+        id=_campaign_id(context),
+    )
+    assert rows, "the world changed but nothing says which turn did it"
+
+
+@then("narration should arrive after the roll")
+def step_narration_after_roll(context):
+    order = [name for name, _ in context.events]
+    assert "roll" in order, order
+    assert "narration" in order[order.index("roll") :], order
+
+
+@then("the roll total should be between {low:d} and {high:d}")
+def step_roll_within(context, low, high):
+    rolls = _of(context, "roll")
+    assert rolls, "nothing was rolled"
+    for roll in rolls:
+        assert low <= roll["total"] <= high, roll
+
+
+@then("no roll should have been recorded")
+def step_no_roll(context):
+    rows = sql(
+        "SELECT r.id FROM rolls r JOIN turns t ON t.id = r.turn_id"
+        " WHERE t.campaign_id = :id",
+        id=_campaign_id(context),
+    )
+    assert not rows, f"{len(rows)} roll(s) were written down"
+
+
+@given("the dice are seeded with {value:d}")
+@when("the dice are seeded with {value:d} again")
+def step_seed(context, value):
+    dice.seed(value)
+
+
+@then("both rolls should have the same total")
+def step_same_total(context):
+    totals = context.all_rolls
+    assert len(totals) == 2, totals
+    assert totals[0] == totals[1], totals
+
+
+@then("the stream should carry an error")
+def step_stream_error(context):
+    assert _of(context, "error"), [name for name, _ in context.events]
+
+
+@then("the stream should carry a refusal")
+def step_stream_refusal(context):
+    assert _of(context, "refusal"), [name for name, _ in context.events]
+
+
+@then("the refusal should say why in words")
+def step_refusal_words(context):
+    said = _of(context, "refusal")[0]["detail"]
+    assert len(said.split()) > 3, said
+
+
+@then("gary should have been sent {count:d} prior turns")
+def step_prompt_transcript(context, count):
+    assert fake.LAST is not None, "gary was never asked"
+    assert len(fake.LAST.transcript) == count, fake.LAST.transcript
+
+
+@then("the party should have been among what gary was sent")
+def step_prompt_party(context):
+    assert fake.LAST is not None, "gary was never asked"
+    for name in context.characters:
+        assert name in fake.LAST.world, fake.LAST.world
+
+
+@then('gary should have been told the module is "{slug}"')
+def step_prompt_module(context, slug):
+    assert fake.LAST.module_slug == slug, fake.LAST.module_slug
+
+
+@then('gary should have been told the system is "{slug}"')
+def step_prompt_system(context, slug):
+    assert fake.LAST.system_slug == slug, fake.LAST.system_slug
+
+
+@then("the check should have been recorded against {dc:d}")
+def step_check_recorded(context, dc):
+    rows = sql(
+        "SELECT r.dc, r.degree FROM rolls r JOIN turns t ON t.id = r.turn_id"
+        " WHERE t.campaign_id = :id AND r.dc IS NOT NULL",
+        id=_campaign_id(context),
+    )
+    assert rows, "no check was written down"
+    assert rows[-1][0] == dc, rows[-1]
+
+
+@then("the degree should be one this system grades")
+def step_degree_valid(context):
+    from gary_api import systems
+
+    allowed = [d.value for d in systems.ruleset(fake.LAST.system_slug).degrees]
+    graded = [roll["degree"] for roll in _of(context, "roll") if roll.get("degree")]
+    assert graded, "nothing was graded"
+    for degree in graded:
+        assert degree in allowed, f"{degree} is not one of {allowed}"
+
+
+@then("this system should grade {count:d} ways")
+def step_degree_count(context, count):
+    from gary_api import systems
+
+    allowed = systems.ruleset(fake.LAST.system_slug).degrees
+    assert len(allowed) == count, [degree.value for degree in allowed]
+
+
+def _world(context):
+    response = context.client.get(
+        f"/campaigns/{_campaign_id(context)}/world", headers=_headers(context)
+    )
+    assert response.status_code == 200, response.status_code
+    return response.json()
+
+
+@then('the world should say the party is at "{place}"')
+def step_world_place(context, place):
+    assert _world(context)["place"] == place, _world(context)["place"]
+
+
+@then('the world should remember "{key}" as "{value}"')
+def step_world_fact(context, key, value):
+    facts = _world(context)["facts"]
+    assert facts.get(key) == value, facts
+
+
+@then('the world should have "{who}" {amount:d} hit points down')
+def step_world_damage(context, who, amount):
+    member = next(m for m in _world(context)["party"] if m["name"] == who)
+    assert member["max_hp"] - member["hp"] == amount, member
+
+
+@then('the world should have "{who}" at full hit points')
+def step_world_full(context, who):
+    member = next(m for m in _world(context)["party"] if m["name"] == who)
+    assert member["hp"] == member["max_hp"], member
+
+
+@then('the world should have "{who}" "{condition}"')
+def step_world_condition(context, who, condition):
+    member = next(m for m in _world(context)["party"] if m["name"] == who)
+    assert condition in member["conditions"], member
+
+
+@then("the world should say {minutes:d} minutes have passed")
+def step_world_minutes(context, minutes):
+    assert _world(context)["minutes"] == minutes, _world(context)["minutes"]

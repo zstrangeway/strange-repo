@@ -61,10 +61,6 @@ class Outcome:
     roll: Roll
     degree: Degree
 
-    @property
-    def succeeded(self) -> bool:
-        return self.degree in (Degree.CRITICAL_SUCCESS, Degree.SUCCESS)
-
 
 class Ruleset(Protocol):
     slug: str
