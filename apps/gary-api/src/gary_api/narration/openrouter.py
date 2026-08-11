@@ -60,6 +60,26 @@ MAX_TOKENS = 4096
 # real turns to compare.
 EFFORT = "medium"
 
+# How many times gary may go back for more before it has to say something.
+#
+# Each one is a whole request carrying the conversation so far, so this is a
+# ceiling on both the cost and the wait of a single turn, not a free dial.
+# Eight was too few: a party of four crossing one hazard is four checks and
+# the damage that follows, and a model that asks for them one at a time —
+# which they do — reaches the wall describing a single moment.
+#
+# The last of these is spent narrating rather than asking, so the number of
+# rounds gary can actually call tools in is one less than this.
+ROUNDS = 15
+
+# What gary is told on the round it has to finish in. Stated as the situation
+# rather than as a scolding: a model told it has failed tends to apologise to
+# the player, who never asked and cannot help.
+WRAP_UP = (
+    "That is all the time you have for looking things up this turn. Do not "
+    "call any more tools. Say what happened, using what you already have."
+)
+
 # What every tool takes, in the shape OpenAI-compatible APIs want. Built from
 # narration.TOOLS so a tool that exists in the contract cannot be missing from
 # what the model is offered.
@@ -352,9 +372,20 @@ class OpenRouterNarrator:
         conversation = messages(prompt)
 
         # Rounds, not one pass: a tool call ends a completion, and what the
-        # tools came back with has to go in before the model can carry on. The
-        # cap is a backstop against a model that asks forever.
-        for _ in range(8):
+        # tools came back with has to go in before the model can carry on.
+        for round_ in range(ROUNDS):
+            # The last one is spent saying what happened. Reaching the cap
+            # used to end the turn in silence — the loop fell out of the
+            # bottom having narrated nothing — which read to the player as
+            # gary freezing mid-sentence. A turn always ends in prose now,
+            # even when gary has run out of room to keep asking.
+            last = round_ == ROUNDS - 1
+            if last:
+                logger.warning(
+                    "gm.out_of_rounds", model=prompt.model or self.model
+                )
+                conversation.append({"role": "user", "content": WRAP_UP})
+
             fragments = Fragments()
             spoken: list[str] = []
             finish = None
@@ -364,6 +395,10 @@ class OpenRouterNarrator:
                     model=prompt.model or self.model,
                     messages=conversation,
                     tools=schema(),
+                    # Left described rather than withdrawn: the conversation
+                    # above is full of calls to them, and taking the
+                    # definitions away mid-thread reads as a contradiction.
+                    tool_choice="none" if last else "auto",
                     max_tokens=MAX_TOKENS,
                     stream=True,
                     extra_body={"reasoning": {"effort": EFFORT}},
@@ -435,7 +470,11 @@ class OpenRouterNarrator:
                     }
                 )
 
-        logger.warning("gm.too_many_rounds", model=prompt.model or self.model)
+        # Only reachable if a model kept calling tools through a round that
+        # forbade them. Raised rather than logged and swallowed: the player is
+        # owed an answer, and silence is the one thing that reads as the app
+        # being broken rather than gary having a bad night.
+        raise NarrationError("gary lost the thread of that turn")
 
     async def close(
         self, prompt: Prompt

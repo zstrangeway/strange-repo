@@ -182,6 +182,21 @@ would have given us are simply not there, and both are contained in
 ordinary narration, so the `refusal` frame is mostly exercised by the double)
 and server-side refusal fallbacks.
 
+**A turn is several requests, not one.** A tool call ends a completion, so
+what the engines answered has to go back in before the model can carry on.
+`ROUNDS` caps how many times that may happen, and it is a ceiling on the cost
+and the wait of a single turn rather than a free dial.
+
+It was eight, and eight was too few: a party of four crossing one hazard is
+four checks plus the damage that follows, and models ask for those one at a
+time rather than together, so an ordinary moment reached the wall. Reaching
+it used to end the turn in silence — the loop fell out of the bottom having
+narrated nothing, which reads as the app freezing rather than as a turn
+ending. **The last round is now spent narrating**: tools are still described
+but forbidden with `tool_choice: "none"`, and gary is told to say what
+happened with what it already has. A model still calling tools through that
+is a `NarrationError`, because the player is owed an answer.
+
 ### Configuration
 
 | Variable | What it does |

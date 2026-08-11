@@ -116,6 +116,20 @@ def drive(narrator, prompt, answers=None):
     return told
 
 
+ROUNDS = openrouter.ROUNDS
+
+# One round of a model asking for a tool and nothing else — the shape of a
+# turn that never gets around to narrating.
+ASKING = Chunk(
+    [
+        Choice(
+            Delta(tool_calls=[ToolDelta(0, "pass_time", '{"minutes":1}')]),
+            finish_reason="tool_calls",
+        )
+    ]
+)
+
+
 def narrator_with(client):
     made = openrouter.OpenRouterNarrator(api_key="sk-or-test", model="a/model")
     made.client = client
@@ -462,19 +476,74 @@ class FailureTests(unittest.TestCase):
             drive(narrator_with(Exploding()), a_prompt())
 
     def test_a_model_that_asks_forever_is_stopped(self):
-        # Otherwise one confused turn spends the account.
-        asking = Chunk(
-            [
-                Choice(
-                    Delta(tool_calls=[ToolDelta(0, "pass_time", '{"minutes":1}')]),
-                    finish_reason="tool_calls",
-                )
-            ]
+        # Otherwise one confused turn spends the account. It is an error
+        # rather than a quiet stop: a model still calling tools on the round
+        # that forbade them has lost the thread, and the player is owed an
+        # answer rather than a turn that simply ends.
+        client, sent = client_serving(*[[ASKING] for _ in range(ROUNDS + 5)])
+        with self.assertRaises(narration.NarrationError):
+            drive(narrator_with(client), a_prompt())
+        self.assertEqual(len(sent), ROUNDS)
+
+
+class WrappingUpTests(unittest.TestCase):
+    """What happens when gary runs out of room to keep asking.
+
+    Reported from a real session: seven rolls landed and gary never narrated
+    a word. It had spent every round calling tools — a party of four crossing
+    one hazard, asked for one at a time — and the loop fell out of the bottom
+    having said nothing, which reads as the app freezing rather than as a
+    turn ending.
+    """
+
+    def test_the_last_round_forbids_tools_and_asks_for_prose(self):
+        client, sent = client_serving(
+            *[[ASKING] for _ in range(ROUNDS - 1)],
+            [Chunk([Choice(Delta(content="The planks give."), finish_reason="stop")])],
         )
-        client, sent = client_serving(*[[asking] for _ in range(20)])
+        drive(narrator_with(client), a_prompt())
+
+        self.assertEqual(len(sent), ROUNDS)
+        # Every round but the last may ask for whatever it needs.
+        for asked in sent[:-1]:
+            self.assertEqual(asked["tool_choice"], "auto")
+
+        last = sent[-1]
+        self.assertEqual(last["tool_choice"], "none")
+        # Described but forbidden, rather than withdrawn: the conversation is
+        # full of calls to them by now.
+        self.assertTrue(last["tools"])
+        self.assertIn(
+            openrouter.WRAP_UP,
+            [
+                message.get("content")
+                for message in last["messages"]
+                if message.get("role") == "user"
+            ],
+        )
+
+    def test_a_turn_that_used_every_round_still_ends_in_prose(self):
+        client, _ = client_serving(
+            *[[ASKING] for _ in range(ROUNDS - 1)],
+            [Chunk([Choice(Delta(content="You are all in the water."), finish_reason="stop")])],
+        )
         told = drive(narrator_with(client), a_prompt())
-        self.assertLess(len(sent), 20)
-        self.assertTrue([e for e in told if isinstance(e, narration.Calls)])
+
+        said = "".join(e.text for e in told if isinstance(e, narration.Said))
+        self.assertEqual(said, "You are all in the water.")
+
+    def test_an_ordinary_turn_never_forbids_tools(self):
+        client, sent = client_serving(
+            [Chunk([Choice(Delta(content="The door groans."), finish_reason="stop")])]
+        )
+        drive(narrator_with(client), a_prompt())
+
+        self.assertEqual(len(sent), 1)
+        self.assertEqual(sent[0]["tool_choice"], "auto")
+        self.assertNotIn(
+            openrouter.WRAP_UP,
+            [message.get("content") for message in sent[0]["messages"]],
+        )
 
 
 class SelectionTests(unittest.TestCase):
