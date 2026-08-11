@@ -5,6 +5,7 @@ Selected from the environment once, the same arrangement as ``identity``:
     GM_FAKE          set to 1 to use the spec double
     OPENROUTER_API_KEY   the key the real narrator needs
     GM_MODEL         which model to ask for, default anthropic/claude-sonnet-5
+    SCENE_MODEL      which model closes a scene, default anthropic/claude-haiku-4.5
 
 The real narrator goes through OpenRouter, which serves an OpenAI-compatible
 API and no Anthropic one — so the client is the openai SDK pointed at a
@@ -19,9 +20,11 @@ from gary_api.narration import models
 from gary_api.narration.base import (
     Call,
     Calls,
+    CLOSING_TOOLS,
     NarrationError,
     Narrator,
     Prompt,
+    Recap,
     Refused,
     Result,
     Said,
@@ -30,11 +33,13 @@ from gary_api.narration.base import (
 from gary_api.narration.fake import FakeNarrator
 
 __all__ = [
+    "CLOSING_TOOLS",
     "Call",
     "Calls",
     "NarrationError",
     "Narrator",
     "Prompt",
+    "Recap",
     "Refused",
     "Result",
     "Said",

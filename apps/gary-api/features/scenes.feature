@@ -99,7 +99,7 @@ Feature: Scenes
 
   # Turns are a poor proxy for cost when they are long, so length counts too.
   Scenario: A scene too big to send is broken on its size
-    Given a scene is broken after 400 characters
+    Given a scene is broken after 100 characters
     And I said "A very long speech indeed, at some length"
     When I say "And another one, equally long and unhurried"
     Then there should be 2 scenes
@@ -137,6 +137,17 @@ Feature: Scenes
     Then the world should have "Bramble" at full hit points
     And there should be 2 scenes
 
+  # No dice after the fact. A die thrown once the scene is over would decide
+  # something nobody was at the table for, so the close pass is not offered
+  # one — and is refused if it asks anyway.
+  Scenario: Reconciling cannot roll dice
+    Given gary will roll dice when the scene closes
+    And I said "I search the room"
+    When a new scene begins
+    Then no roll should have been recorded
+    And there should be 2 scenes
+    And the first scene should have a recap
+
   Scenario: What reconciling changed is in the history, against the scene
     Given gary will remember "brass-key" as "in Bramble's pocket" when the scene closes
     And I said "You pocket the brass key"
@@ -152,6 +163,15 @@ Feature: Scenes
     Then there should be 2 scenes
     And the first scene should be closed
     And the first scene should say its recap is missing
+
+  # Recapping is summarising, not running a game. It is the one call here that
+  # does not need the model the campaign chose, and a scene break is otherwise
+  # the most expensive moment in a campaign.
+  Scenario: Recapping runs on the cheap model, not the campaign's
+    Given I said "I push open the door"
+    When a new scene begins
+    Then the recap should have been asked of the scene model
+    And the scene model should not be the campaign's model
 
   Scenario: A scene with nothing in it needs no reconciling
     When I begin a scene called "The flooded nave"

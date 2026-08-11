@@ -242,3 +242,42 @@ Then("the page shows which model is running it", async function () {
   const shown = (await world.page.textContent('[data-testid="model"]')) ?? "";
   assert.ok(shown.trim().length > 0, "no model was named");
 });
+
+// ------------------------------------------------------------------ scenes
+
+When("I start a new scene called {string}", async function (title) {
+  await world.page.getByTestId("scene-title").fill(title);
+  await world.page.getByTestId("new-scene").click();
+  // Closing a scene runs a whole pass through a model, so this is the one
+  // control here that is slow on purpose — wait for the seam, not the click.
+  await world.page.waitForSelector('[data-testid="scene-break"]', {
+    timeout: 15_000,
+  });
+});
+
+When("I say {string} and gary changes scene", async function (message) {
+  apiStub.garyWill({ scene: "The road to Ashfen" });
+  await say(message);
+});
+
+Then("the transcript should show a break for {string}", async function (title) {
+  await world.page.waitForFunction(
+    (want) =>
+      [...document.querySelectorAll('[data-testid="scene-title"]')].some(
+        (found) => found.textContent?.trim() === want,
+      ),
+    title,
+    { timeout: 15_000 },
+  );
+});
+
+Then("the page shows what happened in the scene before", async function () {
+  // The recap is now the whole of what gary remembers of that scene, so what
+  // is on screen is what gary has.
+  const recaps = await world.page
+    .locator('[data-testid="scene-recap"]')
+    .allTextContents();
+
+  assert.ok(recaps.length > 0, "no recap was shown");
+  assert.ok(recaps[0].trim().length > 0, "the recap was blank");
+});

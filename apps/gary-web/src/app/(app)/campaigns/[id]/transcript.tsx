@@ -3,7 +3,7 @@
 import { Badge } from "@gary/ui/components/badge";
 import { Item, ItemContent, ItemDescription, ItemTitle } from "@gary/ui/components/item";
 
-import type { Roll } from "@/lib/play";
+import type { Roll, Scene } from "@/lib/api";
 
 /** One thing said, and anything the engines did while it was being said. */
 export type Entry = {
@@ -12,6 +12,7 @@ export type Entry = {
   text: string;
   rolls: Roll[];
   complete: boolean;
+  sceneId: string;
 };
 
 // A roll is a thing that happened, not a sentence gary wrote.
@@ -83,14 +84,49 @@ function Turn({ entry, who }: { entry: Entry; who: string }) {
   );
 }
 
+// The seam, drawn where gary's memory has one.
+//
+// Above a boundary is the story; below it is what gary is actually working
+// from. A closed scene shows its recap because that recap is now the whole of
+// what gary remembers of it — so what is on screen is what gary has, which is
+// the only honest way to render this.
+function Break({ scene }: { scene: Scene }) {
+  return (
+    <div className="flex flex-col gap-2 pt-2" data-testid="scene-break">
+      <div className="flex items-center gap-3">
+        <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+          Scene {scene.number}
+        </span>
+        <span className="font-medium" data-testid="scene-title">
+          {scene.title || "Untitled"}
+        </span>
+        {scene.open ? <Badge variant="secondary">playing</Badge> : null}
+        <span className="h-px flex-1 bg-border" />
+      </div>
+
+      {!scene.open ? (
+        <p
+          className="text-sm text-muted-foreground italic"
+          data-testid="scene-recap"
+        >
+          {scene.recap ??
+            "gary could not be reached to say what happened in this scene."}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export default function Transcript({
   entries,
+  scenes,
   who,
 }: {
   entries: Entry[];
+  scenes: Scene[];
   who: string;
 }) {
-  if (entries.length === 0) {
+  if (entries.length === 0 && scenes.length <= 1) {
     return (
       <p className="text-sm text-muted-foreground" data-testid="nothing-said">
         Nothing has happened yet. Say what you do.
@@ -98,11 +134,35 @@ export default function Transcript({
     );
   }
 
+  // Grouped by scene rather than laid out flat, and in the scenes' own order
+  // rather than the turns'. A scene with nothing in it still shows — an empty
+  // scene is a fact about the campaign, not an absence of one.
+  const known = new Set(scenes.map((scene) => scene.id));
+
   return (
     <div className="flex flex-col gap-4" data-testid="transcript">
-      {entries.map((entry) => (
-        <Turn key={entry.id} entry={entry} who={who} />
+      {scenes.map((scene) => (
+        <div key={scene.id} className="flex flex-col gap-4">
+          {/* Only worth drawing when there is more than one. A campaign that
+              has never broken a scene has no seam to show. */}
+          {scenes.length > 1 ? <Break scene={scene} /> : null}
+          {entries
+            .filter((entry) => entry.sceneId === scene.id)
+            .map((entry) => (
+              <Turn key={entry.id} entry={entry} who={who} />
+            ))}
+        </div>
       ))}
+
+      {/* Anything whose scene the page has not caught up with yet — a turn
+          said in a scene opened by the stream a moment ago. Rendered rather
+          than dropped: a turn that vanishes because bookkeeping lagged is
+          worse than one in slightly the wrong place. */}
+      {entries
+        .filter((entry) => !known.has(entry.sceneId))
+        .map((entry) => (
+          <Turn key={entry.id} entry={entry} who={who} />
+        ))}
     </div>
   );
 }

@@ -11,6 +11,7 @@ import {
   type Identity,
   type Model,
   type Provider,
+  type Scene,
   type SignedIn,
   type System,
   type Turn,
@@ -237,6 +238,29 @@ export async function worldOf(id: string): Promise<World | null> {
     token: storedToken(),
   });
   return result.ok ? result.data : null;
+}
+
+/** Every scene, oldest first, with what each is remembered by. */
+export async function scenesOf(id: string): Promise<Scene[]> {
+  const result = await callApi<Scene[]>(`/campaigns/${id}/scenes`, {
+    token: storedToken(),
+  });
+  return result.ok ? result.data : [];
+}
+
+/** End the scene being played and start the next one. Slow on purpose: this
+ *  is what runs the reconciliation pass. */
+export async function beginScene(
+  id: string,
+  title: string,
+): Promise<Outcome & { scene?: Scene }> {
+  const result = await callApi<Scene>(`/campaigns/${id}/scenes`, {
+    method: "POST",
+    body: { title },
+    token: storedToken(),
+  });
+
+  return result.ok ? { scene: result.data } : { error: result.message };
 }
 
 /** Everything said so far. The stream only carries what happens next, so a

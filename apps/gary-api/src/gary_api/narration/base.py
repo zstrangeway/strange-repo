@@ -38,7 +38,16 @@ TOOLS = {
     "add_condition": ("character", "condition"),
     "remove_condition": ("character", "condition"),
     "pass_time": ("minutes",),
+    "scene": ("title",),
 }
+
+# What the close pass may call. A recap does not roll dice and does not grade
+# a check — it is looking back at what was already decided, and a die thrown
+# after the fact would decide something nobody was there for. Everything left
+# is a change to the world, which is the whole business of reconciling.
+CLOSING_TOOLS = tuple(
+    name for name in TOOLS if name not in ("roll", "check", "scene")
+)
 
 
 @dataclass(frozen=True)
@@ -96,10 +105,22 @@ class Prompt:
     # removes, so it has to arrive by a route that does not go through
     # storage.
     message: str = ""
-    # (role, content) oldest first, the current turn included. The transcript
-    # is prose; the world is state. Both are sent, because they answer
-    # different questions.
+    # (role, content) oldest first, the current turn included. This scene's
+    # turns and no others: prose stops being memory at a scene boundary, and
+    # what carries across one is the world and the recaps below.
     transcript: list[tuple[str, str]] = field(default_factory=list)
+    # What this scene is called, when anybody named it.
+    scene_title: str = ""
+    # (title, recap) for the scenes already closed, oldest first. A campaign's
+    # long memory, at a few sentences each rather than every word.
+    recaps: list[tuple[str, str]] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class Recap:
+    """What happened in a scene, in the few sentences that outlive it."""
+
+    text: str
 
 
 class Narrator(Protocol):
@@ -127,5 +148,26 @@ class Narrator(Protocol):
         Raises NarrationError when there is no answer at all — which the
         caller turns into an event on the open stream, because by then the
         status line is long gone.
+        """
+        ...
+
+    def close(
+        self, prompt: Prompt
+    ) -> AsyncGenerator[Calls | Recap, list[Result] | None]:
+        """Sum up a scene, and record what it narrated but never recorded.
+
+        Driven exactly as ``narrate`` is, and for exactly the same reason:
+        what it proposes goes through the same engines and is refused by the
+        same refusals. The difference is only which tools are offered — see
+        ``CLOSING_TOOLS`` — and that it ends with a ``Recap`` rather than
+        prose.
+
+        This is the last moment at which a fact gary narrated but never wrote
+        down can still be written down. After the scene closes the transcript
+        is out of context and that fact is gone.
+
+        Raises NarrationError like ``narrate``. The caller closes the scene
+        anyway: a scene missing its recap is a worse campaign, and a scene
+        that would not close is an unbounded one.
         """
         ...

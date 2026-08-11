@@ -518,3 +518,231 @@ class SelectionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def close_with(narrator, prompt, answers=None):
+    """Run a close pass to the end, answering tool calls from `answers`."""
+    told = []
+
+    async def go():
+        generator = narrator.close(prompt)
+        sending = None
+        while True:
+            try:
+                event = await generator.asend(sending)
+            except StopAsyncIteration:
+                break
+            told.append(event)
+            sending = None
+            if isinstance(event, narration.Calls):
+                sending = [
+                    narration.Result(call, (answers or {}).get(call.name, "done"))
+                    for call in event.calls
+                ]
+        await generator.aclose()
+
+    asyncio.run(go())
+    return told
+
+
+class ClosingTests(unittest.TestCase):
+    """The close pass — unreachable from the specs, like everything here."""
+
+    def test_sums_up_what_it_was_shown(self):
+        client, _ = client_serving(
+            [
+                Chunk([Choice(Delta(content="The party "))]),
+                Chunk([Choice(Delta(content="opened the door."), finish_reason="stop")]),
+            ]
+        )
+        told = close_with(narrator_with(client), a_prompt())
+        self.assertEqual(len(told), 1)
+        self.assertIsInstance(told[0], narration.Recap)
+        self.assertEqual(told[0].text, "The party opened the door.")
+
+    def test_offers_only_the_closing_tools(self):
+        # A die thrown after the scene is over would decide something nobody
+        # was at the table for, so `roll` and `check` are not on offer.
+        client, sent = client_serving(
+            [Chunk([Choice(Delta(content="done"), finish_reason="stop")])]
+        )
+        close_with(narrator_with(client), a_prompt())
+        offered = {tool["function"]["name"] for tool in sent[0]["tools"]}
+        self.assertEqual(offered, set(narration.CLOSING_TOOLS))
+        self.assertNotIn("roll", offered)
+        self.assertNotIn("scene", offered)
+
+    def test_records_before_it_sums_up(self):
+        client, sent = client_serving(
+            [
+                Chunk(
+                    [
+                        Choice(
+                            Delta(
+                                tool_calls=[
+                                    ToolDelta(0, "remember", '{"key": "brass-key",'),
+                                    ToolDelta(0, None, ' "value": "pocketed"}'),
+                                ]
+                            ),
+                            finish_reason="tool_calls",
+                        )
+                    ]
+                ),
+                Chunk([Choice(Delta(content="A key was found."), finish_reason="stop")]),
+            ],
+            [Chunk([Choice(Delta(content="A key was found."), finish_reason="stop")])],
+        )
+        told = close_with(narrator_with(client), a_prompt())
+
+        calls = [e for e in told if isinstance(e, narration.Calls)]
+        self.assertEqual(calls[0].calls[0].name, "remember")
+        self.assertEqual(
+            calls[0].calls[0].arguments, {"key": "brass-key", "value": "pocketed"}
+        )
+        self.assertEqual(told[-1].text, "A key was found.")
+        # What the tools came back with goes in before it writes the recap.
+        self.assertEqual(sent[1]["messages"][-1]["role"], "tool")
+
+    def test_a_refused_tool_is_told_it_was_refused(self):
+        client, sent = client_serving(
+            [
+                Chunk(
+                    [
+                        Choice(
+                            Delta(
+                                tool_calls=[
+                                    ToolDelta(0, "damage", '{"character": "Nobody"}')
+                                ]
+                            ),
+                            finish_reason="tool_calls",
+                        )
+                    ]
+                ),
+            ],
+            [Chunk([Choice(Delta(content="Nothing happened."), finish_reason="stop")])],
+        )
+
+        told = []
+
+        async def go():
+            generator = narrator_with(client).close(a_prompt())
+            sending = None
+            while True:
+                try:
+                    event = await generator.asend(sending)
+                except StopAsyncIteration:
+                    break
+                told.append(event)
+                sending = None
+                if isinstance(event, narration.Calls):
+                    sending = [
+                        narration.Result(call, "nobody here is called Nobody", failed=True)
+                        for call in event.calls
+                    ]
+            await generator.aclose()
+
+        asyncio.run(go())
+        self.assertTrue(sent[1]["messages"][-1]["content"].startswith("refused:"))
+
+    def test_asks_for_the_scene_model_it_was_given(self):
+        client, sent = client_serving(
+            [Chunk([Choice(Delta(content="done"), finish_reason="stop")])]
+        )
+        close_with(
+            narrator_with(client), a_prompt(model="anthropic/claude-haiku-4.5")
+        )
+        self.assertEqual(sent[0]["model"], "anthropic/claude-haiku-4.5")
+
+    def test_shows_it_the_scene_it_is_closing(self):
+        client, sent = client_serving(
+            [Chunk([Choice(Delta(content="done"), finish_reason="stop")])]
+        )
+        close_with(
+            narrator_with(client),
+            a_prompt(transcript=[("player", "I push the door"), ("gm", "It gives.")]),
+        )
+        shown = sent[0]["messages"][1]["content"]
+        self.assertIn("I push the door", shown)
+        self.assertIn("It gives.", shown)
+
+    def test_a_scene_with_nothing_said_in_it_still_asks(self):
+        # scenes.py does not call this for an empty scene, but nothing here
+        # may assume that: an empty transcript must not produce an empty user
+        # message, which some providers reject outright.
+        client, sent = client_serving(
+            [Chunk([Choice(Delta(content="done"), finish_reason="stop")])]
+        )
+        close_with(narrator_with(client), a_prompt(transcript=[]))
+        self.assertTrue(sent[0]["messages"][1]["content"].strip())
+
+    def test_a_mid_stream_error_is_a_narration_error(self):
+        client, _ = client_serving([Chunk(error={"message": "upstream fell over"})])
+        with self.assertRaises(narration.NarrationError):
+            close_with(narrator_with(client), a_prompt())
+
+    def test_empty_chunks_are_skipped_rather_than_ending_the_recap(self):
+        # Both shapes really arrive: a chunk with no choices at all, and one
+        # whose choice carries no delta. Reading either as the end would cut
+        # a recap off partway.
+        client, _ = client_serving(
+            [
+                Chunk([]),
+                Chunk([Choice(None)]),
+                Chunk([Choice(Delta(content="They crossed."), finish_reason="stop")]),
+            ]
+        )
+        told = close_with(narrator_with(client), a_prompt())
+        self.assertEqual(told[-1].text, "They crossed.")
+
+    def test_a_transport_failure_is_a_narration_error(self):
+        class Exploding:
+            class chat:
+                class completions:
+                    @staticmethod
+                    async def create(**kwargs):
+                        raise RuntimeError("connection reset")
+
+        with self.assertRaises(narration.NarrationError):
+            close_with(narrator_with(Exploding()), a_prompt())
+
+    def test_gives_up_rather_than_asking_forever(self):
+        # Better an empty recap than a scene that will not close.
+        asking = [
+            Chunk(
+                [
+                    Choice(
+                        Delta(tool_calls=[ToolDelta(0, "pass_time", '{"minutes": 1}')]),
+                        finish_reason="tool_calls",
+                    )
+                ]
+            )
+        ]
+        client, _ = client_serving(asking, asking, asking, asking)
+        told = close_with(narrator_with(client), a_prompt())
+        self.assertEqual(told[-1].text, "")
+
+
+class LongMemoryTests(unittest.TestCase):
+    def test_says_plainly_when_there_is_nothing_before_this_scene(self):
+        text = openrouter.system_prompt(a_prompt())
+        self.assertIn("first scene", text)
+
+    def test_carries_the_recaps_and_says_the_prose_is_gone(self):
+        prompt = a_prompt()
+        prompt.recaps = [("The causeway", "They crossed at dusk.")]
+        prompt.scene_title = "The flooded nave"
+        text = openrouter.system_prompt(prompt)
+
+        self.assertIn("They crossed at dusk.", text)
+        self.assertIn("The causeway", text)
+        self.assertIn("The flooded nave", text)
+        # A model that thinks it merely was not sent the detail will write as
+        # though it could ask for it.
+        self.assertIn("gone", text)
+
+    def test_an_untitled_earlier_scene_is_still_shown(self):
+        prompt = a_prompt()
+        prompt.recaps = [("", "Something happened.")]
+        text = openrouter.system_prompt(prompt)
+        self.assertIn("Something happened.", text)
+        self.assertIn("Untitled", text)

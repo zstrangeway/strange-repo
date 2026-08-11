@@ -1,11 +1,12 @@
 import json
+import os
 import uuid
 
 import parse
 from behave import given, register_type, then, when
 
 from environment import sql, with_session
-from gary_api import dice, world
+from gary_api import dice, narration, world
 from gary_api.narration import fake
 
 # behave's placeholders are greedy, so `the {character_class}` would swallow
@@ -645,6 +646,7 @@ def step_refusal_words(context):
     assert len(said.split()) > 3, said
 
 
+@then("gary should have been sent {count:d} prior turn")
 @then("gary should have been sent {count:d} prior turns")
 def step_prompt_transcript(context, count):
     assert fake.LAST is not None, "gary was never asked"
@@ -865,3 +867,194 @@ def step_turn_carries_roll(context, notation):
     assert gm, "gary took no turn"
     rolls = [roll["notation"] for turn in gm for roll in turn["rolls"]]
     assert notation in rolls, rolls
+
+
+# ------------------------------------------------------------------ scenes
+
+
+def _scenes(context, campaign_id=None):
+    """The scenes as gary-api reports them, freshly asked for."""
+    response = context.client.get(
+        f"/campaigns/{campaign_id or _campaign_id(context)}/scenes",
+        headers=_headers(context),
+    )
+    context.response = response
+    return response.json() if response.status_code == 200 else []
+
+
+@when("I read the scenes")
+def step_read_scenes(context):
+    context.scenes = _scenes(context)
+
+
+@when("I read their scenes")
+def step_read_their_scenes(context):
+    _scenes(context, context.other_campaign["id"])
+
+
+def _begin(context, title="", campaign_id=None):
+    context.response = context.client.post(
+        f"/campaigns/{campaign_id or _campaign_id(context)}/scenes",
+        json={"title": title},
+        headers=_headers(context),
+    )
+
+
+@given("a new scene begins")
+@when("a new scene begins")
+def step_new_scene(context):
+    _begin(context)
+
+
+@given('I begin a scene called "{title}"')
+@when('I begin a scene called "{title}"')
+def step_begin_named(context, title):
+    _begin(context, title)
+
+
+@when("I begin a scene in that campaign")
+def step_begin_in_that(context):
+    _begin(context)
+
+
+@then("there should be {count:d} scene")
+@then("there should be {count:d} scenes")
+def step_scene_count(context, count):
+    found = _scenes(context)
+    assert len(found) == count, f"expected {count} scenes, got {len(found)}"
+
+
+@then("the scene should be open")
+def step_scene_open(context):
+    found = _scenes(context)
+    assert found and found[0]["open"], f"no open scene in {found}"
+
+
+@then('the open scene should be called "{title}"')
+def step_open_scene_named(context, title):
+    found = [scene for scene in _scenes(context) if scene["open"]]
+    assert found, "no scene is open"
+    assert found[0]["title"] == title, f"open scene is {found[0]['title']!r}"
+
+
+@then("the first scene should be closed")
+def step_first_closed(context):
+    found = _scenes(context)
+    assert found and not found[0]["open"], f"first scene still open: {found}"
+
+
+@then("the first scene should have a recap")
+def step_first_recapped(context):
+    found = _scenes(context)
+    assert found[0]["recap"], f"no recap on {found[0]}"
+
+
+@then("the first scene should say its recap is missing")
+def step_first_unrecapped(context):
+    found = _scenes(context)
+    assert not found[0]["open"], "the scene did not close"
+    # Null rather than empty: gary being unable to say what happened is not
+    # the same as nothing having happened, and a blank would read as the
+    # latter.
+    assert found[0]["recap"] is None, f"expected no recap, got {found[0]['recap']!r}"
+
+
+@then("the recap of the first scene should have been among what gary was sent")
+def step_recap_sent(context):
+    assert fake.LAST, "gary was not asked anything"
+    assert fake.LAST.recaps, "gary was sent no recaps"
+
+
+@then("the stream should carry a scene change")
+def step_stream_scene(context):
+    assert _of(context, "scene"), f"no scene frame in {context.events}"
+
+
+@then("gary's turn should belong to the first scene")
+def step_turn_in_first_scene(context):
+    turns = context.client.get(
+        f"/campaigns/{_campaign_id(context)}/turns", headers=_headers(context)
+    ).json()
+    scenes_seen = _scenes(context)
+    first = scenes_seen[0]["id"]
+    gm = [turn for turn in turns if turn["role"] == "gm"]
+    assert gm, "gary said nothing"
+    assert gm[-1]["scene_id"] == first, "gary's turn landed in the wrong scene"
+
+
+@then("the turns should carry the scene they happened in")
+def step_turns_carry_scene(context):
+    turns = context.client.get(
+        f"/campaigns/{_campaign_id(context)}/turns", headers=_headers(context)
+    ).json()
+    assert turns and all(turn.get("scene_id") for turn in turns)
+
+
+@then("the transcript should read back {count:d} scenes")
+def step_transcript_scenes(context, count):
+    turns = context.client.get(
+        f"/campaigns/{_campaign_id(context)}/turns", headers=_headers(context)
+    ).json()
+    seen = {turn["scene_id"] for turn in turns}
+    assert len(seen) == count, f"turns spanned {len(seen)} scenes, expected {count}"
+
+
+@given("a scene is broken after {count:d} turns")
+def step_bound_turns(context, count):
+    os.environ["SCENE_TURNS"] = str(count)
+
+
+@given("a scene is broken after {count:d} characters")
+def step_bound_chars(context, count):
+    os.environ["SCENE_CHARS"] = str(count)
+    # Otherwise the turn bound fires first and the scenario would pass without
+    # the size bound existing at all.
+    os.environ["SCENE_TURNS"] = "999"
+
+
+@given('gary will remember "{key}" as "{value}" when the scene closes')
+def step_close_remembers(context, key, value):
+    fake.ON_CLOSE = [f"remember {key}={value}"]
+
+
+@given('gary will hurt "{name}" when the scene closes')
+def step_close_hurts(context, name):
+    fake.ON_CLOSE = [f"damage {name} 4"]
+
+
+@given("gary will roll dice when the scene closes")
+def step_close_rolls(context):
+    fake.ON_CLOSE = ["roll 1d20+3 Perception"]
+
+
+@given("gary is unreachable when the scene closes")
+def step_close_fails(context):
+    fake.ON_CLOSE = ["fail"]
+
+
+@then('the history should hold that change against the first scene')
+def step_history_against_scene(context):
+    first = _scenes(context)[0]["id"]
+    events = context.client.get(
+        f"/campaigns/{_campaign_id(context)}/history", headers=_headers(context)
+    ).json()
+    against = [event for event in events if event.get("scene_id") == first]
+    assert any(
+        event["kind"] == world.REMEMBERED for event in against
+    ), f"nothing remembered against the first scene: {events}"
+
+
+@then("the recap should have been asked of the scene model")
+def step_recap_model(context):
+    assert fake.LAST_CLOSE, "no scene was closed"
+    assert fake.LAST_CLOSE.model == narration.models.scene_model()
+
+
+@then("the scene model should not be the campaign's model")
+def step_recap_model_differs(context):
+    assert narration.models.scene_model() != narration.models.default()
+
+
+@then("gary should not have been asked to close anything")
+def step_nothing_closed(context):
+    assert fake.LAST_CLOSE is None, "a close pass ran on an empty scene"

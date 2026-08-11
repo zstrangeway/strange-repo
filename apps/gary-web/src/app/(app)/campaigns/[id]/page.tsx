@@ -13,10 +13,12 @@ import {
 } from "@gary/ui/components/card";
 import { Skeleton } from "@gary/ui/components/skeleton";
 
-import type { Campaign, Model, World } from "@/lib/api";
+import type { Campaign, Model, Scene, World } from "@/lib/api";
 import {
+  beginScene,
   campaign as readCampaign,
   runnableModels,
+  scenesOf,
   systemNamed,
   transcript as readTranscript,
   changeModel,
@@ -29,6 +31,7 @@ import { Notice } from "../../../form-parts";
 import Composer from "./composer";
 import ModelPicker from "./model-picker";
 import Party from "./party";
+import SceneBreak from "./scene-break";
 import Transcript, { type Entry } from "./transcript";
 
 // The table.
@@ -51,6 +54,7 @@ export default function CampaignPage({
   const [models, setModels] = useState<Model[]>([]);
   const [classes, setClasses] = useState<string[]>([]);
   const [world, setWorld] = useState<World | null>(null);
+  const [scenes, setScenes] = useState<Scene[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [busy, setBusy] = useState(false);
   const [trouble, setTrouble] = useState<string | undefined>(undefined);
@@ -60,8 +64,23 @@ export default function CampaignPage({
   // stale render would append the second half of a turn to the first.
   const answering = useRef<string | null>(null);
 
+  // Which scene the turns arriving now belong to. A ref for the same reason:
+  // the stream can open a new scene between renders, and a turn filed under
+  // the scene a stale render knew about would render in the wrong place.
+  const playing = useRef<string>("");
+
   const loadWorld = useCallback(async () => {
     setWorld(await worldOf(id));
+  }, [id]);
+
+  const loadScenes = useCallback(async () => {
+    const found = await scenesOf(id);
+    setScenes(found);
+    const open = found.find((scene) => scene.open) ?? found.at(-1);
+    if (open) {
+      playing.current = open.id;
+    }
+    return found;
   }, [id]);
 
   const load = useCallback(async () => {
@@ -75,6 +94,7 @@ export default function CampaignPage({
       runnableModels(),
       readTranscript(id),
       systemNamed(found.system),
+      loadScenes(),
     ]);
 
     setCampaign(found);
@@ -87,10 +107,11 @@ export default function CampaignPage({
         text: turn.content,
         rolls: turn.rolls ?? [],
         complete: turn.complete,
+        sceneId: turn.scene_id,
       })),
     );
     await loadWorld();
-  }, [id, loadWorld]);
+  }, [id, loadWorld, loadScenes]);
 
   useEffect(() => {
     // Fetching on mount, which is what an effect is for.
@@ -110,6 +131,7 @@ export default function CampaignPage({
           text: "",
           rolls: [],
           complete: false,
+          sceneId: playing.current,
         },
       ]);
       return;
@@ -135,6 +157,14 @@ export default function CampaignPage({
           entry.id === event.turn_id ? { ...entry, complete: true } : entry,
         ),
       );
+      return;
+    }
+
+    if (event.type === "scene") {
+      // gary asked for a break and the engine granted it once the turn was
+      // over. Everything said from here belongs to the scene it opened.
+      playing.current = event.scene_id;
+      void loadScenes();
       return;
     }
 
@@ -174,6 +204,7 @@ export default function CampaignPage({
       text: message,
       rolls: [],
       complete: true,
+      sceneId: playing.current,
     };
     setEntries((held) => [...held, mine]);
 
@@ -197,7 +228,10 @@ export default function CampaignPage({
     );
 
     setBusy(false);
-    await loadWorld();
+    // Both, and after the turn rather than during it: the engine may have
+    // broken a long scene before this turn even joined one, and the page has
+    // no other way to learn that happened.
+    await Promise.all([loadWorld(), loadScenes()]);
   }
 
   if (missing) {
@@ -259,7 +293,11 @@ export default function CampaignPage({
             <CardTitle>The story so far</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-6">
-            <Transcript entries={entries} who={user?.display_name ?? "You"} />
+            <Transcript
+              entries={entries}
+              scenes={scenes}
+              who={user?.display_name ?? "You"}
+            />
             <Notice error={trouble} />
             <Composer
               busy={busy}
@@ -270,6 +308,18 @@ export default function CampaignPage({
                   : undefined
               }
               onSay={say}
+            />
+            <SceneBreak
+              disabled={busy || party.length === 0}
+              onBreak={async (title) => {
+                const result = await beginScene(id, title);
+                if (result.scene) {
+                  playing.current = result.scene.id;
+                  await Promise.all([loadScenes(), loadWorld()]);
+                  return;
+                }
+                setTrouble(result.error);
+              }}
             />
           </CardContent>
         </Card>

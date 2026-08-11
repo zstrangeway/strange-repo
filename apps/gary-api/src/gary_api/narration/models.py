@@ -79,6 +79,12 @@ BUILT_IN: tuple[Model, ...] = (
 # transcript — a campaign nobody thought about should not be doing that.
 FALLBACK = "anthropic/claude-sonnet-5"
 
+# What closes a scene. Deliberately not the campaign's model: recapping is
+# summarising, not running a game — no dice, no degrees, no judgement about
+# what happens next — and it is the one call gary makes that nobody is
+# waiting on a sentence at a time. Fast and cheap is the whole specification.
+SCENE_FALLBACK = "anthropic/claude-haiku-4.5"
+
 # Which of the fetched list to put at the top. Kept small on purpose: a
 # suggestion that covers everything suggests nothing.
 SUGGESTED = tuple(model.id for model in BUILT_IN if model.suggested)
@@ -190,3 +196,8 @@ def model(identifier: str) -> Model:
 def default() -> str:
     """What a campaign that names no model runs on."""
     return os.environ.get("GM_MODEL", FALLBACK)
+
+
+def scene_model() -> str:
+    """What closes a scene, whatever the campaign itself runs on."""
+    return os.environ.get("SCENE_MODEL", SCENE_FALLBACK)

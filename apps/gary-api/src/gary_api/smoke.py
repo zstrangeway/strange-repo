@@ -105,6 +105,15 @@ def run_tool(call, ruleset, state, log):
             return f"{arguments.get('character')} is noted as {call.name}d", None
         if call.name in ("add_condition", "remove_condition"):
             return f"condition {call.name.split('_')[0]}ed", None
+        if call.name == "scene":
+            # Noted, exactly as the router notes it. One turn is not a scene,
+            # so there is nothing here to close — but a tool the model is
+            # offered and this cannot answer would report a failure the real
+            # router does not have.
+            return (
+                f"the scene will change to {arguments.get('title')!r} "
+                "when this turn ends"
+            ), None
     except Exception as error:
         return f"refused: {error}", None
 

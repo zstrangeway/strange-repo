@@ -10,6 +10,7 @@ from starlette.testclient import TestClient
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from gary_api import db, dice, identity, logs, narration
+from gary_api.narration import fake as fake_narrator
 from gary_api.app import app, create_app
 from gary_api.db import database_url
 from gary_api.models import Base
@@ -76,7 +77,20 @@ def before_scenario(context, scenario):
     # caches what it built.
     os.environ["GM_FAKE"] = "1"
     os.environ.pop("GM_MODEL", None)
+    os.environ.pop("SCENE_MODEL", None)
     narration.narrator.cache_clear()
+
+    # What the double will do when a scene closes. Module state, because no
+    # player message is being answered at a close — so unlike every other
+    # directive it has to be arranged rather than read, and unlike every other
+    # directive it can leak. Cleared here so it cannot.
+    fake_narrator.ON_CLOSE = None
+    fake_narrator.LAST_CLOSE = None
+
+    # The scene bound, back to its default per scenario. A spec that wants a
+    # four-turn scene sets it and must not hand that to the next one.
+    os.environ.pop("SCENE_TURNS", None)
+    os.environ.pop("SCENE_CHARS", None)
 
     # No key, so the model menu is the built-in list rather than whatever
     # OpenRouter is serving today. That is what makes these specs assert

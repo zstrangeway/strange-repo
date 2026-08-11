@@ -131,6 +131,51 @@ class Campaign(Base):
     events: Mapped[list["WorldEvent"]] = relationship(
         back_populates="campaign", cascade="all, delete-orphan"
     )
+    scenes: Mapped[list["Scene"]] = relationship(
+        back_populates="campaign", cascade="all, delete-orphan"
+    )
+
+
+class Scene(Base):
+    """A bounded stretch of play, and the unit of gary's memory.
+
+    What gary is told each turn is this scene's turns plus the recaps of the
+    ones before it — not every word since the campaign began. So a scene
+    boundary is where prose stops being memory: after it, what is left is the
+    world as the log has it, and the sentence below.
+
+    Which makes closing one the last moment at which something narrated but
+    never recorded can still be recorded, and that is what the close pass is
+    for. A null ``recap`` on a closed scene means gary could not be asked —
+    the scene still closed, because a context that goes on growing is worse
+    than a campaign missing a paragraph.
+    """
+
+    __tablename__ = "scenes"
+    __table_args__ = (
+        # One scene per ordinal per campaign, for the same reason world events
+        # are unique on their seq: the order is the meaning, and two scenes
+        # numbered alike would make "the scene before this one" ambiguous.
+        UniqueConstraint("campaign_id", "number", name="uq_scenes_campaign_number"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    campaign_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("campaigns.id", ondelete="CASCADE")
+    )
+    number: Mapped[int] = mapped_column(Integer)
+    title: Mapped[str] = mapped_column(String(160), default="")
+    recap: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Null while this is the scene being played. At most one per campaign.
+    closed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    campaign: Mapped[Campaign] = relationship(back_populates="scenes")
+    turns: Mapped[list["Turn"]] = relationship(back_populates="scene")
 
 
 class Character(Base):
@@ -172,6 +217,12 @@ class Turn(Base):
     campaign_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("campaigns.id", ondelete="CASCADE")
     )
+    # Which scene this was said in. Every turn has one — a turn outside a
+    # scene would be a turn nothing bounds, which is the state scenes exist
+    # to remove.
+    scene_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("scenes.id", ondelete="CASCADE")
+    )
     role: Mapped[str] = mapped_column(String(8))
     content: Mapped[str] = mapped_column(Text, default="")
     # False when a turn was cut off — the tab closed, the model fell over.
@@ -183,6 +234,7 @@ class Turn(Base):
     )
 
     campaign: Mapped[Campaign] = relationship(back_populates="turns")
+    scene: Mapped[Scene] = relationship(back_populates="turns")
     rolls: Mapped[list["Roll"]] = relationship(
         back_populates="turn", cascade="all, delete-orphan", lazy="selectin"
     )
@@ -247,6 +299,13 @@ class WorldEvent(Base):
     # campaign up before anybody has said anything.
     turn_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("turns.id", ondelete="SET NULL"), nullable=True
+    )
+    # Which scene it happened in. Carried separately from the turn because
+    # closing a scene records changes that belong to no turn — that is what
+    # reconciling is — and "what did the close pass decide" has to be
+    # answerable.
+    scene_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("scenes.id", ondelete="SET NULL"), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

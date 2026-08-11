@@ -9,6 +9,12 @@ in chat.
 | [`apps/gary-api`](apps/gary-api) | FastAPI + Postgres | The game — dice, rules, world and narration — plus accounts and sessions |
 | [`apps/gary-web`](apps/gary-web) | Next.js | The table: campaigns, characters, and a turn as it is written |
 
+Play is divided into **scenes**, which are the unit of gary's memory: the
+model is told the current scene and a recap of each one before it, so a long
+campaign does not cost more every turn forever. Closing a scene is also where
+the world is reconciled — the last moment something narrated but never
+recorded can still be recorded.
+
 The design worth knowing before reading either: **the model narrates and
 decides nothing.** Dice, the rules of the system being run, and the state of
 the world are deterministic engines, and the model asks them rather than

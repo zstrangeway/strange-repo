@@ -28,11 +28,13 @@ from openai import AsyncOpenAI
 
 from gary_api import logs
 from gary_api.narration.base import (
+    CLOSING_TOOLS,
     TOOLS,
     Calls,
     Call,
     NarrationError,
     Prompt,
+    Recap,
     Refused,
     Result,
     Said,
@@ -64,7 +66,14 @@ EFFORT = "medium"
 NUMBERS = {"dc", "modifier", "amount", "minutes"}
 
 
-def schema() -> list[dict]:
+def schema(offered: tuple[str, ...] | None = None) -> list[dict]:
+    """The tools, in the shape OpenAI-compatible APIs want.
+
+    Takes which ones rather than always all of them, because the close pass
+    is offered a subset — see ``narration.CLOSING_TOOLS``. A tool nobody can
+    usefully call at a given moment is better withheld than described and
+    then refused.
+    """
     described = {
         "notation": "Dice to roll, as NdM+K — for example 1d20+3.",
         "reason": "What the roll or check is for, in a word or two.",
@@ -77,6 +86,7 @@ def schema() -> list[dict]:
         "amount": "How many hit points.",
         "condition": "The condition, in one word.",
         "minutes": "How many minutes passed.",
+        "title": "A short name for the scene beginning.",
     }
     purpose = {
         "roll": "Roll dice. You never invent a number yourself — call this.",
@@ -91,10 +101,16 @@ def schema() -> list[dict]:
         "add_condition": "Record that a character is under a condition.",
         "remove_condition": "Record that a condition has ended.",
         "pass_time": "Record that time has passed.",
+        "scene": (
+            "Begin a new scene once this turn is over. Call this when the "
+            "story moves somewhere else, or time skips, or a chapter ends."
+        ),
     }
 
     built = []
     for name, fields in TOOLS.items():
+        if offered is not None and name not in offered:
+            continue
         properties = {
             field: {
                 "type": "integer" if field in NUMBERS else "string",
@@ -136,6 +152,7 @@ def system_prompt(prompt: Prompt) -> str:
             "You are Gary, a game master running a tabletop roleplaying game.",
             prompt.briefing,
             f"The module is {prompt.module_title}.\n\n{prompt.module_premise}",
+            _so_far(prompt),
             "The world as it currently stands:\n" + prompt.world,
             (
                 "Rules you follow without exception:\n"
@@ -157,6 +174,71 @@ def system_prompt(prompt: Prompt) -> str:
                 "Keep the prose tight — a paragraph or two, ending somewhere "
                 "the player can act. Address the player as 'you'. Do not "
                 "write their character's decisions for them."
+            ),
+        ]
+    )
+
+
+def _so_far(prompt: Prompt) -> str:
+    """The campaign before this scene, at a few sentences a scene.
+
+    What is below is all gary has of those scenes — the turns themselves are
+    out of context and are not coming back. Said plainly here, because a model
+    that thinks it merely was not sent the detail will write as though it
+    could ask for it.
+    """
+    if not prompt.recaps:
+        return (
+            "This is the first scene of the campaign. Nothing has happened "
+            "yet beyond what the module says."
+        )
+
+    lines = [
+        "Earlier scenes, in the only form you still have them. The prose of "
+        "those scenes is gone; these summaries and the world state below are "
+        "what is left, and they are enough — do not write as though you can "
+        "recall more."
+    ]
+    for index, (title, recap) in enumerate(prompt.recaps, start=1):
+        lines.append(f"{index}. {title or 'Untitled'} — {recap}")
+
+    if prompt.scene_title:
+        lines.append(f"The scene now being played is called {prompt.scene_title}.")
+
+    return "\n".join(lines)
+
+
+def closing_prompt(prompt: Prompt) -> str:
+    """What gary is told when a scene ends.
+
+    Two jobs, and the order matters: record first, sum up second. The
+    recording is the part with a deadline — after this the transcript is gone
+    and a fact nobody wrote down cannot be recovered — while the summary is
+    merely useful.
+    """
+    return "\n\n".join(
+        [
+            (
+                "You are Gary, and a scene of the game you are running has "
+                "just ended. You are not narrating now. You have two jobs."
+            ),
+            "The world as it currently stands:\n" + prompt.world,
+            (
+                "First: read the scene below and look for anything you "
+                "narrated that the world does not know about — somewhere the "
+                "party ended up, an injury, a fact established, time that "
+                "passed. Record each one with the matching tool. This is your "
+                "last chance to: the scene is about to leave your memory, and "
+                "what is not recorded now is lost. Record only what the scene "
+                "actually shows. Do not invent, and do not record something "
+                "the world already has."
+            ),
+            (
+                "Second: write a short recap of the scene — three or four "
+                "sentences, past tense, covering what changed and what is "
+                "unresolved. This is all you will be told about this scene "
+                "from now on, so write it for a reader who has forgotten "
+                "everything else."
             ),
         ]
     )
@@ -338,3 +420,100 @@ class OpenRouterNarrator:
                 )
 
         logger.warning("gm.too_many_rounds", model=prompt.model or self.model)
+
+    async def close(
+        self, prompt: Prompt
+    ) -> AsyncGenerator[Calls | Recap, list[Result] | None]:
+        conversation: list[dict] = [
+            {"role": "system", "content": closing_prompt(prompt)},
+            {
+                "role": "user",
+                "content": "The scene that just ended:\n\n"
+                + (
+                    "\n\n".join(
+                        f"{'Player' if role == 'player' else 'Gary'}: {content}"
+                        for role, content in prompt.transcript
+                        if content
+                    )
+                    or "Nothing was said."
+                ),
+            },
+        ]
+
+        # Fewer rounds than narrating gets. Reconciling a scene is a bounded
+        # job — read it once, record what is missing, sum it up — and a close
+        # pass still asking on the fourth round has stopped doing that.
+        for _ in range(4):
+            fragments = Fragments()
+            spoken: list[str] = []
+
+            try:
+                stream = await self.client.chat.completions.create(
+                    model=prompt.model or self.model,
+                    messages=conversation,
+                    tools=schema(CLOSING_TOOLS),
+                    max_tokens=MAX_TOKENS,
+                    stream=True,
+                )
+
+                async for chunk in stream:
+                    problem = getattr(chunk, "error", None)
+                    if problem:
+                        raise NarrationError(str(problem))
+                    if not chunk.choices:
+                        continue
+
+                    delta = chunk.choices[0].delta
+                    if delta is None:
+                        continue
+                    if delta.content:
+                        spoken.append(delta.content)
+                    fragments.add(getattr(delta, "tool_calls", None))
+
+            except NarrationError:
+                raise
+            except Exception as error:
+                raise NarrationError(str(error)) from error
+
+            if not fragments:
+                # Nothing more to record, so what it wrote is the recap.
+                yield Recap("".join(spoken).strip())
+                return
+
+            calls = fragments.calls()
+            conversation.append(
+                {
+                    "role": "assistant",
+                    "content": "".join(spoken),
+                    "tool_calls": [
+                        {
+                            "id": f"call_{index}",
+                            "type": "function",
+                            "function": {
+                                "name": call.name,
+                                "arguments": json.dumps(call.arguments),
+                            },
+                        }
+                        for index, call in enumerate(calls)
+                    ],
+                }
+            )
+
+            results = yield Calls(calls)
+            for index, result in enumerate(results or []):
+                conversation.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": f"call_{index}",
+                        "content": (
+                            f"refused: {result.summary}"
+                            if result.failed
+                            else result.summary
+                        ),
+                    }
+                )
+
+        # Out of rounds with nothing written. Better an empty recap than a
+        # scene that will not close.
+        logger.warning("gm.close_too_many_rounds", model=prompt.model or self.model)
+        yield Recap("")

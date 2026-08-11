@@ -18,6 +18,17 @@ this app's origin in `BROWSER_ORIGINS` or the browser makes every call and
 then refuses to hand back the answer. And gary-web's own log lines are in the
 browser console, not in any server log — nobody collects them.
 
+## Scenes on screen
+
+A scene is where gary's memory ends, so the table draws the seam. Above a
+boundary is the story; below it is what gary is actually working from, and a
+closed scene shows its recap because that recap is now the whole of what gary
+remembers of it. An undivided scroll would hide the most consequential thing
+about a long campaign.
+
+Breaking a scene by hand is the one control here that is slow on purpose — it
+runs a whole pass through a model — and the button says so while it waits.
+
 ## Streaming a turn
 
 A turn arrives as it is written, over SSE. **`EventSource` cannot be used**,

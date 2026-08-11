@@ -32,6 +32,9 @@ export const world = {
   // The campaign a scenario arranged, and the last thing said to gary in it.
   campaign: null,
   said: null,
+  // The pair of log lines the logging scenarios join up.
+  webCall: null,
+  apiCalls: [],
 };
 
 let webServer = null;
@@ -127,6 +130,8 @@ Before(async function () {
   world.verificationToken = null;
   world.campaign = null;
   world.said = null;
+  world.webCall = null;
+  world.apiCalls = [];
   world.page = await world.browser.newPage();
 
   // gary-web logs to the console now, so the console is where its lines are.

@@ -67,7 +67,7 @@ Then("gary-web should have logged the call it made to gary-api", async function 
 });
 
 Then("gary-api should have logged receiving that call", async function () {
-  world.apiCall = await waitForLine(
+  await waitForLine(
     apiLines,
     (line) =>
       line.message === "http.request" &&
@@ -75,13 +75,33 @@ Then("gary-api should have logged receiving that call", async function () {
       line.path === world.webCall.path,
     `http.request line from gary-api for ${world.webCall.path}`,
   );
+
+  // Every one of them, not the last. A page can call the same endpoint more
+  // than once — React runs mount effects twice in development, and the
+  // campaigns page fetches on mount — and then "the last line" means
+  // different requests in the two logs, because gary-web logs when a call
+  // finishes and gary-api logs when it arrives. Pairing on that basis fails
+  // about one run in ten and says nothing true when it does.
+  world.apiCalls = apiLines().filter(
+    (line) =>
+      line.message === "http.request" &&
+      line.app === "gary-api" &&
+      line.path === world.webCall.path,
+  );
 });
 
 Then("the two lines should carry the same request id", function () {
-  assert.equal(
-    world.apiCall.request_id,
-    world.webCall.request_id,
-    "the two apps logged the same call under different ids, so the two logs cannot be joined",
+  // The property: gary-api kept the id it was handed rather than minting its
+  // own, so one user action is findable in both logs. Matched by id across
+  // whatever gary-api recorded for that path, which is true however many
+  // times the page called it.
+  const seen = world.apiCalls.map((line) => line.request_id);
+
+  assert.ok(
+    seen.includes(world.webCall.request_id),
+    "the two apps logged the same call under different ids, so the two logs" +
+      ` cannot be joined. gary-web sent ${world.webCall.request_id} for` +
+      ` ${world.webCall.path}; gary-api recorded ${JSON.stringify(seen)}`,
   );
 });
 

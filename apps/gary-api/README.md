@@ -51,6 +51,39 @@ in `REGISTRY`. Nothing outside the package names a system —
 3.5e grade a check two ways; Pathfinder 2e grades it four, with the natural-20
 shift, and nothing between the model and the engine knows the difference.
 
+### Scenes
+
+Play is divided into scenes, and a scene is the unit of gary's memory. What
+the model is told each turn is **this scene's turns plus the recaps of the
+ones before it** — never every word since the campaign began. Without that a
+campaign costs more per turn the longer it runs, without limit, and what
+eventually breaks is not the bill but the model's grip on a context it cannot
+hold.
+
+So a boundary is where **prose stops being memory**. Across one, what carries
+is the world as the log has it and a few sentences a scene.
+
+Which makes closing a scene the last moment at which something narrated but
+never recorded can still be recorded — and that is what the close pass is for.
+It reads the scene, records what the world is missing, and writes the recap.
+**It is not a licence to assert**: it proposes into the same engines, through
+the same runner a turn uses, and is refused by the same refusals. It is
+offered fewer tools, not looser ones — no dice and no checks, because a die
+thrown after the fact decides something nobody was there for.
+
+A scene ends three ways: gary asks (the `scene` tool), the player says
+(`POST /campaigns/{id}/scenes`), or it has run past `SCENE_TURNS` or
+`SCENE_CHARS` and the engine breaks it regardless. That last one is the point
+— a bound a model can decline to apply is not a bound. A boundary always lands
+*after* a turn, never inside one.
+
+A scene closes even when gary cannot be reached to say what happened in it,
+and its recap is then null. A campaign missing a paragraph is worse than one
+with it; a campaign whose context never stops growing is worse than both.
+
+⚠️ **Recaps still accumulate.** This makes growth roughly 50× slower, not
+zero. The next lever is recapping the recaps, and it is not built.
+
 ### Playing a turn
 
 `POST /campaigns/{id}/turns` answers `text/event-stream`:
@@ -61,6 +94,7 @@ event: narration data: {"text": "The door groans"}      ← many of these
 event: roll      data: {"notation":"1d20+3","dice":[14],"modifier":3,
                         "total":17,"reason":"Perception"}
 event: world     data: {"kind":"moved","place":"the belfry stair"}
+event: scene     data: {"scene_id":"…","title":"The road north","number":2}
 event: done      data: {"turn_id": "…", "role": "gm"}
 event: refusal   data: {"detail":"…","code":"gm_refused"}
 event: error     data: {"detail":"…","code":"gm_unavailable"}
@@ -99,6 +133,8 @@ and server-side refusal fallbacks.
 | --- | --- |
 | `OPENROUTER_API_KEY` | The key narration needs. Unset means the built-in model list, and a narrator that cannot run. |
 | `GM_MODEL` | What a campaign that names no model runs on. Default `anthropic/claude-sonnet-5` — the suggestion list leads with Opus 5, but the thing to suggest first is not the thing to bill by default. |
+| `SCENE_MODEL` | What closes a scene. Default `anthropic/claude-haiku-4.5` — recapping is summarising, not running a game, and it is the one call nobody reads a sentence at a time. |
+| `SCENE_TURNS` / `SCENE_CHARS` | When a scene is broken whatever anybody thinks. Default 20 turns, 24000 characters. |
 | `GM_FAKE=1` | Stand in for the model, as `IDENTITY_FAKE` does for the providers. Set by the specs. |
 | `DICE_SEED` | Fix the dice, so a spec can assert a number rather than only that a number arrived. |
 

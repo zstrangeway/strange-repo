@@ -33,7 +33,8 @@ const waiting = new Map(); // provider -> {subject, email, name}
 
 const campaigns = new Map(); // id -> {id, user_id, name, system, module, model}
 const characters = new Map(); // id -> {id, campaign_id, name, ...}
-const turns = new Map(); // id -> {id, campaign_id, role, content, rolls, at}
+const turns = new Map(); // id -> {id, campaign_id, scene_id, role, content, ...}
+const scenes = new Map(); // id -> {id, campaign_id, number, title, recap, open}
 
 // What the next turn will be. A scenario says what gary does at the moment it
 // sends the message, exactly as it says who is signing in — no state left
@@ -151,6 +152,7 @@ export function reset() {
   campaigns.clear();
   characters.clear();
   turns.clear();
+  scenes.clear();
   providers = ["google", "facebook", "apple"];
   answeringWithGarbage = false;
   plan = null;
@@ -199,6 +201,45 @@ export function addCharacterTo(campaignId, { name, character_class }) {
   };
   characters.set(character.id, character);
   return character;
+}
+
+/** The scene a campaign is playing, opening its first if it has none — the
+ *  same lazy opening gary-api does, and for the same reason. */
+function openScene(campaignId) {
+  const found = [...scenes.values()].find(
+    (one) => one.campaign_id === campaignId && one.open,
+  );
+  if (found) {
+    return found;
+  }
+
+  const scene = {
+    id: randomUUID(),
+    campaign_id: campaignId,
+    number:
+      [...scenes.values()].filter((one) => one.campaign_id === campaignId)
+        .length + 1,
+    title: "",
+    recap: null,
+    open: true,
+  };
+  scenes.set(scene.id, scene);
+  return scene;
+}
+
+/** End the scene being played and open the next. The recap stands in for what
+ *  a model would have written — gary-api's close pass is a model call, and
+ *  this owes it the shape rather than the sentence. */
+function breakScene(campaignId, title) {
+  const closing = openScene(campaignId);
+  const said = [...turns.values()].filter((one) => one.scene_id === closing.id);
+  closing.open = false;
+  closing.recap = said.length
+    ? `Previously: ${said.map((one) => one.content).join(" ")}`
+    : null;
+  const opened = openScene(campaignId);
+  opened.title = title;
+  return opened;
 }
 
 export function campaignCalled(name) {
@@ -595,6 +636,46 @@ function handle(method, path, body, request, query) {
       };
     }
 
+    if (method === "GET" && under === "/scenes") {
+      openScene(campaign.id);
+      return {
+        status: 200,
+        body: [...scenes.values()]
+          .filter((one) => one.campaign_id === campaign.id)
+          .sort((a, b) => a.number - b.number)
+          .map((one) => ({
+            id: one.id,
+            number: one.number,
+            title: one.title,
+            recap: one.recap,
+            open: one.open,
+          })),
+      };
+    }
+
+    if (method === "POST" && under === "/scenes") {
+      if (partyOf(campaign.id).length === 0) {
+        return {
+          status: 409,
+          body: {
+            detail: "There is nobody in this campaign to play yet",
+            code: "no_party",
+          },
+        };
+      }
+      const opened = breakScene(campaign.id, String(body.title ?? ""));
+      return {
+        status: 201,
+        body: {
+          id: opened.id,
+          number: opened.number,
+          title: opened.title,
+          recap: opened.recap,
+          open: opened.open,
+        },
+      };
+    }
+
     if (method === "GET" && under === "/turns") {
       return {
         status: 200,
@@ -606,6 +687,7 @@ function handle(method, path, body, request, query) {
             role: turn.role,
             content: turn.content,
             complete: turn.complete,
+            scene_id: turn.scene_id,
             rolls: turn.rolls,
           })),
       };
@@ -647,9 +729,11 @@ async function stream(request, response, body, campaign) {
   // Stored before the stream opens, as gary-api does — what gary is told next
   // time is the transcript, so a turn that only existed on the wire would be
   // a turn the next one is never told about.
+  const scene = openScene(campaign.id);
   const mine = {
     id: randomUUID(),
     campaign_id: campaign.id,
+    scene_id: scene.id,
     role: "player",
     content: said,
     complete: true,
@@ -699,6 +783,7 @@ async function stream(request, response, body, campaign) {
   const answer = {
     id: randomUUID(),
     campaign_id: campaign.id,
+    scene_id: scene.id,
     role: "gm",
     content: "",
     complete: false,
@@ -726,6 +811,17 @@ async function stream(request, response, body, campaign) {
   await new Promise((resolve) => {
     release = resolve;
   });
+
+  // Gary asking for a break: acted on once the turn is over, as gary-api
+  // does it, and relayed on the same open stream.
+  if (doing.scene) {
+    const opened = breakScene(campaign.id, doing.scene);
+    await write("scene", {
+      scene_id: opened.id,
+      title: opened.title,
+      number: opened.number,
+    });
+  }
 
   answer.complete = true;
   await write("done", { turn_id: answer.id, role: "gm" });

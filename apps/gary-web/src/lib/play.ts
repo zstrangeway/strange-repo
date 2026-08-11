@@ -32,6 +32,7 @@ export type TurnEvent =
   | { type: "narration"; text: string }
   | { type: "roll"; roll: Roll }
   | { type: "world"; change: WorldChange }
+  | { type: "scene"; scene_id: string; title: string }
   | { type: "done"; turn_id: string }
   | { type: "refusal"; detail: string }
   | { type: "error"; detail: string };
@@ -105,6 +106,12 @@ function asEvent(name: string, payload: Record<string, unknown>): TurnEvent {
       return { type: "roll", roll: payload as unknown as Roll };
     case "world":
       return { type: "world", change: payload as unknown as WorldChange };
+    case "scene":
+      return {
+        type: "scene",
+        scene_id: String(payload.scene_id ?? ""),
+        title: String(payload.title ?? ""),
+      };
     case "done":
       return { type: "done", turn_id: String(payload.turn_id ?? "") };
     case "refusal":

@@ -89,7 +89,12 @@ class RefusedCallTests(unittest.TestCase):
         who = Stub()
         return asyncio.run(
             play._run(
-                None, Stub(), [who], narration.Call(name, arguments), uuid.uuid4()
+                None,
+                Stub(),
+                [who],
+                narration.Call(name, arguments),
+                uuid.uuid4(),
+                uuid.uuid4(),
             )
         )
 

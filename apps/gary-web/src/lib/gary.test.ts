@@ -20,6 +20,7 @@ vi.mock("./session", () => ({
 
 const {
   addCharacter,
+  beginScene,
   campaign,
   catalogue,
   completeSignIn,
@@ -29,6 +30,7 @@ const {
   me,
   myCampaigns,
   runnableModels,
+  scenesOf,
   signOut,
   startCampaign,
   systemNamed,
@@ -447,5 +449,44 @@ describe("transcript", () => {
     answering(REFUSED);
 
     expect(await transcript("c1")).toEqual([]);
+  });
+});
+
+describe("scenesOf", () => {
+  it("asks for every scene", async () => {
+    answering({ ok: true, data: [{ id: "s1", number: 1, open: true }] });
+
+    expect(await scenesOf("c1")).toEqual([{ id: "s1", number: 1, open: true }]);
+    expect(callApi).toHaveBeenCalledWith("/campaigns/c1/scenes", {
+      token: "a-token",
+    });
+  });
+
+  it("is empty when gary-api will not say", async () => {
+    // The table still renders; it just draws no seams.
+    answering(REFUSED);
+
+    expect(await scenesOf("c1")).toEqual([]);
+  });
+});
+
+describe("beginScene", () => {
+  it("hands back the scene it opened", async () => {
+    answering({ ok: true, data: { id: "s2", number: 2, open: true } });
+
+    expect(await beginScene("c1", "The flooded nave")).toEqual({
+      scene: { id: "s2", number: 2, open: true },
+    });
+    expect(callApi).toHaveBeenCalledWith("/campaigns/c1/scenes", {
+      method: "POST",
+      body: { title: "The flooded nave" },
+      token: "a-token",
+    });
+  });
+
+  it("passes on why it was refused", async () => {
+    answering(REFUSED);
+
+    expect(await beginScene("c1", "")).toEqual({ error: "Not allowed" });
   });
 });

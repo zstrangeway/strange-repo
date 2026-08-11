@@ -17,6 +17,7 @@ brackets at a real narrator is just a player typing square brackets.
     [[heal Bramble 2]]              put them back
     [[afflict Bramble frightened]]  add a condition
     [[time 30]]                     let time pass
+    [[scene The road north]]        ask for a new scene after this turn
     [[refuse]]                      decline, in words
     [[fail]]                        be unreachable
     [[stall]]                       start, then never finish
@@ -24,6 +25,11 @@ brackets at a real narrator is just a player typing square brackets.
 Anything else is narrated: the double echoes the message back inside a
 sentence, which is enough for a spec to assert the narration mentions what
 the player said without pinning prose nobody wrote.
+
+Closing a scene is the one thing here a message cannot say, because no player
+message is being answered — the scene is ending, not being played. So
+``ON_CLOSE`` is arranged by a step instead, and ``environment.py`` clears it
+between scenarios so it cannot leak the way message directives cannot.
 """
 
 import re
@@ -34,6 +40,7 @@ from gary_api.narration.base import (
     Calls,
     NarrationError,
     Prompt,
+    Recap,
     Refused,
     Result,
     Said,
@@ -101,6 +108,8 @@ def _call(directive: str) -> Call | None:
         return Call(
             "pass_time", {"minutes": int(rest) if rest.isdigit() else rest}
         )
+    if head == "scene":
+        return Call("scene", {"title": rest})
     return None
 
 
@@ -108,6 +117,16 @@ def _call(directive: str) -> Call | None:
 # told. Read by specs, never arranged by them — so it cannot carry anything
 # from one scenario into the next beyond what the next one overwrites.
 LAST: Prompt | None = None
+
+# What the double will do when a scene closes, as directives — the same ones a
+# message carries, since a close pass is the same machinery pointed at a
+# different moment. Set by a step, cleared per scenario. ``None`` means the
+# ordinary thing: a recap and nothing recorded.
+ON_CLOSE: list[str] | None = None
+
+# The last prompt a close pass was given, for the scenarios about which model
+# was asked and what it was shown.
+LAST_CLOSE: Prompt | None = None
 
 
 class FakeNarrator:
@@ -159,3 +178,23 @@ class FakeNarrator:
                 yield Said(" ")
 
         yield Said("The scene waits on you.")
+
+    async def close(
+        self, prompt: Prompt
+    ) -> AsyncGenerator[Calls | Recap, list[Result] | None]:
+        global LAST_CLOSE
+        LAST_CLOSE = prompt
+
+        asked = ON_CLOSE or []
+
+        if "fail" in asked:
+            raise NarrationError("the narrator could not be reached")
+
+        calls = [call for call in (_call(one) for one in asked) if call]
+        if calls:
+            yield Calls(calls)
+
+        # Built from the scene rather than invented, so a spec can assert the
+        # recap is about what happened without pinning prose nobody wrote.
+        said = " ".join(content for _, content in prompt.transcript if content)
+        yield Recap(f"In {prompt.scene_title or 'this scene'}: {said}".strip())

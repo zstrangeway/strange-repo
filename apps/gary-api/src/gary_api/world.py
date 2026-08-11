@@ -42,8 +42,15 @@ HEALED = "healed"
 AFFLICTED = "condition-added"
 RELIEVED = "condition-removed"
 ELAPSED = "time-passed"
+# A scene boundary. Nothing about the world changes here, which is why it
+# projects to nothing — but "when did the story turn a corner" is a question
+# the history should answer in order with everything else.
+SCENED = "scene-began"
 
-KINDS = (MOVED, REMEMBERED, FORGOTTEN, DAMAGED, HEALED, AFFLICTED, RELIEVED, ELAPSED)
+KINDS = (
+    MOVED, REMEMBERED, FORGOTTEN, DAMAGED, HEALED, AFFLICTED, RELIEVED,
+    ELAPSED, SCENED,
+)
 
 
 @dataclass
@@ -125,6 +132,12 @@ def clean(kind: str, payload: dict | None) -> dict:
             "character_id": _who(payload),
             "condition": _text(payload, "condition").lower(),
         }
+    if kind == SCENED:
+        # The one field here that may be blank. A scene nobody named is
+        # ordinary — the first one never is — and refusing it would make the
+        # log demand a title the game does not.
+        title = payload.get("title")
+        return {"title": title.strip() if isinstance(title, str) else ""}
     return {"minutes": _count(payload, "minutes")}
 
 
@@ -134,6 +147,7 @@ async def record(
     kind: str,
     payload: dict | None = None,
     turn_id: uuid.UUID | None = None,
+    scene_id: uuid.UUID | None = None,
 ) -> WorldEvent:
     """Write one thing that happened."""
     # Checked before the database is touched, not after. A refusal is the
@@ -154,6 +168,7 @@ async def record(
         kind=kind,
         payload=cleaned,
         turn_id=turn_id,
+        scene_id=scene_id,
     )
     database.add(event)
     await database.flush()
@@ -207,6 +222,13 @@ def project(characters: list[Character], events: list[WorldEvent]) -> World:
     for event in events:
         payload = event.payload or {}
         kind = event.kind
+
+        if kind == SCENED:
+            # A boundary is in the log so the history reads in order, but it
+            # changes nothing about the world — that is the point of it. Named
+            # here rather than left to fall through the chain below and miss,
+            # which would work by accident.
+            continue
 
         if kind == MOVED:
             world.place = payload["place"]

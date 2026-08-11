@@ -166,6 +166,17 @@ describe("parsing frames", () => {
     });
   });
 
+  it("reads a scene change", () => {
+    const { events } = parseFrames(
+      frame("scene", { scene_id: "s2", title: "The road north", number: 2 }),
+    );
+    expect(events[0]).toEqual({
+      type: "scene",
+      scene_id: "s2",
+      title: "The road north",
+    });
+  });
+
   it("reads a turn, a done and a refusal", () => {
     const { events } = parseFrames(
       frame("turn", { turn_id: "t1", role: "gm" }) +
@@ -198,6 +209,11 @@ describe("parsing frames", () => {
 
     expect(events[0]).toEqual({ type: "turn", turn_id: "", role: "" });
     expect(events[1]).toEqual({ type: "narration", text: "" });
+    expect(parseFrames(frame("scene", {})).events[0]).toEqual({
+      type: "scene",
+      scene_id: "",
+      title: "",
+    });
     expect(events[2]).toEqual({ type: "done", turn_id: "" });
     expect((events[3] as { detail: string }).detail).toContain("unavailable");
   });

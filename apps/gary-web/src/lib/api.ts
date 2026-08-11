@@ -130,11 +130,25 @@ export type Roll = {
   character?: string;
 };
 
+/** A bounded stretch of play, and the unit of gary's memory: it is told this
+ *  scene's turns and the recaps of the ones before it, never the whole
+ *  campaign. */
+export type Scene = {
+  id: string;
+  number: number;
+  title: string;
+  /** Null while a scene is being played, and also when it closed without gary
+   *  being reachable to say what happened. `open` tells the two apart. */
+  recap: string | null;
+  open: boolean;
+};
+
 export type Turn = {
   id: string;
   role: "player" | "gm";
   content: string;
   complete: boolean;
+  scene_id: string;
   /** Beside the turn they happened in, so a reloaded transcript shows a roll
    *  as a roll rather than losing it into the prose. */
   rolls: Roll[];

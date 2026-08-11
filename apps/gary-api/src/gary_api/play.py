@@ -19,9 +19,9 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from gary_api import db, dice, logs, narration, systems, world
+from gary_api import db, dice, logs, narration, scenes, systems, world
 from gary_api.auth import CurrentUser, Db, Refusal
-from gary_api.models import Campaign, Character, Roll, Turn
+from gary_api.models import Campaign, Character, Roll, Scene, Turn
 
 logger = logs.get_logger(__name__)
 
@@ -146,6 +146,8 @@ class EventResponse(BaseModel):
     seq: int
     kind: str
     payload: dict[str, Any]
+    # Which scene it happened in. Null only for events older than scenes.
+    scene_id: uuid.UUID | None
 
 
 class TurnResponse(BaseModel):
@@ -153,7 +155,25 @@ class TurnResponse(BaseModel):
     role: str
     content: str
     complete: bool
+    # Which scene it was said in, so a client can draw the seam where gary's
+    # memory has one rather than showing an undivided scroll.
+    scene_id: uuid.UUID
     rolls: list[dict[str, Any]]
+
+
+class SceneResponse(BaseModel):
+    id: uuid.UUID
+    number: int
+    title: str
+    # Null while a scene is being played, and also when it closed without gary
+    # being reachable to say what happened. The two are told apart by whether
+    # it is open.
+    recap: str | None
+    open: bool
+
+
+class NewScene(BaseModel):
+    title: str = Field(default="", max_length=160)
 
 
 def _as_system(ruleset: systems.Ruleset) -> dict:
@@ -446,6 +466,7 @@ async def read_transcript(
             "role": turn.role,
             "content": turn.content,
             "complete": turn.complete,
+            "scene_id": turn.scene_id,
             # Beside the turn they happened in, so a reloaded transcript shows
             # a roll as a roll rather than losing it into the prose.
             "rolls": [
@@ -465,6 +486,64 @@ async def read_transcript(
     ]
 
 
+def _as_scene(scene: Scene) -> dict:
+    return {
+        "id": scene.id,
+        "number": scene.number,
+        "title": scene.title,
+        "recap": scene.recap,
+        "open": scene.closed_at is None,
+    }
+
+
+@router.get("/campaigns/{campaign_id}/scenes")
+async def read_scenes(
+    campaign_id: uuid.UUID, database: Db, user: CurrentUser
+) -> list[SceneResponse]:
+    """Every scene, oldest first, with what each is remembered by."""
+    campaign = await _mine(database, user, campaign_id)
+    # Reading opens the first scene if there is not one yet, which is the same
+    # answer a campaign gives to its first turn — a campaign is always in a
+    # scene, and it would be odd for looking to be the thing that decides.
+    await scenes.current(database, campaign.id)
+    await database.commit()
+    return [_as_scene(scene) for scene in await scenes.all_of(database, campaign.id)]
+
+
+@router.post(
+    "/campaigns/{campaign_id}/scenes", status_code=status.HTTP_201_CREATED
+)
+async def begin_scene(
+    campaign_id: uuid.UUID, request: NewScene, database: Db, user: CurrentUser
+) -> SceneResponse:
+    """End the scene being played and start the next one.
+
+    Closing runs the reconciliation pass, so this can take as long as a model
+    takes — it is the one request here that is slow on purpose.
+    """
+    campaign = await _mine(database, user, campaign_id)
+
+    party = list(
+        await database.scalars(
+            select(Character)
+            .where(Character.campaign_id == campaign.id)
+            .order_by(Character.created_at, Character.name)
+        )
+    )
+    if not party:
+        # Same refusal as playing, for the same reason: a scene is a stretch
+        # of play, and there is nobody to play.
+        raise Refusal(
+            status.HTTP_409_CONFLICT,
+            "no_party",
+            "There is nobody in this campaign to play yet",
+        )
+
+    opened = await scenes.begin(database, campaign, party, _run, request.title)
+    await database.commit()
+    return _as_scene(opened)
+
+
 @router.get("/campaigns/{campaign_id}/history")
 async def read_history(
     campaign_id: uuid.UUID, database: Db, user: CurrentUser
@@ -476,7 +555,12 @@ async def read_history(
     """
     campaign = await _mine(database, user, campaign_id)
     return [
-        {"seq": event.seq, "kind": event.kind, "payload": event.payload or {}}
+        {
+            "seq": event.seq,
+            "kind": event.kind,
+            "payload": event.payload or {},
+            "scene_id": event.scene_id,
+        }
         for event in await world.history(database, campaign.id)
     ]
 
@@ -509,7 +593,12 @@ def _named(party: list[Character], name: str) -> Character:
 
 
 async def _run(
-    database, campaign: Campaign, party: list[Character], call, turn_id: uuid.UUID
+    database,
+    campaign: Campaign,
+    party: list[Character],
+    call,
+    turn_id: uuid.UUID | None,
+    scene_id: uuid.UUID,
 ) -> tuple[narration.Result, list[str]]:
     """Do what the narrator asked, or refuse it, and say what came of it.
 
@@ -520,7 +609,7 @@ async def _run(
     arguments = call.arguments or {}
 
     async def moved(kind: str, payload: dict, summary: str):
-        await world.record(database, campaign.id, kind, payload, turn_id)
+        await world.record(database, campaign.id, kind, payload, turn_id, scene_id)
         return narration.Result(call, summary), [
             _frame("world", {"kind": kind, **payload})
         ]
@@ -644,6 +733,16 @@ async def _run(
                 world.ELAPSED, {"minutes": minutes}, f"{minutes} minutes passed"
             )
 
+        if call.name == "scene":
+            # Noted, not acted on. A boundary inside a turn would leave that
+            # turn's narration half in each scene, and the close pass would
+            # run inside a stream that is still open. The turn that ends a
+            # scene is the last turn of it.
+            title = arguments.get("title", "")
+            return narration.Result(
+                call, f"the scene will change to {title!r} when this turn ends"
+            ), []
+
         raise world.WorldError(f"gary has no {call.name!r} to call")
 
     except (dice.DiceError, world.WorldError, systems.SystemError) as error:
@@ -685,12 +784,23 @@ async def take_turn(
     gary = narration.narrator(campaign.model or narration.models.default())
     said = gary.sanitise(request.message) or request.message
 
-    player_turn = Turn(campaign_id=campaign.id, role="player", content=said)
+    # A scene that has outgrown what may be sent every turn is broken here,
+    # before the turn joins it, rather than after — so this turn starts the
+    # new scene rather than being the straw that ended the old one. The bound
+    # is applied whether or not gary ever asks for a break, which is the only
+    # way a bound means anything.
+    scene = await scenes.current(database, campaign.id)
+    if await scenes.outgrown(database, scene):
+        scene = await scenes.begin(database, campaign, party, _run)
+
+    player_turn = Turn(
+        campaign_id=campaign.id, scene_id=scene.id, role="player", content=said
+    )
     database.add(player_turn)
     await database.commit()
 
     return StreamingResponse(
-        _stream(campaign.id, player_turn.id, request.message, gary),
+        _stream(campaign.id, scene.id, player_turn.id, request.message, gary),
         media_type="text/event-stream",
         # Whatever sits in front of this must not collect the whole body
         # before passing it on, or streaming is a stream-shaped hole.
@@ -698,7 +808,7 @@ async def take_turn(
     )
 
 
-async def _stream(campaign_id, player_turn_id, message, gary):
+async def _stream(campaign_id, scene_id, player_turn_id, message, gary):
     """The turn, as it happens.
 
     Opens its own session: this outlives the request handler, and the
@@ -715,13 +825,10 @@ async def _stream(campaign_id, player_turn_id, message, gary):
                 .order_by(Character.created_at, Character.name)
             )
         )
-        turns = list(
-            await database.scalars(
-                select(Turn)
-                .where(Turn.campaign_id == campaign_id)
-                .order_by(Turn.created_at, Turn.id)
-            )
-        )
+        # This scene's turns, not the campaign's. Prose stops being memory at
+        # a scene boundary; what crosses one is the world and the recaps.
+        scene = await database.get(Scene, scene_id)
+        turns = await scenes.turns_in(database, scene_id)
 
         ruleset = systems.ruleset(campaign.system_slug)
         module = systems.module(campaign.system_slug, campaign.module_slug)
@@ -737,9 +844,17 @@ async def _stream(campaign_id, player_turn_id, message, gary):
             world=world.render(state),
             message=message,
             transcript=[(turn.role, turn.content) for turn in turns],
+            scene_title=scene.title,
+            recaps=await scenes.recaps(database, campaign_id),
         )
 
-        gm_turn = Turn(campaign_id=campaign_id, role="gm", content="", complete=False)
+        gm_turn = Turn(
+            campaign_id=campaign_id,
+            scene_id=scene_id,
+            role="gm",
+            content="",
+            complete=False,
+        )
         database.add(gm_turn)
         await database.flush()
 
@@ -747,6 +862,7 @@ async def _stream(campaign_id, player_turn_id, message, gary):
 
         spoken: list[str] = []
         finished = False
+        wanted_scene: str | None = None
         generator = gary.narrate(prompt)
         sending: list[narration.Result] | None = None
 
@@ -768,8 +884,11 @@ async def _stream(campaign_id, player_turn_id, message, gary):
                     results = []
                     for call in event.calls:
                         result, frames = await _run(
-                            database, campaign, party, call, gm_turn.id
+                            database, campaign, party, call, gm_turn.id, scene_id
                         )
+                        if call.name == "scene":
+                            # Acted on once the stream is done, not here.
+                            wanted_scene = call.arguments.get("title", "")
                         results.append(result)
                         for frame in frames:
                             yield frame
@@ -809,5 +928,19 @@ async def _stream(campaign_id, player_turn_id, message, gary):
             else:
                 await database.delete(gm_turn)
                 await database.commit()
+
+        # Now the turn is over, and only now. Closing a scene runs a whole
+        # second pass through a model, and doing that mid-stream would stall
+        # the narration the player is reading.
+        if wanted_scene is not None:
+            opened = await scenes.begin(
+                database, campaign, party, _run, wanted_scene
+            )
+            await database.commit()
+            yield _frame(
+                "scene",
+                {"scene_id": str(opened.id), "title": opened.title,
+                 "number": opened.number},
+            )
 
         yield _frame("done", {"turn_id": str(gm_turn.id), "role": "gm"})
