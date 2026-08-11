@@ -12,6 +12,7 @@ import os
 import unittest
 from unittest.mock import AsyncMock, patch
 
+import httpx
 import jwt
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -122,49 +123,123 @@ class ReportingTests(unittest.TestCase):
         self.assertEqual(fine.call_count, 1)
 
 
-class GoogleTests(unittest.TestCase):
+class ProviderTestCase(unittest.TestCase):
+    """Drives a provider down to the wire rather than to its client object.
+
+    Mocking the library's ``get_profile`` was how the display name went wrong
+    unnoticed: the mocks returned a shape that method cannot return, so the
+    tests and the code agreed with each other and neither agreed with Google.
+    Answering the HTTP call instead means the fields we ask for are part of
+    what is under test.
+    """
+
+    def serving(self, payload, status=200):
+        self.requests = []
+
+        def handle(request):
+            self.requests.append(request)
+            return httpx.Response(status, json=payload)
+
+        self.provider._client.get_httpx_client = lambda: httpx.AsyncClient(
+            transport=httpx.MockTransport(handle)
+        )
+
+    def asked_for(self, param):
+        self.assertEqual(len(self.requests), 1, "expected exactly one profile call")
+        return self.requests[0].url.params[param]
+
+
+class GoogleTests(ProviderTestCase):
     def setUp(self):
         self.provider = GoogleProvider("id", "secret")
-
-    def _client(self, **overrides):
-        client = self.provider._client
-        client.get_access_token = AsyncMock(return_value={"access_token": "t"})
-        client.get_id_email = AsyncMock(return_value=("1234", "ada@example.com"))
-        client.get_profile = AsyncMock(
-            return_value={"names": [{"displayName": "Ada Lovelace"}]}
+        self.provider._client.get_access_token = AsyncMock(
+            return_value={"access_token": "t"}
         )
-        for name, value in overrides.items():
-            setattr(client, name, value)
-        return client
 
-    def test_identifies_someone(self):
-        self._client()
+    def person(self, **overrides):
+        """A People record shaped the way People actually shapes one."""
+        payload = {
+            "resourceName": "people/1234",
+            "names": [{"displayName": "Ada Lovelace"}],
+            "emailAddresses": [
+                {"value": "ada@example.com", "metadata": {"primary": True}}
+            ],
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_asks_people_for_the_name_as_well_as_the_address(self):
+        # The regression. httpx-oauth asks for emailAddresses alone, so a
+        # name could never arrive and everyone was named after their inbox.
+        self.serving(self.person())
         who = run(self.provider.identify("code", "http://back"))
 
-        self.assertEqual(who.subject, "1234")
+        self.assertIn("names", self.asked_for("personFields"))
         self.assertEqual(who.display_name, "Ada Lovelace")
 
+    def test_identifies_someone(self):
+        self.serving(self.person())
+        who = run(self.provider.identify("code", "http://back"))
+
+        self.assertEqual(who.subject, "people/1234")
+        self.assertEqual(who.email, "ada@example.com")
+
+    def test_carries_the_token_it_was_given(self):
+        self.serving(self.person())
+        run(self.provider.identify("code", "http://back"))
+
+        self.assertEqual(self.requests[0].headers["authorization"], "Bearer t")
+
+    def test_prefers_the_address_google_marks_primary(self):
+        self.serving(
+            self.person(
+                emailAddresses=[
+                    {"value": "old@example.com", "metadata": {}},
+                    {"value": "ada@example.com", "metadata": {"primary": True}},
+                ]
+            )
+        )
+        self.assertEqual(run(self.provider.identify("c", "u")).email, "ada@example.com")
+
+    def test_takes_the_only_address_when_none_is_marked_primary(self):
+        self.serving(
+            self.person(emailAddresses=[{"value": "ada@example.com", "metadata": {}}])
+        )
+        self.assertEqual(run(self.provider.identify("c", "u")).email, "ada@example.com")
+
     def test_falls_back_to_the_local_part_when_there_is_no_name(self):
-        self._client(get_profile=AsyncMock(return_value={"names": []}))
+        self.serving(self.person(names=[]))
         self.assertEqual(run(self.provider.identify("c", "u")).display_name, "ada")
 
     def test_a_names_entry_with_no_display_name_is_passed_over(self):
         # Google returns the list with entries that carry no displayName, so
         # the loop has to run out rather than take the first entry blindly.
-        self._client(get_profile=AsyncMock(return_value={"names": [{}, {}]}))
+        self.serving(self.person(names=[{}, {}]))
         self.assertEqual(run(self.provider.identify("c", "u")).display_name, "ada")
 
     def test_a_profile_with_no_names_key_at_all(self):
-        self._client(get_profile=AsyncMock(return_value={}))
+        payload = self.person()
+        del payload["names"]
+        self.serving(payload)
         self.assertEqual(run(self.provider.identify("c", "u")).display_name, "ada")
 
     def test_a_declined_email_scope_is_refused(self):
-        self._client(get_id_email=AsyncMock(return_value=("1234", None)))
+        payload = self.person()
+        del payload["emailAddresses"]
+        self.serving(payload)
+        with self.assertRaises(IdentityError):
+            run(self.provider.identify("c", "u"))
+
+    def test_people_refusing_the_call_is_an_identity_error(self):
+        # What an unenabled People API looks like from here.
+        self.serving({"error": {"status": "PERMISSION_DENIED"}}, status=403)
         with self.assertRaises(IdentityError):
             run(self.provider.identify("c", "u"))
 
     def test_a_refusal_from_google_is_an_identity_error(self):
-        self._client(get_access_token=AsyncMock(side_effect=OAuth2Error("nope")))
+        self.provider._client.get_access_token = AsyncMock(
+            side_effect=OAuth2Error("nope")
+        )
         with self.assertRaises(IdentityError):
             run(self.provider.identify("c", "u"))
 
@@ -173,36 +248,57 @@ class GoogleTests(unittest.TestCase):
         self.assertIn("accounts.google.com", url)
 
 
-class FacebookTests(unittest.TestCase):
+class FacebookTests(ProviderTestCase):
     def setUp(self):
         self.provider = FacebookProvider("id", "secret")
+        self.provider._client.get_access_token = AsyncMock(
+            return_value={"access_token": "t"}
+        )
 
-    def _client(self, **overrides):
-        client = self.provider._client
-        client.get_access_token = AsyncMock(return_value={"access_token": "t"})
-        client.get_id_email = AsyncMock(return_value=("9876", "ada@example.com"))
-        client.get_profile = AsyncMock(return_value={"name": "Ada Lovelace"})
-        for name, value in overrides.items():
-            setattr(client, name, value)
-        return client
+    def person(self, **overrides):
+        payload = {"id": "9876", "name": "Ada Lovelace", "email": "ada@example.com"}
+        payload.update(overrides)
+        return payload
+
+    def test_asks_the_graph_for_the_name_as_well(self):
+        # Same regression as Google's: the library asks for id and email only.
+        self.serving(self.person())
+        who = run(self.provider.identify("c", "u"))
+
+        self.assertIn("name", self.asked_for("fields").split(","))
+        self.assertEqual(who.display_name, "Ada Lovelace")
 
     def test_identifies_someone(self):
-        self._client()
-        self.assertEqual(run(self.provider.identify("c", "u")).subject, "9876")
+        self.serving(self.person())
+        who = run(self.provider.identify("c", "u"))
+
+        self.assertEqual(who.subject, "9876")
+        self.assertEqual(who.email, "ada@example.com")
 
     def test_an_account_with_no_address_is_refused(self):
         # Facebook accounts can be registered with a phone number alone, so
         # this is a real path rather than a defensive one.
-        self._client(get_id_email=AsyncMock(return_value=("9876", None)))
+        payload = self.person()
+        del payload["email"]
+        self.serving(payload)
         with self.assertRaises(IdentityError):
             run(self.provider.identify("c", "u"))
 
     def test_falls_back_when_the_profile_carries_no_name(self):
-        self._client(get_profile=AsyncMock(return_value={}))
+        payload = self.person()
+        del payload["name"]
+        self.serving(payload)
         self.assertEqual(run(self.provider.identify("c", "u")).display_name, "ada")
 
+    def test_the_graph_refusing_the_call_is_an_identity_error(self):
+        self.serving({"error": {"message": "expired"}}, status=400)
+        with self.assertRaises(IdentityError):
+            run(self.provider.identify("c", "u"))
+
     def test_a_refusal_is_an_identity_error(self):
-        self._client(get_access_token=AsyncMock(side_effect=OAuth2Error("nope")))
+        self.provider._client.get_access_token = AsyncMock(
+            side_effect=OAuth2Error("nope")
+        )
         with self.assertRaises(IdentityError):
             run(self.provider.identify("c", "u"))
 
