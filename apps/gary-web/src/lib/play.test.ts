@@ -406,17 +406,41 @@ describe("taking a turn", () => {
   });
 
   it("says nothing when the reader is aborted", async () => {
+    // Held open rather than timed. The earlier version aborted and then slept
+    // 30ms hoping the read would throw inside that window; when it did not,
+    // the stream simply ended, the catch never ran, and the test passed
+    // anyway — its only assertion was that no error arrived, which is equally
+    // true of a stream that finished normally. So it went green while leaving
+    // the branch it exists for uncovered, which is how it turned up: as a
+    // coverage gate that failed about one run in five.
+    //
+    // Nothing here ends the response, so the read loop has exactly one way
+    // out, and taking it is what the assertions below describe.
     const controller = new AbortController();
+    let release: (() => void) | undefined;
     writer = async (write) => {
       await write(frame("narration", { text: "starting" }));
-      controller.abort();
-      await new Promise((resolve) => setTimeout(resolve, 30));
-      await write(frame("narration", { text: "never seen" }));
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
     };
 
     const seen: TurnEvent[] = [];
-    await takeTurn("c-1", "hello", (e) => seen.push(e), controller.signal);
-    expect(seen.every((event) => event.type !== "error")).toBe(true);
+    const turn = takeTurn(
+      "c-1",
+      "hello",
+      (event) => seen.push(event),
+      controller.signal,
+    );
+
+    await vi.waitFor(() => expect(seen).toHaveLength(1));
+    controller.abort();
+    await turn;
+    release?.();
+
+    // One frame, and no error about it: an abort is the page going away, and
+    // there is nobody left to tell.
+    expect(seen.map((event) => event.type)).toEqual(["narration"]);
   });
 
   it("reports a stream that breaks for a reason other than abort", async () => {
