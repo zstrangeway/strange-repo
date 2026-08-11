@@ -41,6 +41,19 @@ Feature: The opening
     Then gary should have been told the module is "the-drowned-belfry"
     And the party should have been among what gary was sent
 
+  # An opening that describes a place and stops is a postcard. What prompted
+  # this: "there's nothing actionable — no premise at all, just a description
+  # of the current location", and then, asked "why am I here?", gary handed
+  # the question back to the player.
+  #
+  # Which it did because nothing had told it. A premise is a situation in the
+  # world; a hook is why these people are standing in it tonight and what
+  # they have been asked to do. The module knows, so the module says.
+  Scenario: Gary is told why the party is here at all
+    Given I add "Bramble" the rogue
+    When I ask gary to begin
+    Then gary should have been told what brought the party here
+
   Scenario: The opening belongs to the first scene
     Given I add "Bramble" the rogue
     When I ask gary to begin

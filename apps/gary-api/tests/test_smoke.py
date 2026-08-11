@@ -36,10 +36,10 @@ class Stub:
                 self.answered.append(results)
 
 
-def run(script=None, explode=None):
+def run(script=None, explode=None, opening=False):
     stub = Stub(script or [narration.Said("A door.")], explode)
     with patch.object(narration, "narrator", lambda model=None: stub):
-        code = __import__("asyncio").run(smoke.play("a/model"))
+        code = __import__("asyncio").run(smoke.play("a/model", opening))
     return code, stub
 
 
@@ -150,6 +150,13 @@ class PlayTests(unittest.TestCase):
         code, _ = run([narration.Refused("Gary would rather not.")])
         self.assertEqual(code, 0)
 
+    def test_an_opening_is_asked_for_without_anybody_having_spoken(self):
+        # The one turn with an empty transcript. What it sends is the router's
+        # own instruction rather than a copy, so a smoke run cannot report on
+        # a prompt gary does not use.
+        code, stub = run([narration.Said("The causeway.")], opening=True)
+        self.assertEqual(code, 0)
+
     def test_being_unreachable_is_a_failure(self):
         code, _ = run(explode=narration.NarrationError("no route"))
         self.assertEqual(code, 1)
@@ -181,8 +188,9 @@ class MainTests(unittest.TestCase):
     def test_takes_the_model_from_the_command_line(self):
         seen = {}
 
-        async def fake_play(model):
+        async def fake_play(model, opening=False):
             seen["model"] = model
+            seen["opening"] = opening
             return 0
 
         with patch.dict("os.environ", {"OPENROUTER_API_KEY": "sk-or-test"}, clear=True):
@@ -191,11 +199,12 @@ class MainTests(unittest.TestCase):
                     with patch.object(smoke.sys, "argv", ["smoke", "a/named-model"]):
                         self.assertEqual(smoke.main(), 0)
         self.assertEqual(seen["model"], "a/named-model")
+        self.assertFalse(seen["opening"])
 
     def test_falls_back_to_the_default_model(self):
         seen = {}
 
-        async def fake_play(model):
+        async def fake_play(model, opening=False):
             seen["model"] = model
             return 0
 
@@ -205,6 +214,24 @@ class MainTests(unittest.TestCase):
                     with patch.object(smoke.sys, "argv", ["smoke"]):
                         self.assertEqual(smoke.main(), 0)
         self.assertEqual(seen["model"], narration.models.default())
+
+    def test_the_opening_flag_is_not_mistaken_for_a_model(self):
+        # `smoke --opening` names no model, and reading the flag as one would
+        # ask OpenRouter for a model called "--opening".
+        seen = {}
+
+        async def fake_play(model, opening=False):
+            seen["model"] = model
+            seen["opening"] = opening
+            return 0
+
+        with patch.dict("os.environ", {"OPENROUTER_API_KEY": "sk-or-test"}, clear=True):
+            with patch.object(smoke, "play", fake_play):
+                with patch.object(smoke, "spend", lambda: None):
+                    with patch.object(smoke.sys, "argv", ["smoke", "--opening"]):
+                        self.assertEqual(smoke.main(), 0)
+        self.assertEqual(seen["model"], narration.models.default())
+        self.assertTrue(seen["opening"])
 
 
 if __name__ == "__main__":

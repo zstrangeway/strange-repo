@@ -27,6 +27,7 @@ import sys
 import httpx
 
 from gary_api import dice, narration, systems, world
+from gary_api import play as play_module
 from gary_api.narration import models
 
 # Chosen to make a well-behaved model reach for two different tools: a check
@@ -120,7 +121,7 @@ def run_tool(call, ruleset, state, log):
     return f"gary has no {call.name!r}", None
 
 
-async def play(model: str) -> int:
+async def play(model: str, opening: bool = False) -> int:
     # Whatever is registered first, rather than a system named here — this
     # file is outside the systems package and tests/test_pluggable.py fails
     # the build if anything out here learns a system's name. It caught this
@@ -137,8 +138,10 @@ async def play(model: str) -> int:
         module_title=module.title,
         module_premise=module.premise,
         world=world.render(state),
-        message=SAYS,
-        transcript=[("player", SAYS)],
+        # The opening answers gary-api's instruction rather than a player, so
+        # it is the one thing here where the transcript is genuinely empty.
+        message=play_module.OPENING if opening else SAYS,
+        transcript=[] if opening else [("player", SAYS)],
     )
 
     gary = narration.narrator(model)
@@ -149,7 +152,10 @@ async def play(model: str) -> int:
     print(f"model    {model}")
     print(f"system   {ruleset.name}")
     print(f"module   {module.title}")
-    print(f'player   "{SAYS}"')
+    if opening:
+        print("player   (nobody has said anything — this is the opening)")
+    else:
+        print(f'player   "{SAYS}"')
     print()
     print("narration " + "-" * 60)
 
@@ -235,10 +241,12 @@ def main() -> int:
         )
         return 2
 
-    model = sys.argv[1] if len(sys.argv) > 1 else models.default()
+    wanted = [one for one in sys.argv[1:] if one != "--opening"]
+    opening = "--opening" in sys.argv[1:]
+    model = wanted[0] if wanted else models.default()
 
     before = spend()
-    code = asyncio.run(play(model))
+    code = asyncio.run(play(model, opening))
     after = spend()
 
     if before is not None and after is not None:
