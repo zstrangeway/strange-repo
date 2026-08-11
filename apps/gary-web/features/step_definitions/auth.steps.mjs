@@ -261,3 +261,14 @@ Then("the address bar carries no message", async function () {
     `the address bar carried ${carried.join(", ")}: ${url.href}`,
   );
 });
+
+/** Facebook sends people back with "#_=_" on the URL. Navigating away from
+ *  the callback drops it, because a path-only URL carries no fragment — so
+ *  nothing in this app does the dropping. Pinned here rather than left to
+ *  luck: it is a property of how we navigate, and changing that would bring
+ *  the fragment back with nothing to notice. */
+Then("the address bar carries nothing the provider added", async function () {
+  const url = new URL(world.page.url());
+
+  assert.equal(url.hash, "", `the address bar kept ${url.hash}`);
+});

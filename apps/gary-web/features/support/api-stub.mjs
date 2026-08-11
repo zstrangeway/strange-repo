@@ -324,6 +324,13 @@ export async function start() {
           back.searchParams.set("error", "access_denied");
         }
         back.searchParams.set("state", url.searchParams.get("state") ?? provider);
+
+        // Facebook appends this to every redirect it makes. Nothing reads it
+        // and nothing breaks on it, but it rides along into the page unless
+        // the callback drops it, so the double does it too.
+        if (provider === "facebook") {
+          back.hash = "_=_";
+        }
         response.writeHead(302, { location: back.toString() });
         response.end();
         return;

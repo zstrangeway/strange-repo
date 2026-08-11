@@ -18,6 +18,7 @@ Feature: Connected accounts
     Then facebook should be connected
     And google should be connected
     And the address bar carries no message
+    And the address bar carries nothing the provider added
 
   Scenario: Either provider then reaches the same account
     Given facebook will say I am "ada@example.com" named "Ada Lovelace"
