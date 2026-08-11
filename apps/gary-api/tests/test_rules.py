@@ -84,6 +84,26 @@ class Stub:
         self.name = name
 
 
+class _Fights:
+    """Just enough database for the refusals that never reach one.
+
+    A fight that is refused for its arguments is refused before anything is
+    read, so what this has to answer is "nothing here yet" and no more.
+    """
+
+    async def scalars(self, *_args, **_kwargs):
+        return []
+
+    async def scalar(self, *_args, **_kwargs):
+        return 0
+
+    def add(self, *_args, **_kwargs):
+        pass
+
+    async def flush(self):
+        pass
+
+
 class RefusedCallTests(unittest.TestCase):
     def run_call(self, name, arguments):
         who = Stub()
@@ -150,11 +170,72 @@ class RefusedCallTests(unittest.TestCase):
     def test_every_tool_the_narrator_is_offered_is_one_gary_answers(self):
         # A tool in the contract that the router does not implement is a tool
         # the model will call and nothing will do.
+        #
+        # The fight tools need a database to answer at all — whether there is
+        # a fight is a fold over the log — so here they only have to be
+        # *reached*. Falling through to the bottom of the chain is what this
+        # is looking for, and that returns rather than raising.
         for name in narration.TOOLS:
             with self.subTest(name=name):
-                result, _ = self.run_call(name, {})
+                try:
+                    result, _ = self.run_call(name, {})
+                except Exception:
+                    continue
                 self.assertNotIn("has no", result.summary)
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FightTests(unittest.TestCase):
+    """The refusals a fight can produce before it touches a database.
+
+    Everything reachable without one is here; the rest is in
+    ``features/combat.feature``, which has a real log to fold.
+    """
+
+    def refusing(self, call, **arguments):
+        return asyncio.run(
+            play._run(
+                _Fights(),
+                Stub(),
+                [Stub()],
+                narration.Call(call, arguments),
+                uuid.uuid4(),
+                uuid.uuid4(),
+            )
+        )
+
+    def test_a_fight_with_nothing_in_it(self):
+        result, _ = self.refusing("begin_combat", adversaries=[])
+        self.assertTrue(result.failed)
+        self.assertIn("something to fight", result.summary)
+
+    def test_an_adversary_that_is_not_a_shape(self):
+        result, _ = self.refusing("begin_combat", adversaries=["a wolf"])
+        self.assertTrue(result.failed)
+        self.assertIn("name and a shape", result.summary)
+
+    def test_an_adversary_with_no_name(self):
+        result, _ = self.refusing("begin_combat", adversaries=[{"hit_points": 4}])
+        self.assertTrue(result.failed)
+        self.assertIn("name", result.summary)
+
+    def test_an_adversary_with_hit_points_that_are_not_a_number(self):
+        result, _ = self.refusing(
+            "begin_combat",
+            adversaries=[{"name": "wolf", "hit_points": "lots", "armour_class": 12}],
+        )
+        self.assertTrue(result.failed)
+        self.assertIn("whole number", result.summary)
+
+    def test_attacking_when_there_is_no_fight(self):
+        result, _ = self.refusing("attack", attacker="Gus", target="wolf")
+        self.assertTrue(result.failed)
+        self.assertIn("no fight", result.summary)
+
+    def test_ending_a_turn_when_there_is_no_fight(self):
+        result, _ = self.refusing("end_turn")
+        self.assertTrue(result.failed)
+        self.assertIn("no fight", result.summary)

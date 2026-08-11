@@ -19,6 +19,10 @@ brackets at a real narrator is just a player typing square brackets.
     [[heal Bramble 2]]              put them back
     [[afflict Bramble frightened]]  add a condition
     [[time 30]]                     let time pass
+    [[fight mud-creature]]          start a fight with one of those
+    [[attack Sara mud-creature]]    have whoever is up swing
+    [[endturn]]                     finish the current turn
+    [[peace]]                       call the fight off
     [[scene The road north]]        ask for a new scene after this turn
     [[refuse]]                      decline, in words
     [[fail]]                        be unreachable
@@ -88,14 +92,14 @@ def _call(directive: str) -> Call | None:
         if _DICE.match(first) or not tail:
             return Call("roll", {"notation": first, "reason": tail.strip()})
         notation, _, reason = tail.partition(" ")
-        return Call(
-            "roll",
-            {
-                "notation": notation,
-                "reason": reason.strip(),
-                "character": first,
-            },
-        )
+        call = {"notation": notation, "reason": reason.strip(), "character": first}
+        if not _DICE.match(notation):
+            # An ability between the name and the dice, which is how a roll
+            # for somebody gets a modifier now that it may not carry one.
+            call["ability"] = notation
+            call["notation"], _, call["reason"] = reason.strip().partition(" ")
+            call["reason"] = call["reason"].strip()
+        return Call("roll", call)
     if head == "check":
         # names [ability] dc reason — the ability is optional, and told from
         # the dc by not being a number.
@@ -116,6 +120,37 @@ def _call(directive: str) -> Call | None:
         if ability:
             call["ability"] = ability
         return Call("check", call)
+    if head == "fight":
+        # One adversary, named, with numbers a scenario does not care about —
+        # what a fight is *for* here is the order and the outcomes, and those
+        # are the engine's whatever the monster is made of.
+        return Call(
+            "begin_combat",
+            {
+                "adversaries": [
+                    {
+                        "name": rest.replace("-", " "),
+                        "hit_points": 11,
+                        "armour_class": 13,
+                        "attack_bonus": 2,
+                        "damage": "1d6",
+                    }
+                ]
+            },
+        )
+    if head == "attack":
+        attacker, _, target = rest.partition(" ")
+        return Call(
+            "attack",
+            {
+                "attacker": attacker.replace("-", " "),
+                "target": target.strip().replace("-", " "),
+            },
+        )
+    if head == "endturn":
+        return Call("end_turn", {})
+    if head == "peace":
+        return Call("end_combat", {})
     if head == "move":
         return Call("move_party", {"place": rest})
     if head == "remember":

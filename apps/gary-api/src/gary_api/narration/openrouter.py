@@ -86,12 +86,33 @@ WRAP_UP = (
 NUMBERS = {"dc", "amount", "minutes"}
 LISTS = {"characters"}
 
+# The one argument that is a list of objects rather than of names. Gary
+# authors what you fight — there is no bestiary to look one up in, and
+# choosing the monster is the one genuinely authorial thing in a fight — but
+# what happens to it from there is the engine's.
+FOES = {"adversaries"}
+FOE = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string", "description": "What it is called."},
+        "hit_points": {"type": "integer", "description": "How much it can take."},
+        "armour_class": {"type": "integer", "description": "How hard it is to hit."},
+        "attack_bonus": {"type": "integer", "description": "What it adds to hit."},
+        "damage": {
+            "type": "string",
+            "description": "What it does when it lands, as NdM+K.",
+        },
+    },
+    "required": ["name", "hit_points", "armour_class"],
+}
+
 DESCRIBED = {
     "notation": "Dice to roll, as NdM+K — for example 1d20+3.",
     "reason": "What the roll or check is for, in a word or two.",
     "character": (
         "Whose roll this is, by name. Leave it out for a roll about the "
-        "world rather than about a person."
+        "world rather than about a person. A roll that names somebody takes "
+        "plain dice — no modifier in the notation."
     ),
     "characters": (
         "Everyone making this check, by name. One call covers all of them: "
@@ -109,6 +130,9 @@ DESCRIBED = {
     "condition": "The condition, in one word.",
     "minutes": "How many minutes passed.",
     "title": "A short name for the scene beginning.",
+    "adversaries": "Everything the party is now fighting.",
+    "attacker": "Who is swinging, by name — a character or an adversary.",
+    "target": "Who they are swinging at, by name.",
 }
 
 # Fields a call may leave out. Not the same as fields that do not matter: a
@@ -120,6 +144,8 @@ OPTIONAL = {"character", "ability"}
 
 def described_as(field: str) -> dict:
     """One argument, in JSON Schema."""
+    if field in FOES:
+        return {"type": "array", "items": FOE, "description": DESCRIBED[field]}
     if field in LISTS:
         return {
             "type": "array",
@@ -159,6 +185,20 @@ def schema(offered: tuple[str, ...] | None = None) -> list[dict]:
             "Begin a new scene once this turn is over. Call this when the "
             "story moves somewhere else, or time skips, or a chapter ends."
         ),
+        "begin_combat": (
+            "Start a fight. You say what they are fighting; initiative and "
+            "the order are rolled for you and you never decide them."
+        ),
+        "attack": (
+            "Have whoever is up swing at somebody. Whether it lands and what "
+            "it costs are the rules' to say, not yours."
+        ),
+        "end_turn": (
+            "Finish the current combatant's turn and move to the next. Never "
+            "call this for the character the player plays — their turn is "
+            "theirs to take."
+        ),
+        "end_combat": "Call the fight off, when it is over or nobody wants it.",
     }
 
     built = []

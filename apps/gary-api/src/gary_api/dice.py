@@ -66,6 +66,20 @@ def reseed() -> None:
     _random = random.Random()
 
 
+def modifier_in(notation: str) -> int:
+    """What a notation adds, without rolling it.
+
+    Asked so that a roll made for a person can be refused before any dice are
+    thrown: what a character adds to a die is their sheet's to say, and a
+    narrator supplying it is the one thing the engines exist to stop.
+    """
+    match = NOTATION.match(notation or "")
+    if not match:
+        raise DiceError(f"gary cannot roll {notation!r}")
+    _, _, sign, amount = match.groups()
+    return 0 if not amount else int(amount) * (-1 if sign == "-" else 1)
+
+
 def roll(notation: str, reason: str = "") -> Roll:
     """Roll ``NdM+K`` and say what came up.
 

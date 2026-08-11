@@ -21,7 +21,15 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from gary_api import db, dice, logs, narration, scenes, systems, world
 from gary_api.auth import CurrentUser, Db, Refusal
-from gary_api.models import Campaign, Character, Roll, Scene, Turn, WorldEvent
+from gary_api.models import (
+    Adversary,
+    Campaign,
+    Character,
+    Roll,
+    Scene,
+    Turn,
+    WorldEvent,
+)
 
 logger = logs.get_logger(__name__)
 
@@ -158,11 +166,40 @@ class MemberResponse(BaseModel):
     played_by: str
 
 
+class FoeResponse(BaseModel):
+    id: str
+    name: str
+    hp: int
+    max_hp: int
+    armour_class: int
+    conditions: list[str]
+    down: bool
+
+
+class InOrder(BaseModel):
+    id: str
+    name: str
+    side: str
+
+
+class FightResponse(BaseModel):
+    order: list[InOrder]
+    # Where in the order it is, rather than who — a client rendering the list
+    # wants to highlight a position, and the name is in the list already.
+    at: int
+    round: int
+
+
 class WorldResponse(BaseModel):
     place: str
     minutes: int
     facts: dict[str, str]
     party: list[MemberResponse]
+    # What the party has fought, still standing or not. Kept after a fight
+    # ends because a monster that was killed is a fact about the campaign.
+    enemies: list[FoeResponse]
+    # Null when nobody is fighting, which is most of the time.
+    fight: FightResponse | None
 
 
 class EventResponse(BaseModel):
@@ -594,6 +631,40 @@ async def read_world(
             }
             for member in state.party
         ],
+        "enemies": [
+            {
+                "id": foe.id,
+                "name": foe.name,
+                "hp": foe.hp,
+                "max_hp": foe.max_hp,
+                "armour_class": foe.armour_class,
+                "conditions": foe.conditions,
+                "down": foe.down,
+            }
+            for foe in state.enemies
+        ],
+        "fight": (
+            {
+                "order": [
+                    {
+                        "id": who,
+                        "name": (
+                            state.anyone(who).name if state.anyone(who) else "?"
+                        ),
+                        "side": (
+                            "party"
+                            if isinstance(state.anyone(who), world.Member)
+                            else "adversary"
+                        ),
+                    }
+                    for who in state.fight.order
+                ],
+                "at": state.fight.at,
+                "round": state.fight.round,
+            }
+            if state.fight
+            else None
+        ),
     }
 
 
@@ -633,7 +704,11 @@ async def read_transcript(
                     # The same shape the stream sent, so a reload shows what
                     # was on screen a moment ago rather than a plainer
                     # version of it.
-                    "character": roll.character.name if roll.character else None,
+                    "character": (
+                        roll.character.name
+                        if roll.character
+                        else roll.adversary.name if roll.adversary else None
+                    ),
                     "ability": roll.ability,
                 }
                 for roll in turn.rolls
@@ -738,6 +813,213 @@ def _named(party: list[Character], name: str) -> Character:
     raise world.WorldError(f"nobody here is called {name!r}")
 
 
+# What a character is worth defending themselves with. Armour class belongs on
+# a sheet and characters do not have one yet — deriving it from class and
+# equipment is the rules engine's job and it does not do that either — so this
+# is a stated default rather than a guess dressed as one.
+DEFAULT_AC = 12
+# And what an unarmed or unspecified swing does. Weapons are not modelled.
+DEFAULT_DAMAGE = "1d6"
+
+
+def _text_of(payload: dict, key: str) -> str:
+    value = payload.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise world.WorldError(f"an adversary needs a {key}")
+    return value.strip()
+
+
+def _count_of(payload: dict, key: str) -> int:
+    value = payload.get(key)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise world.WorldError(f"an adversary's {key} must be a whole number")
+    return value
+
+
+async def _either_side(database, campaign, party, name: str):
+    """That name, whichever side it is on, and which column holds it."""
+    try:
+        return "character_id", _named(party, name)
+    except world.WorldError:
+        pass
+
+    wanted = (name or "").strip().lower()
+    for adversary in await database.scalars(
+        select(Adversary).where(Adversary.campaign_id == campaign.id)
+    ):
+        if adversary.name.lower() == wanted:
+            return "adversary_id", adversary
+    raise world.WorldError(f"nobody here is called {name!r}")
+
+
+def _in_fight(state: world.World, name: str):
+    """Whoever that is, on either side, by the name a person would use."""
+    wanted = (name or "").strip().lower()
+    for candidate in [*state.party, *state.enemies]:
+        if candidate.name.lower() == wanted:
+            return candidate
+    raise world.WorldError(f"nobody in this fight is called {name!r}")
+
+
+async def _fighting(
+    database, campaign, party, foes, call, arguments, rolled, moved, turn_id
+):
+    """The four things that can happen to a fight.
+
+    Together rather than spread through the chain in ``_run``, because every
+    one of them needs the same two things first — the world as it stands, and
+    whether there is a fight at all — and because they are one feature.
+
+    What gary decides here: who is fighting, and what somebody tries. What it
+    does not: who goes first, whether a blow lands, or what it costs.
+    """
+    ruleset = systems.ruleset(campaign.system_slug)
+    state = await world.of(database, campaign.id)
+    fight = state.fight
+    rows = {str(one.id): one for one in [*party, *foes]}
+
+    if call.name == "begin_combat":
+        if fight is not None:
+            raise world.WorldError("a fight is already happening")
+        # No check that anybody is here to fight it: the turn endpoint refuses
+        # a campaign with no party before a byte is streamed, so a fight
+        # cannot be started in one. A guard here would be a branch nothing
+        # could reach.
+
+        wanted = arguments.get("adversaries") or []
+        if not isinstance(wanted, list) or not wanted:
+            raise world.WorldError("a fight needs something to fight")
+
+        made = []
+        for one in wanted:
+            if not isinstance(one, dict):
+                raise world.WorldError("each adversary needs a name and a shape")
+            adversary = Adversary(
+                campaign_id=campaign.id,
+                name=_text_of(one, "name")[:80],
+                max_hp=_count_of(one, "hit_points"),
+                armour_class=_count_of(one, "armour_class"),
+                attack_bonus=int(one.get("attack_bonus") or 0),
+                damage=str(one.get("damage") or DEFAULT_DAMAGE)[:32],
+            )
+            database.add(adversary)
+            made.append(adversary)
+        await database.flush()
+
+        # Everybody rolls and the engine sorts them. This is the whole point:
+        # gary decided the order before, with modifiers it invented.
+        frames, order = [], []
+        for character in party:
+            score = (character.abilities or {}).get(ruleset.initiative_ability, 10)
+            thrown = ruleset.initiative(ruleset.modifier(score))
+            frames.append(
+                _frame(
+                    "roll",
+                    rolled(thrown, character, ability=ruleset.initiative_ability),
+                )
+            )
+            order.append((thrown.total, str(character.id), character.name))
+        for adversary in made:
+            thrown = ruleset.initiative(adversary.attack_bonus)
+            frames.append(_frame("roll", rolled(thrown, foe=adversary)))
+            order.append((thrown.total, str(adversary.id), adversary.name))
+
+        # Highest first, ties broken by name so that folding the log twice
+        # lands the same way twice.
+        order.sort(key=lambda one: (-one[0], one[2]))
+        result, changed = await moved(
+            world.FOUGHT,
+            {"order": [one[1] for one in order]},
+            "a fight began. The order is "
+            + ", ".join(f"{name} ({total})" for total, _, name in order),
+        )
+        return result, [*frames, *changed]
+
+    if fight is None:
+        raise world.WorldError("there is no fight happening")
+
+    up = state.anyone(fight.whose)
+
+    if call.name == "end_combat":
+        return await moved(world.PEACE, {}, "the fight is over")
+
+    if call.name == "end_turn":
+        if isinstance(up, world.Member) and up.played_by == "player":
+            # The reason combat was asked for. Gary reaching the player's turn
+            # has to stop there and ask, not narrate through it.
+            #
+            # Once they have taken it, though, somebody has to move the order
+            # on — and it is gary, because the player says what they do rather
+            # than operating the machinery. So the bar is that they acted, not
+            # that gary may never do this: a fight where nothing could end the
+            # player's turn would stop on it forever.
+            raise world.WorldError(
+                f"it is {up.name}'s turn, and {up.name} is the player's to "
+                "take — ask them what they do"
+            )
+        return await moved(
+            world.TURNED, {}, f"{up.name if up else 'that'}'s turn is over"
+        )
+
+    # An attack, then. Whoever is up swings at somebody.
+    attacker = _in_fight(state, arguments.get("attacker", ""))
+    if up is None or attacker.id != up.id:
+        raise world.WorldError(
+            f"it is not {attacker.name}'s turn — it is "
+            f"{up.name if up else 'nobody'}'s"
+        )
+    target = _in_fight(state, arguments.get("target", ""))
+    if target.id == attacker.id:
+        raise world.WorldError(f"{attacker.name} cannot attack themselves")
+    if target.down:
+        raise world.WorldError(f"{target.name} is already down")
+
+    swinging = rows.get(attacker.id)
+    hitting = isinstance(attacker, world.Foe)
+    bonus = (
+        attacker.attack_bonus
+        if hitting
+        else ruleset.modifier((swinging.abilities or {}).get("str", 10))
+    )
+    guard = target.armour_class if isinstance(target, world.Foe) else DEFAULT_AC
+    swing = ruleset.resolve(
+        dc=guard, modifier=bonus, reason=f"attack on {target.name}"
+    )
+
+    mine = {"foe": swinging} if hitting else {"who": swinging}
+    frames = [_frame("roll", rolled(swing.roll, graded=swing, **mine))]
+
+    landed = swing.degree in (
+        systems.Degree.SUCCESS,
+        systems.Degree.CRITICAL_SUCCESS,
+    )
+
+    said = f"{attacker.name} missed {target.name}"
+    if landed:
+        hurt = dice.roll(
+            attacker.damage if hitting else DEFAULT_DAMAGE,
+            f"{attacker.name} hits {target.name}",
+        )
+        frames.append(_frame("roll", rolled(hurt, **mine)))
+        whose = "adversary_id" if isinstance(target, world.Foe) else "character_id"
+        _, changed = await moved(
+            world.DAMAGED,
+            {whose: target.id, "amount": hurt.total},
+            "",
+        )
+        frames.extend(changed)
+        said = f"{attacker.name} hit {target.name} for {hurt.total}"
+
+    # Swinging is what taking a turn *is* here — a turn holds one action and
+    # nothing else is modelled — so the order moves on by itself. Which is
+    # also how the player's turn ever ends: gary may not end it for them, and
+    # a fight that could not move past them would stop there forever.
+    _, over = await moved(world.TURNED, {}, "")
+    return narration.Result(
+        call, f"{said} ({swing.roll.total} against {guard}). Their turn is over."
+    ), [*frames, *over]
+
+
 async def _run(
     database,
     campaign: Campaign,
@@ -760,18 +1042,24 @@ async def _run(
             _frame("world", {"kind": kind, **payload})
         ]
 
-    def rolled(made, who: Character | None, graded=None, ability=None) -> dict:
+    def rolled(made, who=None, graded=None, ability=None, foe=None) -> dict:
         """Write one roll down and describe it, whoever it belonged to.
 
         One place, so what is stored and what is streamed cannot drift: the
         frame said who made a check long before the row had anywhere to keep
         it, and a reload lost the name every time.
+
+        ``who`` is a character row and ``foe`` an adversary row; at most one.
+        Rows rather than the world's projection of them, because what goes in
+        the column is an id the database will check.
         """
         reason = graded.reason if graded else made.reason
+        named = foe or who
         database.add(
             Roll(
                 turn_id=turn_id,
                 character_id=who.id if who else None,
+                adversary_id=foe.id if foe else None,
                 notation=made.notation,
                 dice=list(made.dice),
                 modifier=made.modifier,
@@ -790,8 +1078,11 @@ async def _run(
             "reason": reason,
             # Named rather than identified: everything downstream of this is
             # something a person reads.
-            "character": who.name if who else None,
+            "character": named.name if named else None,
             "ability": ability,
+            # So a card can tell a monster's roll from a party member's
+            # without having to know every name at the table.
+            "side": "adversary" if foe else "party",
         }
         if graded:
             described["dc"] = graded.dc
@@ -805,9 +1096,36 @@ async def _run(
             # inventing a fact to fill a field.
             named = (arguments.get("character") or "").strip()
             who = _named(party, named) if named else None
+            notation = arguments.get("notation", "")
 
-            made = dice.roll(arguments.get("notation", ""), arguments.get("reason", ""))
-            payload = rolled(made, who)
+            ability = (arguments.get("ability") or "").strip().lower() or None
+            modifier = 0
+            if who is not None:
+                # Plain dice for a person's roll. This is the hole everything
+                # in `check` was built to close, left open: gary ran a whole
+                # encounter through it, giving four characters initiative
+                # modifiers of +1, +2, +3 and +4 that came from nowhere, off
+                # sheets of straight tens. A rule that binds only the tool
+                # gary can route around is not a rule.
+                if dice.modifier_in(notation):
+                    raise world.WorldError(
+                        f"{notation!r} carries a modifier, and a roll for "
+                        f"{who.name} takes plain dice — name an ability and "
+                        "the sheet decides what it is worth"
+                    )
+                ruleset = systems.ruleset(campaign.system_slug)
+                if ability:
+                    if ability not in ruleset.abilities:
+                        raise world.WorldError(
+                            f"{ability!r} is not an ability in this system"
+                        )
+                    modifier = ruleset.modifier(
+                        (who.abilities or {}).get(ability, 10)
+                    )
+                    notation = f"{notation}{modifier:+d}" if modifier else notation
+
+            made = dice.roll(notation, arguments.get("reason", ""))
+            payload = rolled(made, who, ability=ability)
             await database.flush()
             return narration.Result(
                 call,
@@ -868,6 +1186,24 @@ async def _run(
             # three from memory.
             return narration.Result(call, "; ".join(said)), frames
 
+        if call.name in ("begin_combat", "attack", "end_turn", "end_combat"):
+            foes = list(
+                await database.scalars(
+                    select(Adversary).where(Adversary.campaign_id == campaign.id)
+                )
+            )
+            return await _fighting(
+                database,
+                campaign,
+                party,
+                foes,
+                call,
+                arguments,
+                rolled,
+                moved,
+                turn_id,
+            )
+
         if call.name == "move_party":
             place = arguments.get("place", "")
             return await moved(world.MOVED, {"place": place}, f"the party is at {place}")
@@ -879,13 +1215,18 @@ async def _run(
             )
 
         if call.name in ("damage", "heal"):
-            character = _named(party, arguments.get("character", ""))
+            # Either side. A monster takes hit points off the same way a
+            # character does, and a tool that only reached the party would
+            # send gary back to narrating a wound nothing recorded.
+            whose, character = await _either_side(
+                database, campaign, party, arguments.get("character", "")
+            )
             amount = arguments.get("amount")
             kind = world.DAMAGED if call.name == "damage" else world.HEALED
             verb = "took" if call.name == "damage" else "recovered"
             return await moved(
                 kind,
-                {"character_id": str(character.id), "amount": amount},
+                {whose: str(character.id), "amount": amount},
                 f"{character.name} {verb} {amount}",
             )
 

@@ -246,6 +246,42 @@ class Turn(Base):
     )
 
 
+class Adversary(Base):
+    """Something the party is fighting.
+
+    Its own table rather than a row in ``characters`` with a side on it. A
+    character is somebody at the table with a class, a level and an ability
+    array; a monster is a name, a number to beat and a way of hurting you,
+    and pushing both through one shape would make every query say which of
+    the two it meant.
+
+    Like a character, nothing here changes during play: current hit points
+    and conditions are projected from world events, so a monster on 3 has the
+    same kind of answer to "why" that a character does.
+
+    Gary authors these. Choosing what you fight is the one genuinely
+    authorial thing in a fight, and there is no bestiary to look them up in.
+    What happens to them once they exist is the engine's.
+    """
+
+    __tablename__ = "adversaries"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    campaign_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("campaigns.id", ondelete="CASCADE")
+    )
+    name: Mapped[str] = mapped_column(String(80))
+    max_hp: Mapped[int] = mapped_column(Integer)
+    armour_class: Mapped[int] = mapped_column(Integer)
+    # What it adds to hit, and what it does when it lands. Authored rather
+    # than derived: there is no monster sheet to derive them from.
+    attack_bonus: Mapped[int] = mapped_column(Integer, default=0)
+    damage: Mapped[str] = mapped_column(String(32), default="1d6")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
 class Roll(Base):
     """A roll that really happened, kept beside the turn it happened in.
 
@@ -267,6 +303,13 @@ class Roll(Base):
     character_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("characters.id", ondelete="SET NULL"), nullable=True
     )
+    # Or the thing on the other side of the fight, which rolls as often as
+    # the party does. Two columns rather than one polymorphic id, for the
+    # same reason the world events carry two: a bare uuid in a log tells you
+    # nothing about what to look it up in.
+    adversary_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("adversaries.id", ondelete="SET NULL"), nullable=True
+    )
     notation: Mapped[str] = mapped_column(String(32))
     dice: Mapped[list[int]] = mapped_column(JSONB)
     modifier: Mapped[int] = mapped_column(Integer, default=0)
@@ -286,6 +329,7 @@ class Roll(Base):
 
     turn: Mapped[Turn] = relationship(back_populates="rolls")
     character: Mapped[Character | None] = relationship(lazy="selectin")
+    adversary: Mapped[Adversary | None] = relationship(lazy="selectin")
 
 
 class WorldEvent(Base):

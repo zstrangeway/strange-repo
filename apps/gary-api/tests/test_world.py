@@ -194,3 +194,87 @@ class WhoPlaysThemTests(unittest.TestCase):
         text = world.render(world.project([Sheet(name="Maud")], []))
         self.assertIn("Maud", text)
         self.assertIn("yours to play", text)
+
+
+class FightEventTests(unittest.TestCase):
+    """The parts of a fight the log refuses, and the one it has to survive."""
+
+    def test_an_event_naming_neither_side(self):
+        with self.assertRaises(world.WorldError):
+            world.clean(world.DAMAGED, {"amount": 2})
+
+    def test_an_event_naming_both_sides(self):
+        # Not pedantry: which table to look the id up in is the whole content
+        # of the distinction, and an event claiming both answers neither.
+        with self.assertRaises(world.WorldError):
+            world.clean(
+                world.DAMAGED,
+                {
+                    "character_id": str(uuid.uuid4()),
+                    "adversary_id": str(uuid.uuid4()),
+                    "amount": 2,
+                },
+            )
+
+    def test_a_fight_with_nobody_in_it(self):
+        with self.assertRaises(world.WorldError):
+            world.clean(world.FOUGHT, {"order": []})
+
+    def test_a_turn_ending_carries_nothing(self):
+        self.assertEqual(world.clean(world.TURNED, {"anything": 1}), {})
+
+
+class AdvanceTests(unittest.TestCase):
+    """Moving a fight on, including the two edges a game reaches quickly."""
+
+    def _fight(self, hp):
+        state = world.World(
+            party=[
+                world.Member(id=str(n), name=f"P{n}", max_hp=8, hp=points)
+                for n, points in enumerate(hp)
+            ]
+        )
+        state.fight = world.Fight(order=[str(n) for n in range(len(hp))])
+        return state
+
+    def test_skips_whoever_is_down(self):
+        # A fight that stopped on somebody at nought and waited for them to
+        # act would never move again.
+        state = self._fight([8, 0, 8])
+        world._advance(state)
+        self.assertEqual(state.fight.whose, "2")
+
+    def test_gives_up_when_everybody_is_down(self):
+        # Reached only in the moment before the engine ends the fight. A fold
+        # over a log is not the place to start refusing history, so it stops
+        # rather than looping.
+        state = self._fight([0, 0])
+        world._advance(state)
+        self.assertEqual(state.fight.round, 2)
+
+    def test_does_nothing_when_there_is_no_fight(self):
+        state = world.World()
+        world._advance(state)
+        self.assertIsNone(state.fight)
+
+    def test_an_order_naming_somebody_who_is_gone_is_skipped(self):
+        # A character can be removed and the events they caused stay in the
+        # history, which is the correct reading of an append-only log.
+        state = self._fight([8, 8])
+        state.fight.order.append(str(uuid.uuid4()))
+        self.assertIsNone(state.foe("nobody"))
+        self.assertEqual(world.render(state).count("P0"), 2)
+
+
+class FoeLookupTests(unittest.TestCase):
+    def test_looks_past_the_first_one(self):
+        # Two, so the loop has to continue rather than answering from where
+        # it started — which one enemy would never prove.
+        state = world.World(
+            enemies=[
+                world.Foe(id="1", name="wolf", max_hp=4, hp=4),
+                world.Foe(id="2", name="bear", max_hp=9, hp=9),
+            ]
+        )
+        self.assertEqual(state.foe("2").name, "bear")
+        self.assertIsNone(state.foe("3"))

@@ -128,6 +128,21 @@ def run_tool(call, ruleset, state, log):
             return f"{arguments.get('character')} is noted as {call.name}d", None
         if call.name in ("add_condition", "remove_condition"):
             return f"condition {call.name.split('_')[0]}ed", None
+        if call.name == "begin_combat":
+            # Named back, so a smoke run shows whether the model authored a
+            # monster or asked for a fight with nothing in it.
+            wanted = arguments.get("adversaries") or []
+            names = ", ".join(str(one.get("name")) for one in wanted if isinstance(one, dict))
+            return f"a fight began against {names or 'nothing'}", None
+        if call.name == "attack":
+            return (
+                f"{arguments.get('attacker')} swung at {arguments.get('target')}",
+                None,
+            )
+        if call.name == "end_turn":
+            return "that turn is over", None
+        if call.name == "end_combat":
+            return "the fight is over", None
         if call.name == "scene":
             # Noted, exactly as the router notes it. One turn is not a scene,
             # so there is nothing here to close — but a tool the model is

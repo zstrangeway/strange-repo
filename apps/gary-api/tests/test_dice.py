@@ -90,3 +90,16 @@ class SeedingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ModifierTests(unittest.TestCase):
+    def test_reads_what_a_notation_adds(self):
+        self.assertEqual(dice.modifier_in("1d20+3"), 3)
+        self.assertEqual(dice.modifier_in("1d20-1"), -1)
+        self.assertEqual(dice.modifier_in("1d20"), 0)
+
+    def test_refuses_what_it_cannot_read(self):
+        # Asked before a roll for somebody is allowed through, so nonsense has
+        # to fail here rather than at the roll.
+        with self.assertRaises(dice.DiceError):
+            dice.modifier_in("1d20+lots")

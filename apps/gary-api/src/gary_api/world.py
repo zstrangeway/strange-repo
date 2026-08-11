@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from gary_api.models import Character, WorldEvent
+from gary_api.models import Adversary, Character, WorldEvent
 
 
 class WorldError(Exception):
@@ -47,26 +47,33 @@ ELAPSED = "time-passed"
 # the history should answer in order with everything else.
 SCENED = "scene-began"
 
+# A fight, as three things that happen to it. The order is decided once, by
+# the engine, and written down here — so "whose turn is it" is a fold over
+# the log like everything else rather than a column somebody advances.
+FOUGHT = "fight-began"
+TURNED = "turn-ended"
+PEACE = "fight-ended"
+
 KINDS = (
     MOVED, REMEMBERED, FORGOTTEN, DAMAGED, HEALED, AFFLICTED, RELIEVED,
-    ELAPSED, SCENED,
+    ELAPSED, SCENED, FOUGHT, TURNED, PEACE,
 )
 
 
 @dataclass
-class Member:
-    """A character as they currently stand."""
+class Fighter:
+    """The parts of anybody the log can change.
+
+    Shared by the party and by what they are fighting so that damage, healing
+    and conditions fold one way rather than two. The sheets they come from
+    are different tables and different shapes; what happens to them is the
+    same thing happening.
+    """
 
     id: str
     name: str
-    character_class: str
-    level: int
     max_hp: int
     hp: int
-    # Who speaks for them. Part of the world rather than beside it, because
-    # it is a fact about the table that gary needs on every turn — and the
-    # world is what gary is told on every turn.
-    played_by: str = "gary"
     conditions: list[str] = field(default_factory=list)
 
     @property
@@ -75,17 +82,69 @@ class Member:
 
 
 @dataclass
+class Member(Fighter):
+    """A character as they currently stand."""
+
+    character_class: str = ""
+    level: int = 1
+    # Who speaks for them. Part of the world rather than beside it, because
+    # it is a fact about the table that gary needs on every turn — and the
+    # world is what gary is told on every turn.
+    played_by: str = "gary"
+
+
+@dataclass
+class Foe(Fighter):
+    """Something being fought, as it currently stands."""
+
+    armour_class: int = 10
+    attack_bonus: int = 0
+    damage: str = "1d6"
+
+
+@dataclass
+class Fight:
+    """A fight in progress: who is in it, in what order, and where it is up to.
+
+    ``order`` holds ids of party members and adversaries alike, because turn
+    order does not care which side somebody is on — that is the whole reason
+    initiative exists.
+    """
+
+    order: list[str] = field(default_factory=list)
+    at: int = 0
+    round: int = 1
+
+    @property
+    def whose(self) -> str:
+        return self.order[self.at] if self.order else ""
+
+
+@dataclass
 class World:
     place: str = ""
     facts: dict[str, str] = field(default_factory=dict)
     minutes: int = 0
     party: list[Member] = field(default_factory=list)
+    enemies: list[Foe] = field(default_factory=list)
+    # None when nobody is fighting, which is most of the time.
+    fight: Fight | None = None
 
     def member(self, character_id: str) -> Member | None:
         for candidate in self.party:
             if candidate.id == character_id:
                 return candidate
         return None
+
+    def foe(self, adversary_id: str) -> Foe | None:
+        for candidate in self.enemies:
+            if candidate.id == adversary_id:
+                return candidate
+        return None
+
+    def anyone(self, id_: str) -> Fighter | None:
+        """Whoever that is, on either side."""
+        return self.member(id_) or self.foe(id_)
 
 
 def _text(payload: dict, key: str) -> str:
@@ -104,12 +163,32 @@ def _count(payload: dict, key: str) -> int:
     return value
 
 
-def _who(payload: dict) -> str:
-    raw = _text(payload, "character_id")
+def _id(payload: dict, key: str) -> str:
+    raw = _text(payload, key)
     try:
         return str(uuid.UUID(raw))
     except ValueError:
         raise WorldError(f"{raw!r} is not a character") from None
+
+
+def _who(payload: dict) -> dict:
+    """Whichever side the event names, normalised, and exactly one of them.
+
+    Two keys rather than one generic id, because a bare uuid in a log tells
+    you nothing about what to look it up in — and a history somebody reads a
+    year from now is most of the point of keeping one.
+    """
+    keys = [key for key in ("character_id", "adversary_id") if payload.get(key)]
+    if len(keys) != 1:
+        raise WorldError("an event names exactly one character or adversary")
+    return {keys[0]: _id(payload, keys[0])}
+
+
+def _order(payload: dict) -> list[str]:
+    order = payload.get("order")
+    if not isinstance(order, list) or not order:
+        raise WorldError("a fight needs somebody in it")
+    return [_id({"id": one}, "id") for one in order]
 
 
 def clean(kind: str, payload: dict | None) -> dict:
@@ -130,12 +209,18 @@ def clean(kind: str, payload: dict | None) -> dict:
     if kind == FORGOTTEN:
         return {"key": _text(payload, "key")}
     if kind in (DAMAGED, HEALED):
-        return {"character_id": _who(payload), "amount": _count(payload, "amount")}
+        return {**_who(payload), "amount": _count(payload, "amount")}
     if kind in (AFFLICTED, RELIEVED):
         return {
-            "character_id": _who(payload),
+            **_who(payload),
             "condition": _text(payload, "condition").lower(),
         }
+    if kind == FOUGHT:
+        return {"order": _order(payload)}
+    if kind in (TURNED, PEACE):
+        # Nothing to carry. What they mean is entirely where they sit in the
+        # log, which is the one thing a payload could not express.
+        return {}
     if kind == SCENED:
         # The one field here that may be blank. A scene nobody named is
         # ordinary — the first one never is — and refusing it would make the
@@ -198,10 +283,49 @@ async def of(database: AsyncSession, campaign_id: uuid.UUID) -> World:
         .where(Character.campaign_id == campaign_id)
         .order_by(Character.created_at, Character.name)
     )
-    return project(list(characters), await history(database, campaign_id))
+    adversaries = await database.scalars(
+        select(Adversary)
+        .where(Adversary.campaign_id == campaign_id)
+        .order_by(Adversary.created_at, Adversary.name)
+    )
+    return project(
+        list(characters),
+        await history(database, campaign_id),
+        list(adversaries),
+    )
 
 
-def project(characters: list[Character], events: list[WorldEvent]) -> World:
+def _advance(world: World) -> None:
+    """Move a fight on to the next one still standing.
+
+    Skipping the fallen is a rule rather than bookkeeping — a fight that
+    stopped on somebody at nought hit points and waited for them to act would
+    never move again — and it lives here because the log is the only thing
+    that knows both the order and who is down.
+    """
+    fight = world.fight
+    if fight is None:
+        return
+
+    for _ in range(len(fight.order)):
+        fight.at += 1
+        if fight.at >= len(fight.order):
+            fight.at = 0
+            fight.round += 1
+        standing = world.anyone(fight.whose)
+        if standing is None or not standing.down:
+            return
+
+    # Everybody in the order is down, which the engine ends the fight over
+    # before this can be reached twice. Left rather than raised: a fold over
+    # a log is not the place to start refusing history.
+
+
+def project(
+    characters: list[Character],
+    events: list[WorldEvent],
+    adversaries: list | None = None,
+) -> World:
     """Fold the log over the sheets.
 
     The sheets supply what does not change; the log supplies everything that
@@ -221,7 +345,19 @@ def project(characters: list[Character], events: list[WorldEvent]) -> World:
                 played_by=character.played_by,
             )
             for character in characters
-        ]
+        ],
+        enemies=[
+            Foe(
+                id=str(adversary.id),
+                name=adversary.name,
+                max_hp=adversary.max_hp,
+                hp=adversary.max_hp,
+                armour_class=adversary.armour_class,
+                attack_bonus=adversary.attack_bonus,
+                damage=adversary.damage,
+            )
+            for adversary in adversaries or []
+        ],
     )
 
     for event in events:
@@ -243,8 +379,16 @@ def project(characters: list[Character], events: list[WorldEvent]) -> World:
             world.facts.pop(payload["key"], None)
         elif kind == ELAPSED:
             world.minutes += payload["minutes"]
+        elif kind == FOUGHT:
+            world.fight = Fight(order=list(payload["order"]))
+        elif kind == TURNED:
+            _advance(world)
+        elif kind == PEACE:
+            world.fight = None
         else:
-            member = world.member(payload.get("character_id", ""))
+            member = world.anyone(
+                payload.get("character_id") or payload.get("adversary_id") or ""
+            )
             if member is None:
                 continue
             if kind == DAMAGED:
@@ -307,5 +451,40 @@ def render(world: World) -> str:
         lines.append("Established facts:")
         for key in sorted(world.facts):
             lines.append(f"  - {key}: {world.facts[key]}")
+
+    # A fight, if there is one. Stated every turn for the same reason the
+    # party's hit points are: gary running an encounter from what the last few
+    # paragraphs implied is exactly where a fight goes wrong, and the order is
+    # the first thing to slip.
+    if world.fight:
+        fight = world.fight
+        lines.append(f"A fight is happening. Round {fight.round}.")
+        lines.append("Order:")
+        for index, who in enumerate(fight.order):
+            standing = world.anyone(who)
+            if standing is None:
+                continue
+            mark = " <-- it is their turn" if index == fight.at else ""
+            state = "down" if standing.down else f"{standing.hp}/{standing.max_hp}"
+            lines.append(f"  {index + 1}. {standing.name} ({state}){mark}")
+
+        up = world.anyone(fight.whose)
+        if isinstance(up, Member) and up.played_by == "player":
+            # The whole reason any of this is built. Said as its own line
+            # rather than left to the marker above, because it is an
+            # instruction and the rest is a table.
+            lines.append(
+                f"It is {up.name}'s turn, and {up.name} is the player's. "
+                "Stop and ask them what they do. Do not decide it, do not "
+                "end their turn, and do not narrate past it."
+            )
+    elif world.enemies:
+        lines.append(
+            "Not fighting. Previously fought: "
+            + ", ".join(
+                f"{foe.name} ({'down' if foe.down else f'{foe.hp}/{foe.max_hp}'})"
+                for foe in world.enemies
+            )
+        )
 
     return "\n".join(lines)

@@ -93,6 +93,10 @@ class Ruleset(Protocol):
         """
         ...
 
+    def initiative(self, modifier: int) -> Roll:
+        """Roll for turn order. Raises SystemError if this system cannot."""
+        ...
+
     def briefing(self) -> str:
         """What the model is told about running this system.
 
@@ -130,6 +134,15 @@ class D20Ruleset:
     def modifier(self, score: int) -> int:
         """The third-edition-onward formula, which 5e and Pathfinder kept."""
         return (score - 10) // 2
+
+    # Which ability decides turn order. A system that uses a different one
+    # says so here rather than anywhere caring what it is called.
+    initiative_ability: str = "dex"
+
+    def initiative(self, modifier: int) -> Roll:
+        """One roll each, ordered highest first."""
+        notation = f"{self.check_die}{modifier:+d}" if modifier else self.check_die
+        return roll(notation, "initiative")
 
     def briefing(self) -> str:
         listed = ", ".join(degree.value for degree in self.degrees)

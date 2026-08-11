@@ -1,4 +1,5 @@
-from gary_api.systems.base import Module, TwoDegrees
+from gary_api.dice import Roll
+from gary_api.systems.base import Module, SystemError, TwoDegrees
 
 
 class ADnD1e(TwoDegrees):
@@ -63,3 +64,16 @@ class ADnD1e(TwoDegrees):
         exist to stop. Zero until somebody types the real tables in.
         """
         return 0
+
+    def initiative(self, modifier: int) -> Roll:
+        """Not yet, and refused rather than approximated.
+
+        First edition rolls one d6 per *side* and moves whole sides at a
+        time. That is a different shape from the flat, per-combatant order
+        everything downstream of this assumes — not a different number in the
+        same shape — so rolling a die each and sorting them would write a log
+        recording something that never happened at a first edition table.
+        """
+        raise SystemError(
+            "first edition rolls initiative by side, which is not built yet"
+        )

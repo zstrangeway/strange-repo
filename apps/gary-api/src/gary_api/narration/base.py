@@ -29,7 +29,9 @@ class NarrationError(Exception):
 # and the real thing cannot drift: a tool the spec exercises but the model is
 # never offered is a tool that does not exist.
 TOOLS = {
-    "roll": ("notation", "reason", "character"),
+    # An ability rather than a modifier here too, for the same reason: a
+    # roll made for a person may not carry a number gary chose.
+    "roll": ("notation", "reason", "character", "ability"),
     # Several at once, because one hazard at one difficulty is one thing
     # happening no matter how many people are standing in it. Asked for one at
     # a time it cost a round trip each, and a party of four crossing rotten
@@ -46,6 +48,12 @@ TOOLS = {
     "remove_condition": ("character", "condition"),
     "pass_time": ("minutes",),
     "scene": ("title",),
+    # A fight. Gary says who is in it and what they try; it never says who
+    # goes first, whether a blow lands, or how much it hurt.
+    "begin_combat": ("adversaries",),
+    "attack": ("attacker", "target"),
+    "end_turn": (),
+    "end_combat": (),
 }
 
 # What the close pass may call. A recap does not roll dice and does not grade
@@ -53,7 +61,20 @@ TOOLS = {
 # after the fact would decide something nobody was there for. Everything left
 # is a change to the world, which is the whole business of reconciling.
 CLOSING_TOOLS = tuple(
-    name for name in TOOLS if name not in ("roll", "check", "scene")
+    name
+    for name in TOOLS
+    if name
+    not in (
+        "roll",
+        "check",
+        "scene",
+        # Nor a fight. Reconciling looks back at a scene that has ended; a
+        # fight started or advanced there would be one nobody played.
+        "begin_combat",
+        "attack",
+        "end_turn",
+        "end_combat",
+    )
 )
 
 

@@ -126,3 +126,32 @@ Feature: What a roll says
     And "Osric" the fighter has dex 16, and is mine
     When I say "I edge along the lintel [[check Osric dex 12 balance]]"
     Then the check should have used a modifier of 0
+
+  # ------------------------------------------------------- the roll's own hole
+  #
+  # Everything above keeps gary from asserting a modifier on a check, and none
+  # of it mattered while `roll` still took a free-text NdM+K. Gary ran a whole
+  # encounter through that hole — "1d20+1", "1d20+2", "1d20+3", "1d20+4" for
+  # four characters' initiative, every number invented, every sheet a straight
+  # ten. A rule that only binds the tool gary can route around is not a rule.
+
+  Scenario: A roll for somebody takes plain dice
+    When I say "roll for it [[roll John 1d20+3 initiative]]"
+    Then the roll should be refused
+    And the refusal should say the sheet decides the modifier
+
+  Scenario: A roll for somebody can still name an ability
+    When I say "roll for it [[roll John dex 1d20 initiative]]"
+    Then the check should have used a modifier of 3
+
+  # A roll about the world has no sheet behind it, so there is nothing for a
+  # modifier to contradict — how far a thrown rock carries, how deep the water
+  # is. Those stay free-form.
+  Scenario: A roll about the world can still be modified
+    When I say "how far does it carry [[roll 2d6+2 the throw]]"
+    Then the roll should read "2d6+2"
+
+  Scenario: A roll against an ability the system does not have
+    When I say "roll for it [[roll John luck 1d20 initiative]]"
+    Then the roll should be refused
+    And the refusal should name "luck"

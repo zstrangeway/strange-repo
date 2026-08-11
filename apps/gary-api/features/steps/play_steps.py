@@ -1432,3 +1432,297 @@ def step_who_rolled(context, who, notation):
     rolls = [roll for roll in _of(context, "roll") if roll.get("character") == who]
     assert rolls, f"{who} rolled nothing"
     assert all(roll["notation"] == notation for roll in rolls), rolls
+
+
+# ------------------------------------------------------------------ combat
+
+
+def _fight(context):
+    """The fight as the world has it, read back through the API."""
+    context.response = context.client.get(
+        f"/campaigns/{_campaign_id(context)}/world", headers=_headers(context)
+    )
+    assert context.response.status_code == 200, context.response.text
+    return _body(context)
+
+
+def _refusals(context):
+    return [
+        data
+        for name, data in context.events
+        if name == "error" and data.get("code") == "refused_tool"
+    ]
+
+
+@then("the tool should be refused")
+def step_tool_refused(context):
+    refusals = _refusals(context)
+    assert refusals, [name for name, _ in context.events]
+    context.refusal = refusals[-1]
+
+
+@then("the refusal should say {what}")
+def step_refusal_says(context, what):
+    # Matched on a few words rather than the whole sentence: what a refusal
+    # means is what it tells gary, and pinning the wording would make every
+    # rewording a failing spec.
+    wanted = {
+        "a fight is already happening": "already happening",
+        "there is no fight": "no fight",
+        "whose turn it is": "it is not",
+        "it is mine to take": "to take",
+        "this system cannot do fights yet": "by side",
+        "the sheet decides the modifier": "sheet",
+        "nobody is called that": "nobody in this fight",
+        "you cannot hit yourself": "cannot attack themselves",
+        "there is nobody to fight it": "nobody here to fight",
+        "they are already down": "already down",
+    }[what]
+    assert wanted in context.refusal["detail"], context.refusal
+
+
+@then("everybody in the fight should have rolled initiative")
+def step_everybody_rolled(context):
+    rolled = [
+        roll for roll in _of(context, "roll") if roll["reason"] == "initiative"
+    ]
+    fight = _fight(context)["fight"]
+    assert fight, "no fight was started"
+    assert len(rolled) == len(fight["order"]), (rolled, fight["order"])
+
+
+@then("the order should run from highest to lowest")
+def step_order_sorted(context):
+    totals = {
+        roll["character"]: roll["total"]
+        for roll in _of(context, "roll")
+        if roll["reason"] == "initiative"
+    }
+    order = [one["name"] for one in _fight(context)["fight"]["order"]]
+    got = [totals[name] for name in order]
+    assert got == sorted(got, reverse=True), list(zip(order, got))
+
+
+@then("it should be round {number:d}")
+def step_round_is(context, number):
+    assert _fight(context)["fight"]["round"] == number, _fight(context)["fight"]
+
+
+@then('the world should have "{name}" in the fight')
+def step_world_has_foe(context, name):
+    names = [one["name"] for one in _fight(context)["enemies"]]
+    assert name in names, names
+
+
+@then('"{name}" should have hit points')
+def step_foe_has_hp(context, name):
+    foe = next(one for one in _fight(context)["enemies"] if one["name"] == name)
+    assert foe["max_hp"] > 0 and foe["hp"] == foe["max_hp"], foe
+
+
+@then('"{name}" should not be in the party')
+def step_foe_not_party(context, name):
+    names = [one["name"] for one in _fight(context)["party"]]
+    assert name not in names, names
+
+
+@then('"{who}" should have rolled initiative with a modifier of {modifier:d}')
+def step_initiative_modifier(context, who, modifier):
+    rolled = [
+        roll
+        for roll in _of(context, "roll")
+        if roll["reason"] == "initiative" and roll["character"] == who
+    ]
+    assert rolled, f"{who} rolled no initiative"
+    assert rolled[0]["modifier"] == modifier, rolled[0]
+
+
+def _whose(context):
+    fight = _fight(context)["fight"]
+    return fight["order"][fight["at"]]["name"]
+
+
+def _somebody_else(context, besides):
+    """Anyone else in the fight who is still standing.
+
+    Still standing, because the engine refuses a swing at somebody already
+    down — which is right, and which a step that picked blindly would trip
+    over as soon as anybody fell.
+    """
+    world_now = _fight(context)
+    upright = {
+        one["name"]
+        for one in [*world_now["party"], *world_now["enemies"]]
+        if not one["down"]
+    }
+    return next(
+        one["name"]
+        for one in world_now["fight"]["order"]
+        if one["name"] != besides and one["name"] in upright
+    )
+
+
+@when("gary has somebody act out of turn")
+def step_out_of_turn(context):
+    order = [one["name"] for one in _fight(context)["fight"]["order"]]
+    at = _whose(context)
+    other = next(name for name in order if name != at)
+    target = next(name for name in order if name != other)
+    context.execute_steps(
+        f'When I say "out of turn [[attack {other} {target}]]"'
+    )
+
+
+@when("the one whose turn it is attacks")
+def step_whoever_attacks(context):
+    at = _whose(context)
+    target = next(
+        one["name"]
+        for one in _fight(context)["fight"]["order"]
+        if one["name"] != at
+    )
+    context.execute_steps(f'When I say "it swings [[attack {at} {target}]]"')
+
+
+@then("the attack should have been rolled against the target's armour class")
+def step_attack_rolled(context):
+    swings = [roll for roll in _of(context, "roll") if roll.get("dc")]
+    assert swings, _of(context, "roll")
+    assert swings[-1]["degree"], swings[-1]
+
+
+@then("gary should have been told what happened")
+def step_told_outcome(context):
+    said = " ".join(result.summary for result in fake.LAST_RESULTS or [])
+    assert "hit" in said or "missed" in said, said
+
+
+@then("the damage should match whether it hit")
+def step_damage_matches(context):
+    swings = [roll for roll in _of(context, "roll") if roll.get("degree")]
+    assert swings, "nothing was rolled to hit"
+    hit = swings[-1]["degree"] in ("success", "critical-success")
+    # Damage specifically. Every attack ends a turn, and that is a world
+    # change too — counting any of them would make this assertion always true.
+    hurt = [
+        data
+        for name, data in context.events
+        if name == "world" and data.get("kind") == "damaged"
+    ]
+    assert bool(hurt) == hit, (swings[-1], hurt)
+
+
+@then("the history should say which turn did it")
+def step_history_turn(context):
+    rows = sql(
+        "SELECT e.kind FROM world_events e JOIN turns t ON t.id = e.turn_id"
+        " WHERE t.campaign_id = :id",
+        id=_campaign_id(context),
+    )
+    assert rows, "the fight changed the world and nothing says which turn did"
+
+
+def _take_turn(context):
+    """Whoever is up acts, then the turn ends.
+
+    The player's character has to actually act before gary may end their turn
+    — that is the whole rule — so a step that only ends turns would deadlock
+    on them, exactly as a fight would.
+    """
+    at = _whose(context)
+    mine = {one["name"] for one in _fight(context)["party"] if one["played_by"] == "player"}
+    if at in mine:
+        # Gary may not end the player's turn, so the only way past it is for
+        # them to take it — which is the rule this whole feature is about.
+        # Swinging is taking it: one action is all a turn holds.
+        context.execute_steps(
+            f'When I say "it swings [[attack {at} {_somebody_else(context, at)}]]"'
+        )
+        return
+    # Everybody else can simply pass, which keeps a step that only wants the
+    # order to move from also deciding who hits whom.
+    context.execute_steps('When I say "and on [[endturn]]"')
+
+
+@when("the one whose turn it is ends it")
+def step_end_turn(context):
+    context.was = _whose(context)
+    _take_turn(context)
+
+
+@then("it should be the next one's turn")
+def step_next_turn(context):
+    assert _whose(context) != context.was, context.was
+
+
+@when("everybody has had a turn")
+def step_full_round(context):
+    for _ in _fight(context)["fight"]["order"]:
+        _take_turn(context)
+
+
+@given('the order has reached "{who}"')
+def step_order_reaches(context, who):
+    for _ in range(8):
+        if _whose(context) == who:
+            return
+        _take_turn(context)
+    raise AssertionError(f"the order never reached {who}")
+
+
+@then("gary should have been told to stop and ask me")
+def step_told_to_stop(context):
+    assert fake.LAST is not None
+    assert "Stop and ask them" in fake.LAST.world, fake.LAST.world
+
+
+@then("the attack should have been made")
+def step_attack_made(context):
+    assert [roll for roll in _of(context, "roll") if roll.get("degree")], (
+        _of(context, "roll")
+    )
+
+
+@then("the fight should be over")
+def step_fight_over(context):
+    assert _fight(context)["fight"] is None, _fight(context)["fight"]
+
+
+@then("gary should have been told the order")
+def step_told_order(context):
+    assert "Order:" in fake.LAST.world, fake.LAST.world
+
+
+@then("gary should have been told whose turn it is")
+def step_told_whose(context):
+    assert "it is their turn" in fake.LAST.world, fake.LAST.world
+
+
+@then("gary should have been told the round")
+def step_told_round(context):
+    assert "Round " in fake.LAST.world, fake.LAST.world
+
+
+@then("gary should have been told what was fought")
+def step_told_fought(context):
+    assert "Previously fought" in fake.LAST.world, fake.LAST.world
+
+
+@given('"{name}" has been knocked down')
+def step_knock_down(context, name):
+    """Enough damage to put it out, however much that is.
+
+    Written as damage rather than as a state, because there is no state — a
+    thing is down when the log has taken its hit points off it, and a step
+    that set a flag would be testing something the world does not have.
+    """
+    foe = next(one for one in _fight(context)["enemies"] if one["name"] == name)
+    context.execute_steps(
+        f'When I say "it reels [[damage {name} {foe["max_hp"]}]]"'
+    )
+
+
+@then('"{name}" should be {amount:d} hit points down on the other side')
+def step_foe_hurt(context, name, amount):
+    foe = next(one for one in _fight(context)["enemies"] if one["name"] == name)
+    assert foe["max_hp"] - foe["hp"] == amount, foe
