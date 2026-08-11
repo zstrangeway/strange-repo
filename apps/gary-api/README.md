@@ -156,15 +156,24 @@ likely place for this to be broken while green, because the fragmented
 tool-call accumulation is exactly the sort of thing a stub is written to agree
 with.
 
-That gap is closed by hand, before deploying:
+Looking at that gap is a manual step, and never an automatic one:
 
 ```sh
-pnpm --filter gary-api smoke                            # one REAL turn
-pnpm --filter gary-api smoke -- deepseek/deepseek-v3.2  # …on a named model
+pnpm --filter gary-api smoke                                        # one REAL turn
+pnpm --filter gary-api smoke -- nvidia/nemotron-3-super-120b-a12b:free
 ```
 
 It plays one turn against the live API and prints the narration, **which tools
-were called and with what**, the token counts and the cost. Run it against a
-cheap model and against Opus: the difference in tool discipline is the
-evidence the suggested set otherwise lacks. It needs `OPENROUTER_API_KEY` and
-it spends money.
+were called and with what**, the token counts and the cost. What it is looking
+for is whether the model went *through* the engines rather than narrating
+around them — a model that asserts a degree or moves the party in prose alone
+produces a game that reads fine and is being adjudicated by nothing.
+
+It needs `OPENROUTER_API_KEY` and it spends tokens, so it is opt-in and
+nothing calls it for you. **OpenRouter's `:free` models cost nothing and are
+enough to exercise the path** — the two runs so far were free ones, and they
+already disagreed with each other, which is the sort of thing this is for.
+
+The suggested set in `narration/models.py` is picked on price and reputation,
+not on evidence. Turning that into evidence would mean many runs across many
+models, which is a project of its own and not one this repo is doing.

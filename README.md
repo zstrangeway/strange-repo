@@ -49,10 +49,10 @@ passes. It is deliberately few — it costs a Postgres and a Python
 process, and its job is to catch drift, not to cover behaviour.
 
 **No tier ever calls a real model**, including the third — the same trade made
-for Google and Facebook, and for the same reasons. What closes that gap is
-`pnpm --filter gary-api smoke`, which plays one real turn and prints what the
-model actually did with the tools. It is run by hand before deploying, because
-it spends money; a check that silently did nothing would be worse than none.
+for Google and Facebook, and for the same reasons. `pnpm --filter gary-api
+smoke` plays one real turn and prints what the model actually did with the
+tools, which is the only way to see that gap. It is opt-in and never runs on
+its own, because it spends somebody's tokens.
 
 gary-web's coverage gate covers `src/lib` and nothing else, deliberately. The
 rest of that app is React components, and [Next's own
