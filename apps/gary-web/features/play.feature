@@ -83,3 +83,21 @@ Feature: Playing at the table
     When I move it to "Claude Haiku 4.5"
     Then the page shows which model is running it
     And the page shows "Claude Haiku 4.5"
+
+  # A scene divides the table the way it divides gary's memory: what is on
+  # screen above a boundary is the story so far, and what gary is actually
+  # working from is below it. Showing the two as one undivided scroll would
+  # hide the most consequential thing about a long campaign.
+  Scenario: A scene break shows on the table
+    When I open that campaign
+    And I say "I push open the door"
+    And gary finishes
+    And I start a new scene called "The flooded nave"
+    Then the transcript should show a break for "The flooded nave"
+    And the page shows what happened in the scene before
+
+  Scenario: Gary asking for a scene shows the same break
+    When I open that campaign
+    And I say "You travel three days north" and gary changes scene
+    And gary finishes
+    Then the transcript should show a break for "The road to Ashfen"
