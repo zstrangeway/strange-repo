@@ -10,6 +10,7 @@
     "test": "task test",
     "migrate": "task migrate",
     "revision": "task revision --",
-    "seed": "task seed"
+    "seed": "task seed",
+    "smoke": "task smoke --"
   }
 }

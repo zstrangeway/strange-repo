@@ -27,6 +27,14 @@ tasks:
     cmds:
       - uv run alembic revision --autogenerate -m "{{.CLI_ARGS}}"
 
+  smoke:
+    desc: 'Play one REAL turn against a model: task gary-api:smoke -- <model>'
+    cmds:
+      # Deliberately not part of `test`. It costs money, needs a key, and is
+      # the only thing here that talks to a model — so it is run by hand,
+      # before a deploy, and its output is read rather than its exit code.
+      - uv run gary-api-smoke {{.CLI_ARGS}}
+
   test:
     desc: Run the specs and unit tests, then enforce the coverage gate
     cmds:
