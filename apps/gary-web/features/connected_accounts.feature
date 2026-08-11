@@ -27,7 +27,7 @@ Feature: Connected accounts
     And I change my display name to "Ada L"
     When I sign out
     And I sign in with facebook
-    Then the page shows "Welcome Home, Ada L"
+    Then I should be signed in as "Ada L"
 
   Scenario: A provider already held by another account is refused
     Given an account already exists at facebook for "someone@example.com" named "Someone"

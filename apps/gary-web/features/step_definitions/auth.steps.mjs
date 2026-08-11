@@ -6,7 +6,12 @@ import * as apiStub from "../support/api-stub.mjs";
 import { world } from "../support/hooks.mjs";
 
 const PAGES = {
+  // "/" is the campaigns list now — signing in lands you at your games
+  // rather than at a greeting. Both names point at it: specs about the app's
+  // front door say "home", specs about campaigns say "campaigns".
   home: "/",
+  campaigns: "/",
+  "new campaign": "/campaigns/new",
   "sign in": "/login",
   profile: "/profile",
 };
@@ -40,6 +45,14 @@ async function through(provider, testId) {
 /** The session is a value in localStorage now, not a cookie, so clearing
  *  cookies signs nobody out — it merely looked like it did, because the
  *  server used to be the thing holding the session. */
+/** Wait until the session is real. The sidebar is the proof now — it is on
+ *  every signed-in page and says who you are. */
+async function signedIn() {
+  await world.page.waitForSelector('[data-testid="user-menu"]', {
+    timeout: 15_000,
+  });
+}
+
 async function forgetTheSession() {
   // localStorage belongs to an origin, so the page has to be on ours before
   // there is anything to clear.
@@ -84,9 +97,7 @@ Given(
     apiStub.nextPerson(provider, { email, name });
     await open("/login");
     await through(provider, "sign-in");
-    await world.page.waitForSelector('[data-testid="welcome"]', {
-      timeout: 15_000,
-    });
+    await signedIn();
   },
 );
 
@@ -95,9 +106,7 @@ Given("I am signed in as {string}", async function (name) {
   apiStub.nextPerson("google", { email: "ada@example.com", name });
   await open("/login");
   await through("google", "sign-in");
-  await world.page.waitForSelector('[data-testid="welcome"]', {
-    timeout: 15_000,
-  });
+  await signedIn();
 });
 
 When("I sign in with {word}", async function (provider) {
@@ -153,9 +162,23 @@ Then("the page shows {string}", async function (expected) {
   );
 });
 
-Then("the welcome does not show {string}", async function (unwanted) {
-  const welcome = (await world.page.textContent('[data-testid="welcome"]')) ?? "";
-  assert.ok(!welcome.includes(unwanted), `the welcome showed ${unwanted}`);
+Then("I should be signed in as {string}", async function (name) {
+  // The sidebar, not the page: the page is your campaigns now, and being
+  // signed in is a fact about the session rather than about what you are
+  // looking at.
+  await world.page.waitForFunction(
+    (want) =>
+      document
+        .querySelector('[data-testid="user-menu"]')
+        ?.textContent?.includes(want) ?? false,
+    name,
+    { timeout: 15_000 },
+  );
+});
+
+Then("the sidebar should say the account is {string}", async function (email) {
+  const shown = (await world.page.textContent('[data-testid="user-menu"]')) ?? "";
+  assert.ok(shown.includes(email), `the sidebar did not show ${email}`);
 });
 
 Then(/^I should be on the (.+) page$/, async function (name) {

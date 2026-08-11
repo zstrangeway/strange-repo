@@ -6,10 +6,16 @@
 
 import {
   callApi,
+  type Campaign,
+  type Character,
   type Identity,
+  type Model,
   type Provider,
   type SignedIn,
+  type System,
+  type Turn,
   type User,
+  type World,
 } from "./api";
 import { clearToken, storedToken, storeToken } from "./session";
 
@@ -140,4 +146,104 @@ export async function disconnectAccount(provider: string): Promise<Outcome> {
   return result.ok
     ? { confirmation: "That way of signing in has been removed" }
     : { error: result.message };
+}
+
+
+// ---------------------------------------------------------------- the game
+
+/** The systems gary runs and the modules written for them. No session: it is
+ *  a menu, and it is part of deciding whether to make an account. */
+export async function catalogue(): Promise<System[]> {
+  const result = await callApi<System[]>("/catalogue");
+  return result.ok ? result.data : [];
+}
+
+/** One system and everything it can say about itself — its classes, most of
+ *  all, which is what a character sheet is offered. */
+export async function systemNamed(slug: string): Promise<System | null> {
+  const result = await callApi<System>(`/catalogue/${slug}`);
+  return result.ok ? result.data : null;
+}
+
+/** The models gary can be run on. Only ones that can call tools are offered —
+ *  gary's design is the model going through the engines, and one that cannot
+ *  call a tool would narrate a game nothing was adjudicating. */
+export async function runnableModels(): Promise<Model[]> {
+  const result = await callApi<Model[]>("/models");
+  return result.ok ? result.data : [];
+}
+
+export async function myCampaigns(): Promise<Campaign[]> {
+  const result = await callApi<Campaign[]>("/campaigns", {
+    token: storedToken(),
+  });
+  return result.ok ? result.data : [];
+}
+
+export async function campaign(id: string): Promise<Campaign | null> {
+  const result = await callApi<Campaign>(`/campaigns/${id}`, {
+    token: storedToken(),
+  });
+  return result.ok ? result.data : null;
+}
+
+export async function startCampaign(fields: {
+  name: string;
+  system: string;
+  module: string;
+  model: string | null;
+}): Promise<Outcome & { campaign?: Campaign }> {
+  const result = await callApi<Campaign>("/campaigns", {
+    method: "POST",
+    body: fields,
+    token: storedToken(),
+  });
+
+  return result.ok ? { campaign: result.data } : { error: result.message };
+}
+
+/** Move a campaign to another model, mid-game. Null hands it back to the
+ *  deployment's default. */
+export async function changeModel(
+  id: string,
+  model: string | null,
+): Promise<Outcome & { campaign?: Campaign }> {
+  const result = await callApi<Campaign>(`/campaigns/${id}`, {
+    method: "PATCH",
+    body: { model },
+    token: storedToken(),
+  });
+
+  return result.ok ? { campaign: result.data } : { error: result.message };
+}
+
+export async function addCharacter(
+  id: string,
+  fields: { name: string; character_class: string },
+): Promise<Outcome & { character?: Character }> {
+  const result = await callApi<Character>(`/campaigns/${id}/characters`, {
+    method: "POST",
+    body: fields,
+    token: storedToken(),
+  });
+
+  return result.ok ? { character: result.data } : { error: result.message };
+}
+
+/** The party as they currently stand — hit points and conditions projected
+ *  from everything that has happened, not read off the sheet. */
+export async function worldOf(id: string): Promise<World | null> {
+  const result = await callApi<World>(`/campaigns/${id}/world`, {
+    token: storedToken(),
+  });
+  return result.ok ? result.data : null;
+}
+
+/** Everything said so far. The stream only carries what happens next, so a
+ *  reload has to ask for the rest. */
+export async function transcript(id: string): Promise<Turn[]> {
+  const result = await callApi<Turn[]>(`/campaigns/${id}/turns`, {
+    token: storedToken(),
+  });
+  return result.ok ? result.data : [];
 }

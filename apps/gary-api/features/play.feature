@@ -186,3 +186,22 @@ Feature: Playing
     When I say "I look about [[check Bramble hard Perception]]"
     Then the stream should carry an error
     And no roll should have been recorded
+
+  # A client that reloads mid-campaign has to get the table back, and the
+  # stream only carries what happens next.
+  Scenario: Reading the transcript back
+    Given I said "I push open the door"
+    When I read the transcript
+    Then the response status should be 200
+    And the transcript should read back 2 turns
+    And the first turn should be mine
+
+  Scenario: A roll comes back beside the turn it happened in
+    Given I said "I search the room [[roll 1d20+3 Perception]]"
+    When I read the transcript
+    Then gary's turn should carry a roll of "1d20+3"
+
+  Scenario: Someone else's transcript
+    Given another account has a campaign
+    When I read their transcript
+    Then the response status should be 404

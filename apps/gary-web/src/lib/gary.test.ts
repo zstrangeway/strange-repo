@@ -19,14 +19,24 @@ vi.mock("./session", () => ({
 }));
 
 const {
+  addCharacter,
+  campaign,
+  catalogue,
   completeSignIn,
   connectAccount,
   connectedAccounts,
   disconnectAccount,
   me,
+  myCampaigns,
+  runnableModels,
   signOut,
+  startCampaign,
+  systemNamed,
+  transcript,
   updateDisplayName,
+  changeModel,
   waysToSignIn,
+  worldOf,
 } = await import("./gary");
 
 function answering<T>(result: ApiResult<T>) {
@@ -227,5 +237,215 @@ describe("disconnectAccount", () => {
     expect(await disconnectAccount("google")).toEqual({
       error: "You are not signed in",
     });
+  });
+});
+
+// ---------------------------------------------------------------- the game
+//
+// The pattern below is the same one the account half uses: gary-api being
+// unwell is not an exception here, it is an empty list or a null, because
+// every one of these renders into a page that has to render either way.
+
+describe("catalogue", () => {
+  it("asks for the systems without a token", async () => {
+    // A menu, not somebody's data — and part of deciding whether to sign up
+    // at all, so asking for a session would be asking too early.
+    answering({ ok: true, data: [{ slug: "dnd-5e" }] });
+
+    expect(await catalogue()).toEqual([{ slug: "dnd-5e" }]);
+    expect(callApi).toHaveBeenCalledWith("/catalogue");
+  });
+
+  it("offers nothing rather than failing", async () => {
+    answering(REFUSED);
+
+    expect(await catalogue()).toEqual([]);
+  });
+});
+
+describe("systemNamed", () => {
+  it("asks for the one system", async () => {
+    answering({ ok: true, data: { slug: "dnd-5e", classes: ["rogue"] } });
+
+    expect(await systemNamed("dnd-5e")).toEqual({
+      slug: "dnd-5e",
+      classes: ["rogue"],
+    });
+    expect(callApi).toHaveBeenCalledWith("/catalogue/dnd-5e");
+  });
+
+  it("is nobody's system when gary-api does not know it", async () => {
+    answering({ ok: false, status: 404, message: "No such system" });
+
+    expect(await systemNamed("gurps")).toBe(null);
+  });
+});
+
+describe("runnableModels", () => {
+  it("asks for the models that can hold gary's contract", async () => {
+    answering({ ok: true, data: [{ id: "anthropic/claude-opus-5" }] });
+
+    expect(await runnableModels()).toEqual([{ id: "anthropic/claude-opus-5" }]);
+    expect(callApi).toHaveBeenCalledWith("/models");
+  });
+
+  it("offers nothing rather than failing", async () => {
+    answering(REFUSED);
+
+    expect(await runnableModels()).toEqual([]);
+  });
+});
+
+describe("myCampaigns", () => {
+  it("carries the token", async () => {
+    answering({ ok: true, data: [{ id: "c1" }] });
+
+    expect(await myCampaigns()).toEqual([{ id: "c1" }]);
+    expect(callApi).toHaveBeenCalledWith("/campaigns", { token: "a-token" });
+  });
+
+  it("is empty when gary-api will not say", async () => {
+    answering(REFUSED);
+
+    expect(await myCampaigns()).toEqual([]);
+  });
+});
+
+describe("campaign", () => {
+  it("asks for the one campaign", async () => {
+    answering({ ok: true, data: { id: "c1", name: "A Light in the Deep" } });
+
+    expect(await campaign("c1")).toEqual({
+      id: "c1",
+      name: "A Light in the Deep",
+    });
+    expect(callApi).toHaveBeenCalledWith("/campaigns/c1", { token: "a-token" });
+  });
+
+  it("is nothing when it is not yours", async () => {
+    // 404 rather than 403, and the page has a not-found to render.
+    answering({ ok: false, status: 404, message: "No such campaign" });
+
+    expect(await campaign("c1")).toBe(null);
+  });
+});
+
+describe("startCampaign", () => {
+  const fields = {
+    name: "A Light in the Deep",
+    system: "dnd-5e",
+    module: "the-drowned-belfry",
+    model: null,
+  };
+
+  it("hands back the campaign it started", async () => {
+    answering({ ok: true, data: { id: "c1" } });
+
+    expect(await startCampaign(fields)).toEqual({ campaign: { id: "c1" } });
+    expect(callApi).toHaveBeenCalledWith("/campaigns", {
+      method: "POST",
+      body: fields,
+      token: "a-token",
+    });
+  });
+
+  it("passes on why it was refused", async () => {
+    answering(REFUSED);
+
+    expect(await startCampaign(fields)).toEqual({ error: "Not allowed" });
+  });
+});
+
+describe("changeModel", () => {
+  it("moves the campaign to another model", async () => {
+    answering({ ok: true, data: { id: "c1", model: "x/cheap" } });
+
+    expect(await changeModel("c1", "x/cheap")).toEqual({
+      campaign: { id: "c1", model: "x/cheap" },
+    });
+    expect(callApi).toHaveBeenCalledWith("/campaigns/c1", {
+      method: "PATCH",
+      body: { model: "x/cheap" },
+      token: "a-token",
+    });
+  });
+
+  it("hands it back to the deployment's default", async () => {
+    answering({ ok: true, data: { id: "c1", model_chosen: false } });
+    await changeModel("c1", null);
+
+    expect(callApi).toHaveBeenCalledWith("/campaigns/c1", {
+      method: "PATCH",
+      body: { model: null },
+      token: "a-token",
+    });
+  });
+
+  it("passes on why it was refused", async () => {
+    answering(REFUSED);
+
+    expect(await changeModel("c1", "x/nonsense")).toEqual({ error: "Not allowed" });
+  });
+});
+
+describe("addCharacter", () => {
+  it("hands back the character it made", async () => {
+    answering({ ok: true, data: { id: "ch1", name: "Bramble" } });
+
+    expect(
+      await addCharacter("c1", { name: "Bramble", character_class: "rogue" }),
+    ).toEqual({ character: { id: "ch1", name: "Bramble" } });
+    expect(callApi).toHaveBeenCalledWith("/campaigns/c1/characters", {
+      method: "POST",
+      body: { name: "Bramble", character_class: "rogue" },
+      token: "a-token",
+    });
+  });
+
+  it("passes on why it was refused", async () => {
+    answering(REFUSED);
+
+    expect(
+      await addCharacter("c1", { name: "", character_class: "rogue" }),
+    ).toEqual({ error: "Not allowed" });
+  });
+});
+
+describe("worldOf", () => {
+  it("asks for the world as it currently stands", async () => {
+    answering({ ok: true, data: { place: "the belfry stair", party: [] } });
+
+    expect(await worldOf("c1")).toEqual({
+      place: "the belfry stair",
+      party: [],
+    });
+    expect(callApi).toHaveBeenCalledWith("/campaigns/c1/world", {
+      token: "a-token",
+    });
+  });
+
+  it("is nothing when gary-api will not say", async () => {
+    answering(REFUSED);
+
+    expect(await worldOf("c1")).toBe(null);
+  });
+});
+
+describe("transcript", () => {
+  it("asks for everything said so far", async () => {
+    answering({ ok: true, data: [{ id: "t1", role: "player" }] });
+
+    expect(await transcript("c1")).toEqual([{ id: "t1", role: "player" }]);
+    expect(callApi).toHaveBeenCalledWith("/campaigns/c1/turns", {
+      token: "a-token",
+    });
+  });
+
+  it("is empty when gary-api will not say", async () => {
+    // The stream carries what happens next, so an empty transcript is a
+    // playable table rather than a broken one.
+    answering(REFUSED);
+
+    expect(await transcript("c1")).toEqual([]);
   });
 });

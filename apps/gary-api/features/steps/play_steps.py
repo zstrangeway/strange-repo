@@ -832,3 +832,36 @@ def step_campaign_default_model(context):
 def step_prompt_model(context, model):
     assert fake.LAST is not None, "gary was never asked"
     assert fake.LAST.model == model, fake.LAST.model
+
+
+@when("I read the transcript")
+def step_read_transcript(context):
+    context.response = context.client.get(
+        f"/campaigns/{_campaign_id(context)}/turns", headers=_headers(context)
+    )
+
+
+@when("I read their transcript")
+def step_read_their_transcript(context):
+    context.response = context.client.get(
+        f"/campaigns/{context.other_campaign['id']}/turns",
+        headers=_headers(context),
+    )
+
+
+@then("the transcript should read back {count:d} turns")
+def step_transcript_read_back(context, count):
+    assert len(_body(context)) == count, [t["role"] for t in _body(context)]
+
+
+@then("the first turn should be mine")
+def step_first_turn_mine(context):
+    assert _body(context)[0]["role"] == "player", _body(context)[0]
+
+
+@then('gary\'s turn should carry a roll of "{notation}"')
+def step_turn_carries_roll(context, notation):
+    gm = [turn for turn in _body(context) if turn["role"] == "gm"]
+    assert gm, "gary took no turn"
+    rolls = [roll["notation"] for turn in gm for roll in turn["rolls"]]
+    assert notation in rolls, rolls

@@ -16,7 +16,7 @@ Feature: An answer gary-web cannot read is reported, not a blank page
   Scenario: gary-api answers with something that is not JSON
     Given I am signed in as "Ada"
     When I open the home page
-    Then the page shows "Welcome Home, Ada"
+    Then I should be signed in as "Ada"
     When gary-api starts answering with something that is not JSON
     And I reload the page
     Then I should be on the sign in page

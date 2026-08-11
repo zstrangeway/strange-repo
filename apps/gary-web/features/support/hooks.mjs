@@ -29,6 +29,9 @@ export const world = {
   page: null,
   resetToken: null,
   verificationToken: null,
+  // The campaign a scenario arranged, and the last thing said to gary in it.
+  campaign: null,
+  said: null,
 };
 
 let webServer = null;
@@ -122,6 +125,8 @@ Before(async function () {
   browserLog = "";
   world.resetToken = null;
   world.verificationToken = null;
+  world.campaign = null;
+  world.said = null;
   world.page = await world.browser.newPage();
 
   // gary-web logs to the console now, so the console is where its lines are.

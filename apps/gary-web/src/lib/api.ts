@@ -44,6 +44,102 @@ export type Provider = {
 };
 export type SignedIn = User & { token: string; expires_at: string };
 
+/** One adventure written for a system. */
+export type Module = {
+  slug: string;
+  title: string;
+  premise: string;
+  opening: string;
+};
+
+/** A ruleset gary can run, and everything it can say about itself. */
+export type System = {
+  slug: string;
+  name: string;
+  blurb: string;
+  classes: string[];
+  abilities: string[];
+  /** How many ways this system grades a check. Two for most, four for some. */
+  degrees: string[];
+  modules: Module[];
+};
+
+/** A model gary can be run on. Only ones that can call tools are offered. */
+export type Model = {
+  id: string;
+  name: string;
+  /** Dollars per million tokens — the unit the difference is legible in. */
+  prompt_cost: number;
+  completion_cost: number;
+  context: number;
+  reasons: boolean;
+  suggested: boolean;
+};
+
+export type Campaign = {
+  id: string;
+  name: string;
+  system: string;
+  module: string;
+  title: string;
+  turns: number;
+  model: string;
+  /** False when the model came from the deployment rather than the campaign. */
+  model_chosen: boolean;
+};
+
+export type Character = {
+  id: string;
+  name: string;
+  character_class: string;
+  level: number;
+  max_hp: number;
+  abilities: Record<string, number>;
+};
+
+/** A character as they currently stand, projected from what has happened. */
+export type Member = {
+  id: string;
+  name: string;
+  character_class: string;
+  level: number;
+  hp: number;
+  max_hp: number;
+  conditions: string[];
+  down: boolean;
+};
+
+export type World = {
+  place: string;
+  minutes: number;
+  facts: Record<string, string>;
+  party: Member[];
+};
+
+/** A roll that happened — gary asked, gary-api rolled, and where there was a
+ *  DC the rules graded it. Never a number gary produced. */
+export type Roll = {
+  notation: string;
+  dice: number[];
+  modifier: number;
+  total: number;
+  reason: string;
+  /** Set when the roll was a check rather than a bare roll. */
+  dc?: number | null;
+  degree?: string | null;
+  character?: string;
+};
+
+export type Turn = {
+  id: string;
+  role: "player" | "gm";
+  content: string;
+  complete: boolean;
+  /** Beside the turn they happened in, so a reloaded transcript shows a roll
+   *  as a roll rather than losing it into the prose. */
+  rolls: Roll[];
+};
+
 function baseUrl(): string {
   // Baked in at build time, not read at runtime: this code runs in a browser,
   // which has no environment to read. Changing where gary-api lives means a

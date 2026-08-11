@@ -68,6 +68,18 @@ export async function start() {
         // The stand-in for Google, Facebook and Apple. Reaching the real
         // three would mean driving their consent screens by hand.
         IDENTITY_FAKE: "1",
+        // And the stand-in for the model, on the same argument: a real one
+        // costs money, answers differently every time, and is not what these
+        // scenarios are here to check. The engines under it are all real.
+        GM_FAKE: "1",
+        // Emptied rather than inherited. With a key, gary asks OpenRouter
+        // what it serves and the list becomes whatever OpenRouter is serving
+        // today — which is a suite that passes or fails on somebody else's
+        // catalogue. Without one, it offers the built-in list.
+        OPENROUTER_API_KEY: "",
+        // Deterministic dice, so a spec can assert a number rather than only
+        // that a number arrived.
+        DICE_SEED: "7",
         // Where its own stand-in consent page lives, as the browser will
         // reach it — the default assumes port 8000 and this is not that.
         API_BASE_URL: API_URL,

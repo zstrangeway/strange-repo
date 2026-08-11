@@ -1,7 +1,9 @@
 # gary-web
 
-A Next.js companion to gary-api. It signs people up and in, and welcomes them
-home by name.
+A Next.js companion to gary-api. It signs people up and in, and it is where
+the game is played: signing in lands on your campaigns, starting one picks a
+system, a module and a model, and a campaign page is the table — the party as
+the world currently has them, the transcript, and a composer.
 
 It runs entirely in the browser. There is no server rendering and no server
 of its own: every route is static, every call to gary-api is made from the
@@ -15,6 +17,27 @@ of having no server to hold an httpOnly cookie.
 this app's origin in `BROWSER_ORIGINS` or the browser makes every call and
 then refuses to hand back the answer. And gary-web's own log lines are in the
 browser console, not in any server log — nobody collects them.
+
+## Streaming a turn
+
+A turn arrives as it is written, over SSE. **`EventSource` cannot be used**,
+and it is worth knowing why before reaching for it: the session is a bearer
+token in `localStorage` — deliberately, because a gary-api cookie would be
+third-party to this app and dropped by Safari and Firefox — and `EventSource`
+cannot set an `Authorization` header. So `src/lib/play.ts` is `fetch`, a
+`ReadableStream`, a `TextDecoder` and a small SSE parser. That parser is a
+plain module on purpose: it is the branchy part, and `src/lib` is where the
+coverage gate can see it.
+
+Two consequences show up in the UI rather than in the network tab. Anything
+that goes wrong after the first byte is a frame, not a status, so a refusal
+renders in the transcript instead of as a broken page. And a roll is rendered
+as its own element rather than as prose — rendering it as a sentence would
+make it indistinguishable from a number the model made up, which is the
+distinction the whole design rests on.
+
+If the narration ever arrives all at once in production while streaming fine
+locally, the thing in front of gary-api is buffering `text/event-stream`.
 
 ## Run
 

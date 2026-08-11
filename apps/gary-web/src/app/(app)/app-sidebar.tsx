@@ -17,7 +17,7 @@ import {
 } from "@gary/ui/components/sidebar";
 
 import NavUser from "./nav-user";
-import { NAV } from "./nav";
+import { activeFor, NAV } from "./nav";
 
 export default function AppSidebar({
   name,
@@ -53,7 +53,7 @@ export default function AppSidebar({
                 <SidebarMenuItem key={item.url}>
                   <SidebarMenuButton
                     asChild
-                    isActive={pathname === item.url}
+                    isActive={activeFor(pathname, item.url)}
                     tooltip={item.title}
                   >
                     <Link href={item.url}>

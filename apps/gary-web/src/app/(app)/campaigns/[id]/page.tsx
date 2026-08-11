@@ -1,0 +1,286 @@
+"use client";
+
+import Link from "next/link";
+import { use, useCallback, useEffect, useRef, useState } from "react";
+
+import { Badge } from "@gary/ui/components/badge";
+import { Button } from "@gary/ui/components/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@gary/ui/components/card";
+import { Skeleton } from "@gary/ui/components/skeleton";
+
+import type { Campaign, Model, World } from "@/lib/api";
+import {
+  campaign as readCampaign,
+  runnableModels,
+  systemNamed,
+  transcript as readTranscript,
+  changeModel,
+  worldOf,
+} from "@/lib/gary";
+import { takeTurn, type TurnEvent } from "@/lib/play";
+import { useSession } from "@/lib/use-session";
+
+import { Notice } from "../../../form-parts";
+import Composer from "./composer";
+import ModelPicker from "./model-picker";
+import Party from "./party";
+import Transcript, { type Entry } from "./transcript";
+
+// The table.
+//
+// Everything mechanical happens at gary-api: this asks, renders what comes
+// back, and never decides anything itself. The one piece of real logic here
+// is folding a stream of frames into the transcript as they arrive, and it is
+// deliberately small — the parsing that makes it possible lives in
+// `src/lib/play.ts`, where the coverage gate can see it.
+export default function CampaignPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = use(params);
+  const { user } = useSession();
+
+  const [campaign, setCampaign] = useState<Campaign | null>(null);
+  const [missing, setMissing] = useState(false);
+  const [models, setModels] = useState<Model[]>([]);
+  const [classes, setClasses] = useState<string[]>([]);
+  const [world, setWorld] = useState<World | null>(null);
+  const [entries, setEntries] = useState<Entry[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [trouble, setTrouble] = useState<string | undefined>(undefined);
+
+  // Which entry the frames arriving now belong to. A ref rather than state:
+  // several frames land between renders, and reading it from a closure over a
+  // stale render would append the second half of a turn to the first.
+  const answering = useRef<string | null>(null);
+
+  const loadWorld = useCallback(async () => {
+    setWorld(await worldOf(id));
+  }, [id]);
+
+  const load = useCallback(async () => {
+    const found = await readCampaign(id);
+    if (!found) {
+      setMissing(true);
+      return;
+    }
+
+    const [runnable, said, system] = await Promise.all([
+      runnableModels(),
+      readTranscript(id),
+      systemNamed(found.system),
+    ]);
+
+    setCampaign(found);
+    setModels(runnable);
+    setClasses(system?.classes ?? []);
+    setEntries(
+      said.map((turn) => ({
+        id: turn.id,
+        role: turn.role,
+        text: turn.content,
+        rolls: turn.rolls ?? [],
+        complete: turn.complete,
+      })),
+    );
+    await loadWorld();
+  }, [id, loadWorld]);
+
+  useEffect(() => {
+    // Fetching on mount, which is what an effect is for.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load();
+  }, [load]);
+
+  /** One frame from the open stream, folded into what is on screen. */
+  function fold(event: TurnEvent) {
+    if (event.type === "turn") {
+      answering.current = event.turn_id;
+      setEntries((held) => [
+        ...held,
+        {
+          id: event.turn_id,
+          role: "gm",
+          text: "",
+          rolls: [],
+          complete: false,
+        },
+      ]);
+      return;
+    }
+
+    if (event.type === "narration" || event.type === "roll") {
+      const at = answering.current;
+      setEntries((held) =>
+        held.map((entry) =>
+          entry.id !== at
+            ? entry
+            : event.type === "narration"
+              ? { ...entry, text: entry.text + event.text }
+              : { ...entry, rolls: [...entry.rolls, event.roll] },
+        ),
+      );
+      return;
+    }
+
+    if (event.type === "done") {
+      setEntries((held) =>
+        held.map((entry) =>
+          entry.id === event.turn_id ? { ...entry, complete: true } : entry,
+        ),
+      );
+      return;
+    }
+
+    if (event.type === "world") {
+      // What changed is already on the stream; asking for the world again is
+      // how the party on screen agrees with the party gary is narrating
+      // about, rather than this page re-implementing the projection.
+      void loadWorld();
+      return;
+    }
+
+    // Refused or broken. Both arrive as frames rather than statuses — the
+    // status line was spent the moment the stream opened — and both leave
+    // what has been narrated so far exactly where it is.
+    //
+    // Nothing is removed here, because not every error ends the turn: a tool
+    // gary asked for and the engines refused arrives this way too, and gary
+    // carries on narrating around it. Tidying up an answer that never began
+    // happens once the stream is over, where it can be told apart.
+    setTrouble(
+      event.type === "refusal"
+        ? `gary declined: ${event.detail}`
+        : `gary had a problem: ${event.detail}`,
+    );
+  }
+
+  async function say(message: string) {
+    setTrouble(undefined);
+    setBusy(true);
+    answering.current = null;
+
+    // Shown before the stream opens, because it is already true: gary-api
+    // stores the player's turn before it answers.
+    const mine: Entry = {
+      id: `said-${Date.now()}`,
+      role: "player",
+      text: message,
+      rolls: [],
+      complete: true,
+    };
+    setEntries((held) => [...held, mine]);
+
+    const result = await takeTurn(id, message, fold);
+    if (!result.ok) {
+      setTrouble(result.message);
+    }
+
+    // An answer that opened and then said nothing at all — gary declining, or
+    // gary being unreachable. gary-api has already deleted its turn, so
+    // leaving the placeholder would show a turn that does not exist and would
+    // still say "thinking" after everything had stopped.
+    setEntries((held) =>
+      held.filter(
+        (entry) =>
+          entry.role !== "gm" ||
+          entry.complete ||
+          entry.text !== "" ||
+          entry.rolls.length > 0,
+      ),
+    );
+
+    setBusy(false);
+    await loadWorld();
+  }
+
+  if (missing) {
+    return (
+      <div className="flex flex-col gap-4">
+        <h1 className="text-3xl font-semibold tracking-tight">No such campaign</h1>
+        <p className="text-sm text-muted-foreground">
+          It may have been someone else&apos;s, or it may never have existed.
+        </p>
+        <div>
+          <Button asChild variant="secondary">
+            <Link href="/">Back to your campaigns</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!campaign) {
+    return <Skeleton className="h-64 w-full" data-testid="campaign-loading" />;
+  }
+
+  const party = world?.party ?? [];
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-3xl font-semibold tracking-tight">
+            {campaign.name}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {campaign.title}
+            {world?.place ? ` · ${world.place}` : ""}
+            {world && world.minutes > 0 ? ` · ${world.minutes} minutes in` : ""}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline">{campaign.system}</Badge>
+          <ModelPicker
+            models={models}
+            current={campaign.model}
+            chosen={campaign.model_chosen}
+            onPick={async (model) => {
+              const result = await changeModel(id, model);
+              if (result.campaign) {
+                setCampaign(result.campaign);
+                return;
+              }
+              setTrouble(result.error);
+            }}
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
+        <Card>
+          <CardHeader>
+            <CardTitle>The story so far</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-6">
+            <Transcript entries={entries} who={user?.display_name ?? "You"} />
+            <Notice error={trouble} />
+            <Composer
+              busy={busy}
+              disabled={party.length === 0}
+              hint={
+                party.length === 0
+                  ? "Add somebody to the party first"
+                  : undefined
+              }
+              onSay={say}
+            />
+          </CardContent>
+        </Card>
+
+        <Party
+          campaignId={id}
+          party={party}
+          classes={classes}
+          onAdded={loadWorld}
+        />
+      </div>
+    </div>
+  );
+}

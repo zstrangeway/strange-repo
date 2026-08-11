@@ -1,11 +1,20 @@
 # strange-repo
 
-A pnpm + uv monorepo.
+A pnpm + uv monorepo. It builds **gary**, an AI game master named for Gary
+Gygax: pick a system and a module, make a party, and play a tabletop campaign
+in chat.
 
 | App | Stack | What it is |
 | --- | --- | --- |
-| [`apps/gary-api`](apps/gary-api) | FastAPI + Postgres | Accounts, provider identities and sessions |
-| [`apps/gary-web`](apps/gary-web) | Next.js | Signs you in and welcomes you home |
+| [`apps/gary-api`](apps/gary-api) | FastAPI + Postgres | The game — dice, rules, world and narration — plus accounts and sessions |
+| [`apps/gary-web`](apps/gary-web) | Next.js | The table: campaigns, characters, and a turn as it is written |
+
+The design worth knowing before reading either: **the model narrates and
+decides nothing.** Dice, the rules of the system being run, and the state of
+the world are deterministic engines, and the model asks them rather than
+asserting over them. That is what stops the story drifting and stops gary
+inventing the number that decides what happens. See
+[`apps/gary-api`](apps/gary-api#the-game).
 
 ## Working on it
 
@@ -38,6 +47,12 @@ gary-api, so it cannot notice the two drifting apart. Rename a field in
 gary-api's sign-in response and every spec in the first two tiers still
 passes. It is deliberately few — it costs a Postgres and a Python
 process, and its job is to catch drift, not to cover behaviour.
+
+**No tier ever calls a real model**, including the third — the same trade made
+for Google and Facebook, and for the same reasons. What closes that gap is
+`pnpm --filter gary-api smoke`, which plays one real turn and prints what the
+model actually did with the tools. It is run by hand before deploying, because
+it spends money; a check that silently did nothing would be worse than none.
 
 gary-web's coverage gate covers `src/lib` and nothing else, deliberately. The
 rest of that app is React components, and [Next's own

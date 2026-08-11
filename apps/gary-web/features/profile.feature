@@ -16,12 +16,12 @@ Feature: Profile
     When I open the profile page
     Then I should be on the sign in page
 
-  Scenario: Changing my display name changes the welcome
+  Scenario: Changing my display name changes what gary calls me
     When I open the profile page
     And I change my display name to "Ada Lovelace"
     Then the page shows a confirmation
     When I open the home page
-    Then the page shows "Welcome Home, Ada Lovelace"
+    Then I should be signed in as "Ada Lovelace"
 
   Scenario: A blank display name is refused
     When I open the profile page

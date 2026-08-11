@@ -148,6 +148,14 @@ class EventResponse(BaseModel):
     payload: dict[str, Any]
 
 
+class TurnResponse(BaseModel):
+    id: uuid.UUID
+    role: str
+    content: str
+    complete: bool
+    rolls: list[dict[str, Any]]
+
+
 def _as_system(ruleset: systems.Ruleset) -> dict:
     return {
         "slug": ruleset.slug,
@@ -415,6 +423,46 @@ async def read_world(
             for member in state.party
         ],
     }
+
+
+@router.get("/campaigns/{campaign_id}/turns")
+async def read_transcript(
+    campaign_id: uuid.UUID, database: Db, user: CurrentUser
+) -> list[TurnResponse]:
+    """Everything said so far, oldest first.
+
+    A client that reloads mid-campaign has to get the table back, and the
+    stream only carries what happens next.
+    """
+    campaign = await _mine(database, user, campaign_id)
+    turns = await database.scalars(
+        select(Turn)
+        .where(Turn.campaign_id == campaign.id)
+        .order_by(Turn.created_at, Turn.id)
+    )
+    return [
+        {
+            "id": turn.id,
+            "role": turn.role,
+            "content": turn.content,
+            "complete": turn.complete,
+            # Beside the turn they happened in, so a reloaded transcript shows
+            # a roll as a roll rather than losing it into the prose.
+            "rolls": [
+                {
+                    "notation": roll.notation,
+                    "dice": roll.dice,
+                    "modifier": roll.modifier,
+                    "total": roll.total,
+                    "reason": roll.reason,
+                    "dc": roll.dc,
+                    "degree": roll.degree,
+                }
+                for roll in turn.rolls
+            ],
+        }
+        for turn in turns
+    ]
 
 
 @router.get("/campaigns/{campaign_id}/history")

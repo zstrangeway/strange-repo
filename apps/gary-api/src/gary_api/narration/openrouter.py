@@ -144,6 +144,12 @@ def system_prompt(prompt: Prompt) -> str:
                 "- You never state that the world changed without recording "
                 "it. Moving the party, hurting someone, establishing a fact — "
                 "each has a tool, and the tool is what makes it true.\n"
+                "- The world above is what is true. Do not contradict it, and "
+                "that includes counts, names, places and elapsed time. If the "
+                "world says the bell has rung three times, it has rung three "
+                "times; narrating a fourth without calling `remember` first "
+                "makes your own story wrong on the next turn, because the "
+                "world is what you will be told then and your prose is not.\n"
                 "- If a tool refuses, that refusal is what happened. Narrate "
                 "around it rather than pretending it worked."
             ),

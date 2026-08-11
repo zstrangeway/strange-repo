@@ -16,7 +16,7 @@ Feature: Signing in and out
     When I open the sign in page
     And I sign in with google
     Then I should be on the home page
-    And the page shows "Welcome Home, Ada Lovelace"
+    And I should be signed in as "Ada Lovelace"
 
   Scenario: Signing in again returns to the same account
     Given I have signed in at google as "ada@example.com" named "Ada Lovelace"
@@ -24,7 +24,7 @@ Feature: Signing in and out
     And I change my display name to "Ada L"
     When I sign out
     And I sign in with google
-    Then the page shows "Welcome Home, Ada L"
+    Then I should be signed in as "Ada L"
 
   # The visible consequence of not linking accounts by email address.
   Scenario: The same address at another provider is another account
@@ -34,13 +34,15 @@ Feature: Signing in and out
     And facebook will say I am "ada@example.com" named "Ada Lovelace"
     When I sign out
     And I sign in with facebook
-    Then the page shows "Welcome Home, Ada Lovelace"
+    Then I should be signed in as "Ada Lovelace"
 
-  Scenario: The greeting uses my name, not my address
+  # The sidebar carries both, and they are not the same thing: what gary
+  # calls you is yours to change, and which account it is is not.
+  Scenario: The sidebar names me, and says which account it is
     Given I have signed in at google as "ada@example.com" named "Ada Lovelace"
     When I open the home page
-    Then the page shows "Welcome Home, Ada Lovelace"
-    And the welcome does not show "ada@example.com"
+    Then I should be signed in as "Ada Lovelace"
+    And the sidebar should say the account is "ada@example.com"
 
   Scenario: A provider that will not vouch for me
     Given I am signed out
