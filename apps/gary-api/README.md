@@ -51,6 +51,35 @@ in `REGISTRY`. Nothing outside the package names a system —
 3.5e grade a check two ways; Pathfinder 2e grades it four, with the natural-20
 shift, and nothing between the model and the engine knows the difference.
 
+### Who plays whom
+
+Exactly one character in a campaign is the player's; the rest are companions,
+and gary both speaks for them and does what the player tells them to. That is
+`characters.played_by`, `"player"` or `"gary"`, set at creation with
+`{"mine": true}` and moved afterwards with
+`POST /campaigns/{id}/characters/{character_id}/player`, which answers the
+whole party because the character that used to be the player's changed too.
+
+Three refusals fall out of "exactly one", and they are worth telling apart:
+
+| Code | When |
+| --- | --- |
+| `already_playing` | making a second `mine` character — take over instead |
+| `no_party` | playing a campaign nobody is in |
+| `no_character` | playing a campaign where none of them is the player's |
+
+The last one is the reason it is a field rather than a convention. Gary is
+told, per member of the party, which of them is its to voice and which is
+**played by the player — never decide what they do**, and a party where that
+sentence is true of nobody is one gary would narrate straight through. Better
+refused before the money is spent than answered by a game master playing
+everyone including you.
+
+⚠️ **There is no combat, so "the player controls them in a fight" is not a
+thing yet.** There is no initiative and no turn order; a companion is gary's
+to voice and the player's to direct, at any point, in prose. When initiative
+lands, this is the field it will hang off.
+
 ### Scenes
 
 Play is divided into scenes, and a scene is the unit of gary's memory. What

@@ -29,17 +29,31 @@ about a long campaign.
 Breaking a scene by hand is the one control here that is slow on purpose — it
 runs a whole pass through a model — and the button says so while it waits.
 
-## Being dropped into it
+## Building the party, then being dropped into it
 
-Making a character is the last thing anybody should have to do before the game
-starts happening. So the campaign page asks gary to open the scene the moment
-there is a party and nothing said — no button, because having made a character,
-being asked to also press start is the same empty box in a smaller frame. It is
-safe to ask on sight: gary-api refuses a second opening, so a reload cannot
-produce two or spend twice.
+Starting a campaign lands on `/campaigns/{id}/party`, not on the table. The
+table used to be where you made characters, which meant it loaded with an
+empty transcript, a disabled composer and "gary is setting the scene" while
+gary was doing nothing of the sort — because there was nobody to set it for. A
+screen that cannot proceed should be about the thing it is waiting for.
 
-The module's premise is on screen immediately, which costs nothing and covers
-the seconds the opening takes to arrive.
+So the party page is that thing. The first character you make is you; every
+one after is a companion, and a companion can be taken over with the control
+beside its name. There is no pair of radio buttons for the first one, because
+at the moment it is made there is only one sensible answer. "Take them in" is
+shut until one of them is yours, and a campaign whose party was never built
+sends you back here rather than showing a table it cannot lay.
+
+Past that, the game starts happening to you. The campaign page asks gary to
+open the scene the moment there is a party and nothing said — no button,
+because having made a character, being asked to also press start is the same
+empty box in a smaller frame. It is safe to ask on sight: gary-api refuses a
+second opening, so a reload or a second tab cannot produce two or spend twice.
+
+The module's premise and hook are on screen immediately, which costs nothing
+and covers the seconds the opening takes to arrive. They come off the screen
+once the opening lands, since by then they say the same thing twice and the
+worse prose is the one that was free.
 
 ## Streaming a turn
 

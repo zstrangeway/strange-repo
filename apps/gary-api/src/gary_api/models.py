@@ -201,6 +201,12 @@ class Character(Base):
     # different set needs no migration here.
     abilities: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     max_hp: Mapped[int] = mapped_column(Integer)
+    # Who speaks for them: "player" for the one character you are, "gary" for
+    # the companions. Exactly one per campaign is the player's — enforced in
+    # the router rather than by a constraint, because the rule is "at most one
+    # true" and no column expresses that without a partial index that would
+    # then have to be kept in step with the take-over.
+    played_by: Mapped[str] = mapped_column(String(8), default="gary")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

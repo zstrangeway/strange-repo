@@ -55,27 +55,28 @@ Given("I already have a campaign called {string}", async function (name) {
 
 Given("{string} the rogue is at the table", async function (name) {
   assert.ok(world.campaign, "no campaign to put anybody in");
+  // The one you play, unless somebody already is: a scenario saying this
+  // wants a party that can play, not a statement about who controls whom.
   apiStub.addCharacterTo(world.campaign.id, {
     name,
     character_class: "rogue",
+    mine: !apiStub.playedBy(world.campaign.id),
   });
 });
 
-When("I open that campaign", async function () {
-  await world.page.goto(`${world.baseUrl}/campaigns/${world.campaign.id}`, {
-    waitUntil: "domcontentloaded",
-  });
-
-  // Opening a campaign with a party and nothing said now begins with gary
-  // opening the scene. Waited out rather than raced: a step that started
-  // typing here would be typing into a composer gary still had.
+/** Wait for the table to stop moving.
+ *
+ *  Arriving at a campaign with a party and nothing said begins with gary
+ *  opening the scene. Waited out rather than raced: a step that started
+ *  typing here would be typing into a composer gary still had. */
+async function settle() {
   await world.page.waitForFunction(
     () => {
+      // A campaign nobody is playing yet has no table to lay, so the page
+      // sends you back to build the party. Settled there is settled.
+      if (document.querySelector('[data-testid="add-character"]')) return true;
       const box = document.querySelector('[data-testid="composer"]');
       if (!box) return false;
-      // Nobody at the table, so nothing will open and nothing will free the
-      // composer — it is disabled for an entirely different reason.
-      if (document.querySelector('[data-testid="no-party"]')) return true;
       return (
         box.disabled === false &&
         !!document.querySelector('[data-testid="turn-gm"]')
@@ -84,6 +85,13 @@ When("I open that campaign", async function () {
     undefined,
     { timeout: 20_000 },
   );
+}
+
+When("I open that campaign", async function () {
+  await world.page.goto(`${world.baseUrl}/campaigns/${world.campaign.id}`, {
+    waitUntil: "domcontentloaded",
+  });
+  await settle();
 });
 
 When("I choose the system {string}", choose);
@@ -95,11 +103,68 @@ When("I name it {string} and start", async function (name) {
   await world.page.getByRole("button", { name: "Start the campaign" }).click();
 });
 
-When("I add {string} the {string}", async function (name, characterClass) {
+async function makeCharacter(name, characterClass) {
   await world.page.getByTestId("field-character_name").fill(name);
   await world.page.getByTestId("character-class").click();
   await world.page.getByRole("option", { name: characterClass }).click();
   await world.page.getByTestId("add-character").click();
+  await world.page.waitForSelector(`[data-testid="member-${name}"]`, {
+    timeout: 15_000,
+  });
+}
+
+// The same control either way — which of the two it is follows from who is
+// already there — but a scenario saying "as mine" and a scenario saying "as a
+// companion" are saying different things, and should read that way.
+When("I add {string} the {string} as mine", makeCharacter);
+When("I add {string} the {string} as a companion", makeCharacter);
+
+When("I open that campaign's party", async function () {
+  await world.page.goto(
+    `${world.baseUrl}/campaigns/${world.campaign.id}/party`,
+    { waitUntil: "domcontentloaded" },
+  );
+  await world.page.waitForSelector('[data-testid="add-character"]', {
+    timeout: 15_000,
+  });
+});
+
+When("I take them in", async function () {
+  await world.page.getByTestId("take-them-in").click();
+  await settle();
+});
+
+// Not "I should be on the party page": auth.steps.mjs owns
+// `I should be on the (.+) page` for the fixed routes, and this one's path
+// carries a campaign id that no lookup table can hold.
+Then("I should be building the party", async function () {
+  await world.page.waitForURL(
+    (url) => /^\/campaigns\/[0-9a-f-]{36}\/party$/.test(new URL(url).pathname),
+    { timeout: 15_000 },
+  );
+});
+
+Then("the page should say {string} is mine", async function (name) {
+  const shown = await world.page.textContent(`[data-testid="plays-${name}"]`);
+  assert.match(shown ?? "", /you/i, `${name} is not shown as mine`);
+});
+
+Then("the page should say {string} is gary's", async function (name) {
+  const shown = await world.page.textContent(`[data-testid="plays-${name}"]`);
+  assert.match(shown ?? "", /gary/i, `${name} is not shown as gary's`);
+});
+
+Then("I should not be able to take them in", async function () {
+  assert.equal(await world.page.getByTestId("take-them-in").isDisabled(), true);
+});
+
+Then("I should be able to take them in", async function () {
+  await world.page.waitForFunction(
+    () =>
+      document.querySelector('[data-testid="take-them-in"]')?.disabled === false,
+    undefined,
+    { timeout: 15_000 },
+  );
 });
 
 When("I say {string}", async function (message) {

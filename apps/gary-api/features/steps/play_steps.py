@@ -179,13 +179,17 @@ def step_read_their_campaign(context):
 @given('I add "{name}" the {character_class:Class}')
 @when('I add "{name}" the {character_class:Class}')
 def step_add_character(context, name, character_class):
-    context.response = context.client.post(
-        f"/campaigns/{_campaign_id(context)}/characters",
-        json={"name": name, "character_class": character_class},
-        headers=_headers(context),
+    """Add somebody without saying who plays them.
+
+    The first one is yours and the rest are companions, which is what every
+    scenario using this phrasing means: it wants a party that can play, not a
+    statement about control. Scenarios that are *about* control say "as mine"
+    or "as a companion" and get exactly what they say.
+    """
+    taken = any(
+        one["played_by"] == "player" for one in _party(context)
     )
-    if context.response.status_code == 201:
-        context.characters[name] = _body(context)
+    _add(context, name, character_class, not taken)
 
 
 @when('I add "{name}" the {character_class:Class} in "{system}"')
@@ -1187,3 +1191,116 @@ def step_hook_is_not_the_premise(context):
             assert module["hook"].strip() != module["premise"].strip(), (
                 f"{module['slug']}'s hook is its premise again"
             )
+
+
+# ------------------------------------------------------------------ party
+
+
+def _add(context, name, character_class, mine):
+    context.response = context.client.post(
+        f"/campaigns/{_campaign_id(context)}/characters",
+        json={"name": name, "character_class": character_class, "mine": mine},
+        headers=_headers(context),
+    )
+    if context.response.status_code == 201:
+        context.characters[name] = _body(context)
+
+
+@given('I add "{name}" the {character_class:Class} as mine')
+@when('I add "{name}" the {character_class:Class} as mine')
+def step_add_mine(context, name, character_class):
+    _add(context, name, character_class, True)
+
+
+@given('I add "{name}" the {character_class:Class} as a companion')
+@when('I add "{name}" the {character_class:Class} as a companion')
+def step_add_companion(context, name, character_class):
+    _add(context, name, character_class, False)
+
+
+def _party(context, campaign_id=None):
+    response = context.client.get(
+        f"/campaigns/{campaign_id or _campaign_id(context)}/characters",
+        headers=_headers(context),
+    )
+    return response.json() if response.status_code == 200 else []
+
+
+@when('I take over "{name}"')
+def step_take_over(context, name):
+    context.response = context.client.post(
+        f"/campaigns/{_campaign_id(context)}"
+        f"/characters/{_character_id(context, name)}/player",
+        headers=_headers(context),
+    )
+
+
+@when("I take over somebody who does not exist")
+def step_take_over_nobody(context):
+    context.response = context.client.post(
+        f"/campaigns/{_campaign_id(context)}/characters/{NOWHERE}/player",
+        headers=_headers(context),
+    )
+
+
+@when("I take over one of their characters")
+def step_take_over_theirs(context):
+    context.response = context.client.post(
+        f"/campaigns/{context.other_campaign['id']}"
+        f"/characters/{NOWHERE}/player",
+        headers=_headers(context),
+    )
+
+
+@then('the party should say "{name}" is mine')
+def step_party_says_mine(context, name):
+    found = [one for one in _party(context) if one["name"] == name]
+    assert found, f"nobody called {name} at this table"
+    assert found[0]["played_by"] == "player", f"{name} is gary's"
+
+
+@then('the party should say "{name}" is gary\'s')
+def step_party_says_garys(context, name):
+    found = [one for one in _party(context) if one["name"] == name]
+    assert found, f"nobody called {name} at this table"
+    assert found[0]["played_by"] == "gary", f"{name} is mine"
+
+
+@then("exactly {count:d} character should be mine")
+def step_exactly_mine(context, count):
+    played = [
+        one for one in _party(context) if one["played_by"] == "player"
+    ]
+    assert len(played) == count, f"{len(played)} characters are mine"
+
+
+@then('gary should have been told "{name}" is the player\'s')
+def step_told_players(context, name):
+    assert fake.LAST, "gary was not asked anything"
+    for line in fake.LAST.world.splitlines():
+        if name in line:
+            assert "PLAYER" in line, f"gary was not told {name} is yours: {line}"
+            return
+    raise AssertionError(f"gary was told nothing about {name}")
+
+
+@then('gary should have been told "{name}" is gary\'s to play')
+def step_told_garys(context, name):
+    assert fake.LAST, "gary was not asked anything"
+    for line in fake.LAST.world.splitlines():
+        if name in line:
+            assert "yours to play" in line, f"gary was not offered {name}: {line}"
+            return
+    raise AssertionError(f"gary was told nothing about {name}")
+
+
+@then('the world should say "{name}" is mine')
+def step_world_says_mine(context, name):
+    found = [one for one in _body(context)["party"] if one["name"] == name]
+    assert found and found[0]["played_by"] == "player"
+
+
+@then('the world should say "{name}" is gary\'s')
+def step_world_says_garys(context, name):
+    found = [one for one in _body(context)["party"] if one["name"] == name]
+    assert found and found[0]["played_by"] == "gary"

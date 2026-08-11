@@ -15,12 +15,13 @@ from gary_api import world
 class Sheet:
     """A character as far as the projection is concerned."""
 
-    def __init__(self, name="Bramble", max_hp=8):
+    def __init__(self, name="Bramble", max_hp=8, played_by="gary"):
         self.id = uuid.uuid4()
         self.name = name
         self.character_class = "rogue"
         self.level = 1
         self.max_hp = max_hp
+        self.played_by = played_by
 
 
 class Event:
@@ -175,3 +176,21 @@ class RenderTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WhoPlaysThemTests(unittest.TestCase):
+    """The one fact about the party gary must never lose track of."""
+
+    def test_the_projection_carries_it_through(self):
+        world_now = world.project([Sheet(played_by="player")], [])
+        self.assertEqual(world_now.party[0].played_by, "player")
+
+    def test_the_player_is_named_as_off_limits(self):
+        text = world.render(world.project([Sheet(name="Bramble", played_by="player")], []))
+        self.assertIn("Bramble", text)
+        self.assertIn("never decide what they do", text)
+
+    def test_a_companion_is_offered_to_gary(self):
+        text = world.render(world.project([Sheet(name="Maud")], []))
+        self.assertIn("Maud", text)
+        self.assertIn("yours to play", text)

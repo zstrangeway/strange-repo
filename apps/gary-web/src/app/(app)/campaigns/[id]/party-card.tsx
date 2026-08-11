@@ -1,7 +1,5 @@
 "use client";
 
-import { useState, useTransition } from "react";
-
 import { Badge } from "@gary/ui/components/badge";
 import {
   Card,
@@ -10,22 +8,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@gary/ui/components/card";
-import { FieldGroup } from "@gary/ui/components/field";
 import { Item, ItemContent, ItemDescription, ItemTitle } from "@gary/ui/components/item";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@gary/ui/components/select";
 import { Skeleton } from "@gary/ui/components/skeleton";
-import { SubmitButton } from "@gary/ui/components/submit-button";
+
+import Link from "next/link";
+
+import { Button } from "@gary/ui/components/button";
 
 import type { Member } from "@/lib/api";
-import { addCharacter } from "@/lib/gary";
-
-import { Field, Notice } from "../../../form-parts";
 
 // Who is at the table, as they currently stand.
 //
@@ -36,22 +26,15 @@ import { Field, Notice } from "../../../form-parts";
 export default function Party({
   campaignId,
   party,
-  classes,
   loading,
-  onAdded,
 }: {
   campaignId: string;
   party: Member[];
-  classes: string[];
   /** True until the world has been asked. Not the same as an empty party,
    *  and saying "nobody at the table" before looking is a page telling you
    *  something it does not know. */
   loading: boolean;
-  onAdded: () => void;
 }) {
-  const [error, setError] = useState<string | undefined>(undefined);
-  const [pending, start] = useTransition();
-
   return (
     <Card>
       <CardHeader>
@@ -85,6 +68,9 @@ export default function Party({
                       : ""}
                   </ItemDescription>
                 </ItemContent>
+                {member.played_by === "player" ? (
+                  <Badge data-testid={`plays-${member.name}`}>you</Badge>
+                ) : null}
                 <Badge
                   variant={member.down ? "destructive" : "secondary"}
                   data-testid="hit-points"
@@ -96,59 +82,11 @@ export default function Party({
           </div>
         )}
 
-        <form
-          noValidate
-          onSubmit={(event) => {
-            event.preventDefault();
-            const form = new FormData(event.currentTarget);
-            const name = String(form.get("character_name") ?? "");
-            const chosen = String(form.get("character_class") ?? "");
-            setError(undefined);
-
-            start(async () => {
-              const result = await addCharacter(campaignId, {
-                name,
-                character_class: chosen,
-              });
-              if (result.character) {
-                onAdded();
-                return;
-              }
-              setError(result.error);
-            });
-          }}
-        >
-          <FieldGroup className="gap-3">
-            <Notice error={error} />
-            <Field
-              label="Character name"
-              name="character_name"
-              placeholder="Bramble"
-              labelHidden
-            />
-            {/* Asked of the system rather than listed here: a warlock is fine
-                in a game that has warlocks and refused in one that does not,
-                and gary-api refuses it either way. */}
-            <Select name="character_class" defaultValue={classes[0]}>
-              <SelectTrigger data-testid="character-class" className="w-full">
-                <SelectValue placeholder="Class" />
-              </SelectTrigger>
-              <SelectContent>
-                {classes.map((name) => (
-                  <SelectItem key={name} value={name}>
-                    {name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <SubmitButton
-              label="Add to the party"
-              pending={pending}
-              variant="secondary"
-              data-testid="add-character"
-            />
-          </FieldGroup>
-        </form>
+        {/* Making characters belongs to the step before this one, which is
+            also where you change which of them is you. */}
+        <Button asChild variant="ghost" size="sm">
+          <Link href={`/campaigns/${campaignId}/party`}>Change the party</Link>
+        </Button>
       </CardContent>
     </Card>
   );

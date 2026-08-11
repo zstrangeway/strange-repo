@@ -29,11 +29,13 @@ const {
   disconnectAccount,
   me,
   myCampaigns,
+  partyOf,
   runnableModels,
   scenesOf,
   signOut,
   startCampaign,
   systemNamed,
+  takeOver,
   transcript,
   updateDisplayName,
   changeModel,
@@ -395,11 +397,15 @@ describe("addCharacter", () => {
     answering({ ok: true, data: { id: "ch1", name: "Bramble" } });
 
     expect(
-      await addCharacter("c1", { name: "Bramble", character_class: "rogue" }),
+      await addCharacter("c1", {
+        name: "Bramble",
+        character_class: "rogue",
+        mine: true,
+      }),
     ).toEqual({ character: { id: "ch1", name: "Bramble" } });
     expect(callApi).toHaveBeenCalledWith("/campaigns/c1/characters", {
       method: "POST",
-      body: { name: "Bramble", character_class: "rogue" },
+      body: { name: "Bramble", character_class: "rogue", mine: true },
       token: "a-token",
     });
   });
@@ -408,7 +414,11 @@ describe("addCharacter", () => {
     answering(REFUSED);
 
     expect(
-      await addCharacter("c1", { name: "", character_class: "rogue" }),
+      await addCharacter("c1", {
+        name: "",
+        character_class: "rogue",
+        mine: false,
+      }),
     ).toEqual({ error: "Not allowed" });
   });
 });
@@ -488,5 +498,47 @@ describe("beginScene", () => {
     answering(REFUSED);
 
     expect(await beginScene("c1", "")).toEqual({ error: "Not allowed" });
+  });
+});
+
+describe("partyOf", () => {
+  it("asks who is at the table and who plays them", async () => {
+    answering({ ok: true, data: [{ id: "ch1", played_by: "player" }] });
+
+    expect(await partyOf("c1")).toEqual([{ id: "ch1", played_by: "player" }]);
+    expect(callApi).toHaveBeenCalledWith("/campaigns/c1/characters", {
+      token: "a-token",
+    });
+  });
+
+  it("is empty when gary-api will not say", async () => {
+    answering(REFUSED);
+
+    expect(await partyOf("c1")).toEqual([]);
+  });
+});
+
+describe("takeOver", () => {
+  it("hands back the whole party, because two of them changed", async () => {
+    answering({
+      ok: true,
+      data: [
+        { id: "ch1", played_by: "gary" },
+        { id: "ch2", played_by: "player" },
+      ],
+    });
+
+    const result = await takeOver("c1", "ch2");
+    expect(result.party).toHaveLength(2);
+    expect(callApi).toHaveBeenCalledWith("/campaigns/c1/characters/ch2/player", {
+      method: "POST",
+      token: "a-token",
+    });
+  });
+
+  it("passes on why it was refused", async () => {
+    answering(REFUSED);
+
+    expect(await takeOver("c1", "nobody")).toEqual({ error: "Not allowed" });
   });
 });

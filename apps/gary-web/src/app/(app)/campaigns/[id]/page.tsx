@@ -17,20 +17,21 @@ import type { Campaign, Model, Scene, World } from "@/lib/api";
 import {
   beginScene,
   campaign as readCampaign,
+  partyOf,
   runnableModels,
   scenesOf,
-  systemNamed,
   transcript as readTranscript,
   changeModel,
   worldOf,
 } from "@/lib/gary";
 import { beginCampaign, takeTurn, type TurnEvent } from "@/lib/play";
 import { useSession } from "@/lib/use-session";
+import { useRouter } from "next/navigation";
 
 import { Notice } from "../../../form-parts";
 import Composer from "./composer";
 import ModelPicker from "./model-picker";
-import Party from "./party";
+import Party from "./party-card";
 import SceneBreak from "./scene-break";
 import Transcript, { type Entry } from "./transcript";
 
@@ -48,11 +49,11 @@ export default function CampaignPage({
 }) {
   const { id } = use(params);
   const { user } = useSession();
+  const router = useRouter();
 
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [missing, setMissing] = useState(false);
   const [models, setModels] = useState<Model[]>([]);
-  const [classes, setClasses] = useState<string[]>([]);
   const [world, setWorld] = useState<World | null>(null);
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -72,6 +73,10 @@ export default function CampaignPage({
   // the stream can open a new scene between renders, and a turn filed under
   // the scene a stale render knew about would render in the wrong place.
   const playing = useRef<string>("");
+
+  // Projected by gary-api and never assembled here, so it is derived rather
+  // than held: a second copy of the party is a second thing to be wrong.
+  const party = world?.party ?? [];
 
   const loadWorld = useCallback(async () => {
     setWorld(await worldOf(id));
@@ -94,16 +99,23 @@ export default function CampaignPage({
       return;
     }
 
-    const [runnable, said, system] = await Promise.all([
+    // A campaign nobody has built a party for has nothing to show here, and
+    // no way to get one from this page any more. Sent back to the step that
+    // does rather than left on a table it cannot lay.
+    const here = await partyOf(id);
+    if (!here.some((character) => character.played_by === "player")) {
+      router.replace(`/campaigns/${id}/party`);
+      return;
+    }
+
+    const [runnable, said] = await Promise.all([
       runnableModels(),
       readTranscript(id),
-      systemNamed(found.system),
       loadScenes(),
     ]);
 
     setCampaign(found);
     setModels(runnable);
-    setClasses(system?.classes ?? []);
     setEntries(
       said.map((turn) => ({
         id: turn.id,
@@ -115,7 +127,7 @@ export default function CampaignPage({
       })),
     );
     await loadWorld();
-  }, [id, loadWorld, loadScenes]);
+  }, [id, router, loadWorld, loadScenes]);
 
   useEffect(() => {
     // Fetching on mount, which is what an effect is for.
@@ -264,6 +276,8 @@ export default function CampaignPage({
     }
 
     opening.current = true;
+    // Starting the turn is the point, and a turn starts by saying so.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTrouble(undefined);
     setBusy(true);
     answering.current = null;
@@ -289,8 +303,6 @@ export default function CampaignPage({
   if (!campaign) {
     return <Skeleton className="h-64 w-full" data-testid="campaign-loading" />;
   }
-
-  const party = world?.party ?? [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -329,9 +341,11 @@ export default function CampaignPage({
             <CardTitle>The story so far</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-6">
-            {/* What the adventure is about, in the module's own words.
-                Shown while gary is still writing the opening, and kept after,
-                because a table has the premise in front of it all evening. */}
+            {/* What the adventure is about, until gary has said it better.
+                It is here to cover the seconds the opening takes to arrive;
+                once the opening has arrived the two say the same thing one
+                after the other, and the second one is worse prose. */}
+            {entries.length === 0 ? (
             <div
               className="rounded-lg border border-dashed p-4"
               data-testid="premise"
@@ -344,6 +358,7 @@ export default function CampaignPage({
                 {campaign.hook}
               </p>
             </div>
+            ) : null}
 
             <Transcript
               entries={entries}
@@ -378,13 +393,7 @@ export default function CampaignPage({
           </CardContent>
         </Card>
 
-        <Party
-          campaignId={id}
-          party={party}
-          classes={classes}
-          loading={world === null}
-          onAdded={loadWorld}
-        />
+        <Party campaignId={id} party={party} loading={world === null} />
       </div>
     </div>
   );

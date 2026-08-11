@@ -118,6 +118,10 @@ class ChangeCampaign(BaseModel):
 class NewCharacter(BaseModel):
     name: str = Field(max_length=80)
     character_class: str = Field(max_length=40)
+    # Whether this is the one you play. False by default: a companion is what
+    # a character is unless somebody says otherwise, and being the player is
+    # the deliberate act.
+    mine: bool = False
     level: int = Field(default=1, ge=1, le=30)
     max_hp: int = Field(default=DEFAULT_HP, ge=1, le=999)
     abilities: dict[str, int] | None = None
@@ -138,6 +142,8 @@ class CharacterResponse(BaseModel):
     level: int
     max_hp: int
     abilities: dict[str, int]
+    # "player" for the one you are, "gary" for the ones it speaks for.
+    played_by: str
 
 
 class MemberResponse(BaseModel):
@@ -149,6 +155,7 @@ class MemberResponse(BaseModel):
     max_hp: int
     conditions: list[str]
     down: bool
+    played_by: str
 
 
 class WorldResponse(BaseModel):
@@ -242,6 +249,7 @@ def _as_character(character: Character) -> dict:
         "level": character.level,
         "max_hp": character.max_hp,
         "abilities": character.abilities or {},
+        "played_by": character.played_by,
     }
 
 
@@ -282,6 +290,37 @@ def _gary_for(campaign: Campaign) -> narration.Narrator:
             "gm_unavailable",
             "gary cannot reach a model on this deployment",
         ) from error
+
+
+async def _party(database, campaign_id: uuid.UUID) -> list[Character]:
+    return list(
+        await database.scalars(
+            select(Character)
+            .where(Character.campaign_id == campaign_id)
+            .order_by(Character.created_at, Character.name)
+        )
+    )
+
+
+def _playable(party: list[Character]) -> None:
+    """Refuse a party there is nobody in for you to be.
+
+    Two refusals rather than one, because they are two different problems and
+    only one of them is fixed by making another character: an empty campaign
+    needs anybody, a campaign of companions needs one of them to be you.
+    """
+    if not party:
+        raise Refusal(
+            status.HTTP_409_CONFLICT,
+            "no_party",
+            "There is nobody in this campaign to play yet",
+        )
+    if not any(character.played_by == "player" for character in party):
+        raise Refusal(
+            status.HTTP_409_CONFLICT,
+            "no_character",
+            "None of these characters is yours to play",
+        )
 
 
 async def _mine(database, user, campaign_id: uuid.UUID) -> Campaign:
@@ -447,6 +486,25 @@ async def add_character(
             status.HTTP_422_UNPROCESSABLE_ENTITY, "no_such_class", str(error)
         ) from error
 
+    if request.mine:
+        already = await database.scalar(
+            select(func.count())
+            .select_from(Character)
+            .where(
+                Character.campaign_id == campaign.id,
+                Character.played_by == "player",
+            )
+        )
+        if already:
+            # One is the whole idea. Two would put somebody back to playing
+            # the party rather than a person in it — and take over is how you
+            # change your mind, so this is not a state anybody needs.
+            raise Refusal(
+                status.HTTP_409_CONFLICT,
+                "already_playing",
+                "You are already playing somebody in this campaign",
+            )
+
     ruleset = systems.ruleset(campaign.system_slug)
     abilities = request.abilities or {
         ability: DEFAULT_ABILITY for ability in ruleset.abilities
@@ -459,6 +517,7 @@ async def add_character(
         level=request.level,
         max_hp=request.max_hp,
         abilities=abilities,
+        played_by="player" if request.mine else "gary",
     )
     database.add(character)
     await database.commit()
@@ -471,12 +530,44 @@ async def read_party(
     campaign_id: uuid.UUID, database: Db, user: CurrentUser
 ) -> list[CharacterResponse]:
     campaign = await _mine(database, user, campaign_id)
-    rows = await database.scalars(
-        select(Character)
-        .where(Character.campaign_id == campaign.id)
-        .order_by(Character.created_at, Character.name)
+    return [
+        _as_character(character)
+        for character in await _party(database, campaign.id)
+    ]
+
+
+@router.post("/campaigns/{campaign_id}/characters/{character_id}/player")
+async def take_over(
+    campaign_id: uuid.UUID,
+    character_id: uuid.UUID,
+    database: Db,
+    user: CurrentUser,
+) -> list[CharacterResponse]:
+    """Play this one instead, and hand whoever it was to gary.
+
+    The whole party comes back rather than the one character, because two of
+    them changed and a client that had to work out the other from an absence
+    would sometimes get it wrong.
+    """
+    campaign = await _mine(database, user, campaign_id)
+    party = await _party(database, campaign.id)
+
+    wanted = next(
+        (one for one in party if one.id == character_id),
+        None,
     )
-    return [_as_character(character) for character in rows]
+    if wanted is None:
+        raise Refusal(
+            status.HTTP_404_NOT_FOUND,
+            "no_such_character",
+            "No such character in this campaign",
+        )
+
+    for character in party:
+        character.played_by = "player" if character is wanted else "gary"
+    await database.commit()
+
+    return [_as_character(character) for character in party]
 
 
 @router.get("/campaigns/{campaign_id}/world")
@@ -499,6 +590,7 @@ async def read_world(
                 "max_hp": member.max_hp,
                 "conditions": member.conditions,
                 "down": member.down,
+                "played_by": member.played_by,
             }
             for member in state.party
         ],
@@ -583,21 +675,10 @@ async def begin_scene(
     """
     campaign = await _mine(database, user, campaign_id)
 
-    party = list(
-        await database.scalars(
-            select(Character)
-            .where(Character.campaign_id == campaign.id)
-            .order_by(Character.created_at, Character.name)
-        )
-    )
-    if not party:
-        # Same refusal as playing, for the same reason: a scene is a stretch
-        # of play, and there is nobody to play.
-        raise Refusal(
-            status.HTTP_409_CONFLICT,
-            "no_party",
-            "There is nobody in this campaign to play yet",
-        )
+    # Same refusals as playing, for the same reason: a scene is a stretch of
+    # play, and there is nobody to play it.
+    party = await _party(database, campaign.id)
+    _playable(party)
 
     opened = await scenes.begin(database, campaign, party, _run, request.title)
     await database.commit()
@@ -827,19 +908,8 @@ async def take_turn(
     """
     campaign = await _mine(database, user, campaign_id)
 
-    party = list(
-        await database.scalars(
-            select(Character)
-            .where(Character.campaign_id == campaign.id)
-            .order_by(Character.created_at, Character.name)
-        )
-    )
-    if not party:
-        raise Refusal(
-            status.HTTP_409_CONFLICT,
-            "no_party",
-            "There is nobody in this campaign to play yet",
-        )
+    party = await _party(database, campaign.id)
+    _playable(party)
 
     gary = _gary_for(campaign)
 
@@ -899,19 +969,8 @@ async def begin_campaign(
     """
     campaign = await _mine(database, user, campaign_id)
 
-    party = list(
-        await database.scalars(
-            select(Character)
-            .where(Character.campaign_id == campaign.id)
-            .order_by(Character.created_at, Character.name)
-        )
-    )
-    if not party:
-        raise Refusal(
-            status.HTTP_409_CONFLICT,
-            "no_party",
-            "There is nobody in this campaign to play yet",
-        )
+    party = await _party(database, campaign.id)
+    _playable(party)
 
     said = await database.scalar(
         select(func.count()).select_from(Turn).where(Turn.campaign_id == campaign.id)
@@ -949,13 +1008,7 @@ async def _stream(campaign_id, scene_id, message, gary):
 
     async with factory() as database:
         campaign = await database.get(Campaign, campaign_id)
-        party = list(
-            await database.scalars(
-                select(Character)
-                .where(Character.campaign_id == campaign_id)
-                .order_by(Character.created_at, Character.name)
-            )
-        )
+        party = await _party(database, campaign_id)
         # This scene's turns, not the campaign's. Prose stops being memory at
         # a scene boundary; what crosses one is the world and the recaps.
         scene = await database.get(Scene, scene_id)

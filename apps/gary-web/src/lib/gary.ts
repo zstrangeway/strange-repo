@@ -220,7 +220,7 @@ export async function changeModel(
 
 export async function addCharacter(
   id: string,
-  fields: { name: string; character_class: string },
+  fields: { name: string; character_class: string; mine: boolean },
 ): Promise<Outcome & { character?: Character }> {
   const result = await callApi<Character>(`/campaigns/${id}/characters`, {
     method: "POST",
@@ -229,6 +229,28 @@ export async function addCharacter(
   });
 
   return result.ok ? { character: result.data } : { error: result.message };
+}
+
+/** Everybody at the table, and who plays each of them. */
+export async function partyOf(id: string): Promise<Character[]> {
+  const result = await callApi<Character[]>(`/campaigns/${id}/characters`, {
+    token: storedToken(),
+  });
+  return result.ok ? result.data : [];
+}
+
+/** Play this one instead, handing whoever it was to gary. The whole party
+ *  comes back, because two of them changed. */
+export async function takeOver(
+  id: string,
+  characterId: string,
+): Promise<Outcome & { party?: Character[] }> {
+  const result = await callApi<Character[]>(
+    `/campaigns/${id}/characters/${characterId}/player`,
+    { method: "POST", token: storedToken() },
+  );
+
+  return result.ok ? { party: result.data } : { error: result.message };
 }
 
 /** The party as they currently stand — hit points and conditions projected

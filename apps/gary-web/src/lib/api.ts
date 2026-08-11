@@ -108,6 +108,8 @@ export type Character = {
   level: number;
   max_hp: number;
   abilities: Record<string, number>;
+  /** "player" for the one you are, "gary" for the ones it speaks for. */
+  played_by: string;
 };
 
 /** A character as they currently stand, projected from what has happened. */
@@ -120,6 +122,7 @@ export type Member = {
   max_hp: number;
   conditions: string[];
   down: boolean;
+  played_by: string;
 };
 
 export type World = {

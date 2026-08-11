@@ -63,6 +63,10 @@ class Member:
     level: int
     max_hp: int
     hp: int
+    # Who speaks for them. Part of the world rather than beside it, because
+    # it is a fact about the table that gary needs on every turn — and the
+    # world is what gary is told on every turn.
+    played_by: str = "gary"
     conditions: list[str] = field(default_factory=list)
 
     @property
@@ -214,6 +218,7 @@ def project(characters: list[Character], events: list[WorldEvent]) -> World:
                 level=character.level,
                 max_hp=character.max_hp,
                 hp=character.max_hp,
+                played_by=character.played_by,
             )
             for character in characters
         ]
@@ -283,9 +288,17 @@ def render(world: World) -> str:
                 state += ", down"
             if member.conditions:
                 state += ", " + ", ".join(sorted(member.conditions))
+            # Said on every line rather than in a note underneath, because
+            # this is the one fact about the party gary must never lose track
+            # of: whose choices are not its to make.
+            whose = (
+                "PLAYED BY THE PLAYER — never decide what they do"
+                if member.played_by == "player"
+                else "yours to play"
+            )
             lines.append(
                 f"  - {member.name}, level {member.level} {member.character_class}"
-                f" ({state})"
+                f" ({state}) — {whose}"
             )
     else:
         lines.append("The party: nobody yet")

@@ -74,7 +74,7 @@ Feature: Campaigns
     And I choose the module "The Drowned Belfry"
     And I choose the model "Claude Opus 5"
     And I name it "A Light in the Deep" and start
-    Then I should be on the party page
+    Then I should be building the party
     And the page shows what the adventure is about
 
   Scenario: Making the character I play
@@ -122,7 +122,7 @@ Feature: Campaigns
     Given I have signed in at google as "ada@example.com" named "Ada"
     And I already have a campaign called "A Light in the Deep"
     When I open that campaign
-    Then I should be on the party page
+    Then I should be building the party
 
   Scenario: Signing out from a campaign
     Given I have signed in at google as "ada@example.com" named "Ada"
@@ -135,9 +135,10 @@ Feature: Campaigns
   Scenario: A new campaign drops you into a situation
     Given I have signed in at google as "ada@example.com" named "Ada"
     And I already have a campaign called "A Light in the Deep"
-    When I open that campaign
+    When I open that campaign's party
     Then the page shows what the adventure is about
-    When I add "Bramble" the "rogue"
+    When I add "Bramble" the "rogue" as mine
+    And I take them in
     Then gary should open the scene without my asking
     And the composer should be waiting for me afterwards
     # The premise was on screen to cover the wait. Once the opening has

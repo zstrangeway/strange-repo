@@ -55,7 +55,10 @@ const CATALOGUE = [
     slug: "dnd-5e",
     name: "Dungeons & Dragons 5th Edition",
     blurb: "Roll a d20, add a modifier, meet a difficulty class.",
-    classes: ["fighter", "rogue", "wizard"],
+    // A subset of gary-api's twelve, and every one of them has to be in it —
+    // a class this stub invented would let a scenario pass against a service
+    // that refuses it.
+    classes: ["cleric", "fighter", "rogue", "wizard"],
     abilities: ["strength", "dexterity", "constitution"],
     degrees: ["success", "failure"],
     modules: [
@@ -191,12 +194,13 @@ export function addCampaign(userId, { name, system, module, model }) {
   return campaign;
 }
 
-export function addCharacterTo(campaignId, { name, character_class }) {
+export function addCharacterTo(campaignId, { name, character_class, mine }) {
   const character = {
     id: randomUUID(),
     campaign_id: campaignId,
     name,
     character_class,
+    played_by: mine ? "player" : "gary",
     level: 1,
     max_hp: DEFAULT_HP,
     abilities: { strength: 10, dexterity: 10, constitution: 10 },
@@ -245,6 +249,11 @@ function breakScene(campaignId, title) {
   return opened;
 }
 
+/** Whoever the player is at this table, if anybody is yet. */
+export function playedBy(campaignId) {
+  return playing(campaignId);
+}
+
 export function campaignCalled(name) {
   return [...campaigns.values()].find((one) => one.name === name);
 }
@@ -272,6 +281,22 @@ function asCampaign(campaign) {
     // deployment's default is to render which model a campaign runs on.
     model: campaign.model ?? FALLBACK_MODEL,
     model_chosen: campaign.model !== null,
+  };
+}
+
+function playing(campaignId) {
+  return partyOf(campaignId).find((one) => one.played_by === "player");
+}
+
+function asCharacter(character) {
+  return {
+    id: character.id,
+    name: character.name,
+    character_class: character.character_class,
+    level: character.level,
+    max_hp: character.max_hp,
+    abilities: character.abilities,
+    played_by: character.played_by,
   };
 }
 
@@ -568,6 +593,34 @@ function handle(method, path, body, request, query) {
     };
   }
 
+  const takingOver = path.match(
+    /^\/campaigns\/([^/]+)\/characters\/([^/]+)\/player$/,
+  );
+  if (method === "POST" && takingOver) {
+    const campaign = campaigns.get(takingOver[1]);
+    if (!campaign || campaign.user_id !== user.id) {
+      return {
+        status: 404,
+        body: { detail: "No such campaign", code: "no_such_campaign" },
+      };
+    }
+    const here = partyOf(campaign.id);
+    const wanted = here.find((one) => one.id === takingOver[2]);
+    if (!wanted) {
+      return {
+        status: 404,
+        body: {
+          detail: "No such character in this campaign",
+          code: "no_such_character",
+        },
+      };
+    }
+    for (const character of here) {
+      character.played_by = character === wanted ? "player" : "gary";
+    }
+    return { status: 200, body: here.map(asCharacter) };
+  }
+
   const inCampaign = path.match(/^\/campaigns\/([^/]+)(\/[a-z]+)?$/);
   if (inCampaign) {
     const campaign = campaigns.get(inCampaign[1]);
@@ -606,18 +659,21 @@ function handle(method, path, body, request, query) {
           },
         };
       }
+      if (body.mine && playing(campaign.id)) {
+        return {
+          status: 409,
+          body: {
+            detail: "You are already playing somebody in this campaign",
+            code: "already_playing",
+          },
+        };
+      }
       const made = addCharacterTo(campaign.id, body);
-      return {
-        status: 201,
-        body: {
-          id: made.id,
-          name: made.name,
-          character_class: made.character_class,
-          level: made.level,
-          max_hp: made.max_hp,
-          abilities: made.abilities,
-        },
-      };
+      return { status: 201, body: asCharacter(made) };
+    }
+
+    if (method === "GET" && under === "/characters") {
+      return { status: 200, body: partyOf(campaign.id).map(asCharacter) };
     }
 
     if (method === "GET" && under === "/world") {
@@ -638,6 +694,7 @@ function handle(method, path, body, request, query) {
             max_hp: character.max_hp,
             conditions: [],
             down: false,
+            played_by: character.played_by,
           })),
         },
       };
@@ -729,6 +786,16 @@ async function stream(request, response, body, campaign, opening = false) {
       JSON.stringify({
         detail: "There is nobody in this campaign to play yet",
         code: "no_party",
+      }),
+    );
+    return;
+  }
+  if (!playing(campaign.id)) {
+    response.writeHead(409, { "content-type": "application/json" });
+    response.end(
+      JSON.stringify({
+        detail: "None of these characters is yours to play",
+        code: "no_character",
       }),
     );
     return;

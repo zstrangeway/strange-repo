@@ -1,0 +1,250 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { use, useCallback, useEffect, useState, useTransition } from "react";
+
+import { Badge } from "@gary/ui/components/badge";
+import { Button } from "@gary/ui/components/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@gary/ui/components/card";
+import { FieldGroup } from "@gary/ui/components/field";
+import { Item, ItemContent, ItemDescription, ItemTitle } from "@gary/ui/components/item";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@gary/ui/components/select";
+import { Skeleton } from "@gary/ui/components/skeleton";
+import { SubmitButton } from "@gary/ui/components/submit-button";
+
+import type { Campaign, Character } from "@/lib/api";
+import {
+  addCharacter,
+  campaign as readCampaign,
+  partyOf,
+  systemNamed,
+  takeOver,
+} from "@/lib/gary";
+
+import { Field, Notice } from "../../../../form-parts";
+
+// Building the party, before the table rather than beside it.
+//
+// It used to happen on the campaign page, which meant that page loaded with
+// nothing on it, a disabled composer, and "gary is setting the scene" while
+// gary was doing nothing of the sort — because there was nobody to set it
+// for. A screen that cannot proceed should be about the thing it is waiting
+// for, and this is that thing.
+//
+// One character is yours. The rest are companions: gary speaks for them and
+// you may tell them what to do.
+export default function PartyPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = use(params);
+  const router = useRouter();
+
+  const [campaign, setCampaign] = useState<Campaign | null>(null);
+  const [party, setParty] = useState<Character[] | null>(null);
+  const [classes, setClasses] = useState<string[]>([]);
+  const [error, setError] = useState<string | undefined>(undefined);
+  const [pending, start] = useTransition();
+
+  const load = useCallback(async () => {
+    const found = await readCampaign(id);
+    if (!found) {
+      router.replace("/");
+      return;
+    }
+
+    const [here, system] = await Promise.all([
+      partyOf(id),
+      systemNamed(found.system),
+    ]);
+    setCampaign(found);
+    setParty(here);
+    setClasses(system?.classes ?? []);
+  }, [id, router]);
+
+  useEffect(() => {
+    // Fetching on mount, which is what an effect is for.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load();
+  }, [load]);
+
+  if (!campaign || party === null) {
+    return <Skeleton className="h-64 w-full" data-testid="party-loading" />;
+  }
+
+  const mine = party.find((one) => one.played_by === "player");
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-3xl font-semibold tracking-tight">
+          {campaign.name}
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Who is going, and which of them is you.
+        </p>
+      </div>
+
+      {/* What you are walking into, before anybody has been made. */}
+      <div
+        className="rounded-lg border border-dashed p-4"
+        data-testid="premise"
+      >
+        <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+          {campaign.title}
+        </p>
+        <p className="mt-1 text-sm">{campaign.premise}</p>
+        <p className="mt-2 text-sm" data-testid="hook">
+          {campaign.hook}
+        </p>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>The party</CardTitle>
+          <CardDescription>
+            You play one of them. Gary speaks for the rest, and you can tell
+            them what to do.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          {party.length === 0 ? (
+            <p className="text-sm text-muted-foreground" data-testid="no-party">
+              Nobody yet. Make the character you want to be.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-2" data-testid="party">
+              {party.map((character) => (
+                <Item
+                  key={character.id}
+                  variant="outline"
+                  size="sm"
+                  data-testid={`member-${character.name}`}
+                >
+                  <ItemContent>
+                    <ItemTitle>{character.name}</ItemTitle>
+                    <ItemDescription>
+                      level {character.level} {character.character_class} ·{" "}
+                      {character.max_hp}/{character.max_hp}
+                    </ItemDescription>
+                  </ItemContent>
+                  {character.played_by === "player" ? (
+                    <Badge data-testid={`plays-${character.name}`}>you</Badge>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      data-testid={`take-over-${character.name}`}
+                      disabled={pending}
+                      onClick={() =>
+                        start(async () => {
+                          const result = await takeOver(id, character.id);
+                          if (result.party) {
+                            setParty(result.party);
+                            return;
+                          }
+                          setError(result.error);
+                        })
+                      }
+                    >
+                      <span
+                        className="text-muted-foreground"
+                        data-testid={`plays-${character.name}`}
+                      >
+                        gary plays them
+                      </span>
+                    </Button>
+                  )}
+                </Item>
+              ))}
+            </div>
+          )}
+
+          <form
+            noValidate
+            onSubmit={(event) => {
+              event.preventDefault();
+              const form = new FormData(event.currentTarget);
+              const shape = {
+                name: String(form.get("character_name") ?? ""),
+                character_class: String(form.get("character_class") ?? ""),
+                // The first one is you unless you already are somebody. No
+                // choosing between two buttons for a decision that only has
+                // one sensible answer at the time it is made.
+                mine: !mine,
+              };
+              setError(undefined);
+              event.currentTarget.reset();
+
+              start(async () => {
+                const result = await addCharacter(id, shape);
+                if (result.character) {
+                  setParty(await partyOf(id));
+                  return;
+                }
+                setError(result.error);
+              });
+            }}
+          >
+            <FieldGroup className="gap-3">
+              <Notice error={error} />
+              <Field
+                label="Character name"
+                name="character_name"
+                placeholder={mine ? "A companion" : "The one you play"}
+                labelHidden
+              />
+              <Select name="character_class" defaultValue={classes[0]}>
+                <SelectTrigger data-testid="character-class" className="w-full">
+                  <SelectValue placeholder="Class" />
+                </SelectTrigger>
+                <SelectContent>
+                  {classes.map((name) => (
+                    <SelectItem key={name} value={name}>
+                      {name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <SubmitButton
+                label={mine ? "Add a companion" : "This one is me"}
+                pending={pending}
+                variant="secondary"
+                data-testid="add-character"
+              />
+            </FieldGroup>
+          </form>
+        </CardContent>
+      </Card>
+
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-sm text-muted-foreground">
+          {mine
+            ? `You are ${mine.name}.`
+            : "Nobody here is you yet, so there is nobody to be."}
+        </p>
+        <Button
+          data-testid="take-them-in"
+          disabled={!mine}
+          onClick={() => router.push(`/campaigns/${id}`)}
+        >
+          Take them in
+        </Button>
+      </div>
+    </div>
+  );
+}

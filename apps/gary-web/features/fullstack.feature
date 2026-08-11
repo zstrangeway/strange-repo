@@ -88,9 +88,11 @@ Feature: The whole thing, for real
     And I choose the module "The Drowned Belfry"
     And I choose the model "Whatever gary is running"
     And I name it "A Light in the Deep" and start
-    Then I should be on a campaign page
-    When I add "Bramble" the "rogue"
+    Then I should be building the party
+    When I add "Bramble" the "rogue" as mine
     Then the page shows "8/8"
+    When I take them in
+    Then I should be on a campaign page
     When I say "I search the room [[roll 1d20+3 Perception]]"
     And gary finishes
     Then the transcript should show a roll of "1d20+3"
@@ -108,8 +110,9 @@ Feature: The whole thing, for real
     And I choose the module "The Drowned Belfry"
     And I choose the model "Whatever gary is running"
     And I name it "A Light in the Deep" and start
-    Then I should be on a campaign page
-    When I add "Bramble" the "rogue"
+    Then I should be building the party
+    When I add "Bramble" the "rogue" as mine
+    And I take them in
     And I say "I push open the door"
     And gary finishes
     And I reload the page
