@@ -20,7 +20,7 @@ Feature: Characters
     Then the response status should be 201
     And the response field "name" should be "Bramble"
     And the response field "character_class" should be "rogue"
-    And the response field "level" should be "1"
+    And the character should be level 1
 
   Scenario: A party of several
     Given I add "Bramble" the rogue

@@ -6,7 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from gary_api import auth, db, identity, logs
+from gary_api import auth, db, dice, identity, logs, play
 from gary_api.identity import consent
 
 
@@ -16,6 +16,9 @@ async def lifespan(app: FastAPI):
     # without this every record this app emits below WARNING is dropped.
     logs.configure()
     identity.report_configuration()
+    # Seeded only when the environment says to, which is how a spec asserts a
+    # number rather than merely that a number arrived.
+    dice.configure()
     yield
 
 
@@ -69,6 +72,7 @@ def create_app() -> FastAPI:
     app.add_exception_handler(auth.Refusal, _render_refusal)
 
     app.include_router(auth.router)
+    app.include_router(play.router)
     # 404s unless IDENTITY_FAKE is on, so mounting it always is safe.
     app.include_router(consent.router)
     app.add_api_route("/health", health, methods=["GET"])

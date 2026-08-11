@@ -7,7 +7,9 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 from starlette.testclient import TestClient
 
-from gary_api import db, identity, logs
+from sqlalchemy.ext.asyncio import async_sessionmaker
+
+from gary_api import db, dice, identity, logs
 from gary_api.app import app, create_app
 from gary_api.db import database_url
 from gary_api.models import Base
@@ -61,10 +63,18 @@ def before_scenario(context, scenario):
     os.environ.pop("IDENTITY_PROVIDERS", None)
     identity.provider.cache_clear()
 
+    # Rolled from a known place, so a spec can assert a number rather than
+    # merely that a number arrived. Cleared and reapplied per scenario because
+    # the generator is module state: without this a scenario would roll from
+    # wherever the previous one left it.
+    os.environ["DICE_SEED"] = "1234"
+    dice.configure()
+
     async def empty(engine):
         async with engine.begin() as connection:
             # CASCADE reaches sessions and identities through their foreign
-            # keys, so this cannot drift as tables are added.
+            # keys — and now campaigns, and everything hanging off those — so
+            # this cannot drift as tables are added.
             await connection.execute(text("TRUNCATE users CASCADE"))
 
     _run(empty)
@@ -108,5 +118,24 @@ def sql(statement, **parameters):
         async with engine.begin() as connection:
             result = await connection.execute(text(statement), parameters)
             return result.fetchall() if result.returns_rows else []
+
+    return _run(run)
+
+
+def with_session(work):
+    """Run async work against a real session, outside the app.
+
+    For steps that arrange world state. They call the same ``world.record``
+    the model's tools will call, rather than writing rows behind its back — so
+    what a scenario arranges has been through the same validation as anything
+    that happens during play.
+    """
+
+    async def run(engine):
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+        async with factory() as session:
+            result = await work(session)
+            await session.commit()
+            return result
 
     return _run(run)
