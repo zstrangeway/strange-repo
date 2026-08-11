@@ -1,5 +1,6 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest } from "next/server";
 
+import { seeOther } from "@/lib/redirects";
 import { absoluteUrl } from "@/lib/urls";
 
 import { connectAccount } from "../../../actions";
@@ -11,10 +12,9 @@ export async function GET(request: NextRequest) {
   const parameters = request.nextUrl.searchParams;
   const code = parameters.get("code");
   const provider = parameters.get("state");
-  const back = new URL("/profile", request.url);
 
   if (!code || !provider) {
-    return NextResponse.redirect(back);
+    return seeOther("/profile");
   }
 
   const result = await connectAccount(
@@ -24,10 +24,11 @@ export async function GET(request: NextRequest) {
   );
 
   if (result.error) {
-    back.searchParams.set("error", result.error);
-  } else if (result.confirmation) {
-    back.searchParams.set("connected", result.confirmation);
+    return seeOther("/profile", { error: result.error });
+  }
+  if (result.confirmation) {
+    return seeOther("/profile", { connected: result.confirmation });
   }
 
-  return NextResponse.redirect(back);
+  return seeOther("/profile");
 }

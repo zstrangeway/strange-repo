@@ -1,5 +1,6 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest } from "next/server";
 
+import { seeOther } from "@/lib/redirects";
 import { absoluteUrl } from "@/lib/urls";
 
 import { completeSignIn } from "../../actions";
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
   // and no code. That is what pressing cancel does, not a failure, so it
   // returns them quietly rather than in a red box.
   if (!code || !provider) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    return seeOther("/login");
   }
 
   const result = await completeSignIn(
@@ -26,10 +27,8 @@ export async function GET(request: NextRequest) {
   );
 
   if (result.error) {
-    const back = new URL("/login", request.url);
-    back.searchParams.set("error", result.error);
-    return NextResponse.redirect(back);
+    return seeOther("/login", { error: result.error });
   }
 
-  return NextResponse.redirect(new URL("/", request.url));
+  return seeOther("/");
 }
