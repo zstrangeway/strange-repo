@@ -65,20 +65,64 @@ Feature: Campaigns
     And I name it "" and start
     Then the page shows an error about the name
 
-  Scenario: Adding a character to a campaign
+  # Building the party is a step of its own, before the table. Starting a
+  # campaign lands here rather than on a page that cannot do anything yet.
+  Scenario: Starting a campaign lands on building the party
+    Given I have signed in at google as "ada@example.com" named "Ada"
+    When I open the new campaign page
+    And I choose the system "Dungeons & Dragons 5th Edition"
+    And I choose the module "The Drowned Belfry"
+    And I choose the model "Claude Opus 5"
+    And I name it "A Light in the Deep" and start
+    Then I should be on the party page
+    And the page shows what the adventure is about
+
+  Scenario: Making the character I play
     Given I have signed in at google as "ada@example.com" named "Ada"
     And I already have a campaign called "A Light in the Deep"
-    When I open that campaign
-    And I add "Bramble" the "rogue"
+    When I open that campaign's party
+    And I add "Bramble" the "rogue" as mine
     Then the page shows "Bramble"
     And the page shows "8/8"
+    And the page should say "Bramble" is mine
 
-  Scenario: A campaign with nobody in it asks for somebody
+  Scenario: Adding a companion for gary to play
+    Given I have signed in at google as "ada@example.com" named "Ada"
+    And I already have a campaign called "A Light in the Deep"
+    When I open that campaign's party
+    And I add "Bramble" the "rogue" as mine
+    And I add "Maud" the "cleric" as a companion
+    Then the page should say "Maud" is gary's
+
+  # Nothing to open a scene for until somebody is mine, so the way in stays
+  # shut and says why.
+  Scenario: The way in is shut until one of them is mine
+    Given I have signed in at google as "ada@example.com" named "Ada"
+    And I already have a campaign called "A Light in the Deep"
+    When I open that campaign's party
+    Then I should not be able to take them in
+    When I add "Bramble" the "rogue" as mine
+    Then I should be able to take them in
+
+  Scenario: Taking them into the game
+    Given I have signed in at google as "ada@example.com" named "Ada"
+    And I already have a campaign called "A Light in the Deep"
+    When I open that campaign's party
+    And I add "Bramble" the "rogue" as mine
+    And I take them in
+    Then I should be on a campaign page
+    And gary should open the scene without my asking
+
+  # "gary is setting the scene" while gary is doing nothing of the sort is the
+  # page describing work that is not happening. Nothing will happen until
+  # somebody is at the table, and that is what it should say.
+  # A campaign whose party was never built has nothing on the table to show,
+  # so the table is not where it sends you.
+  Scenario: A campaign with nobody in it sends me back to build one
     Given I have signed in at google as "ada@example.com" named "Ada"
     And I already have a campaign called "A Light in the Deep"
     When I open that campaign
-    Then the page shows "Nobody at the table yet"
-    And I should not be able to say anything
+    Then I should be on the party page
 
   Scenario: Signing out from a campaign
     Given I have signed in at google as "ada@example.com" named "Ada"
@@ -96,3 +140,6 @@ Feature: Campaigns
     When I add "Bramble" the "rogue"
     Then gary should open the scene without my asking
     And the composer should be waiting for me afterwards
+    # The premise was on screen to cover the wait. Once the opening has
+    # arrived it says the same thing twice, in worse prose the second time.
+    And the page should have stopped repeating the premise

@@ -300,6 +300,21 @@ Then("the page shows what happened in the scene before", async function () {
 
 // ----------------------------------------------------------------- opening
 
+Then("the page should not claim gary is working", async function () {
+  const found = await world.page.$('[data-testid="nothing-said"]');
+  const said = found ? ((await found.textContent()) ?? "") : "";
+  assert.ok(
+    !/setting the scene/i.test(said),
+    `the page said gary was working when nobody was at the table: ${said}`,
+  );
+});
+
+Then("the page should have stopped repeating the premise", async function () {
+  // It earned its place while there was nothing else on screen. There is now.
+  const found = await world.page.$('[data-testid="premise"]');
+  assert.equal(found, null, "the premise is still on screen beside the opening");
+});
+
 Then("the page shows what the adventure is about", async function () {
   // Free and instant, so it is on screen before gary has written a word —
   // which is also what covers the seconds the opening takes to arrive.
