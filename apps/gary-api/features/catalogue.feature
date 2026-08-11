@@ -46,6 +46,6 @@ Feature: The catalogue
   # Every module has to answer "why am I here" before anybody asks it, or
   # gary answers it with a shrug and the game starts with a vacuum in it.
   Scenario: Every module says why anybody would go
-    When I read the catalogue
+    When I GET "/catalogue"
     Then every module should carry a hook
     And no hook should merely repeat its premise

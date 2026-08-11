@@ -25,6 +25,7 @@ def a_prompt(model="anthropic/claude-opus-5", transcript=None):
         module_slug="the-drowned-belfry",
         module_title="The Drowned Belfry",
         module_premise="A bell rings under the water.",
+        module_hook="The reeve is paying you to stop the ringing.",
         world="Where the party is: the causeway\nThe party:\n  - Bramble",
         message="I push open the door",
         transcript=transcript or [("player", "I push open the door")],
@@ -746,3 +747,24 @@ class LongMemoryTests(unittest.TestCase):
         text = openrouter.system_prompt(prompt)
         self.assertIn("Something happened.", text)
         self.assertIn("Untitled", text)
+
+
+class HookTests(unittest.TestCase):
+    """Why the party is here — the question gary kept handing back."""
+
+    def test_the_hook_reaches_the_model(self):
+        text = openrouter.system_prompt(a_prompt())
+        self.assertIn("The reeve is paying you", text)
+
+    def test_a_module_with_no_hook_says_so_rather_than_nothing(self):
+        # Silence would read as "no reason exists"; this reads as "nobody has
+        # told you", which is the truth and is actable on.
+        prompt = a_prompt()
+        prompt.module_hook = ""
+        self.assertIn("Nobody has said why", openrouter.system_prompt(prompt))
+
+    def test_it_is_told_never_to_hand_the_question_back(self):
+        # The exact failure this exists to stop: asked "why am I here", gary
+        # answered "perhaps you have your own reasons".
+        text = openrouter.system_prompt(a_prompt())
+        self.assertIn("your own reasons", text)

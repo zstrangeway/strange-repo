@@ -187,6 +187,10 @@ async def close(
         module_slug=campaign.module_slug,
         module_title="",
         module_premise="",
+        # Empty like the two above: closing_prompt() shows the scene and the
+        # world and asks for a summary. Why the party came is not part of
+        # summarising what they did.
+        module_hook="",
         world=world.render(await world.of(database, campaign.id)),
         scene_title=scene.title,
         transcript=[(turn.role, turn.content) for turn in said],

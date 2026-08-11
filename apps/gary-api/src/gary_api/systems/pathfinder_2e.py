@@ -32,6 +32,12 @@ class Pathfinder2e(FourDegrees):
                 "methodically, and the ash is coming up warm and smelling of a "
                 "spice nobody trades in."
             ),
+            hook=(
+                "The harbourmaster is losing a berth a week to the ash and "
+                "has hired you to find where it is coming from, before the "
+                "traders stop calling and Otari stops eating. The last "
+                "surveyor sent down came back and will not talk about it."
+            ),
             opening="the ash-choked quay at Otari harbour",
         ),
         Module(
@@ -41,6 +47,12 @@ class Pathfinder2e(FourDegrees):
                 "Every person in Otari has been counted, twice, by someone "
                 "nobody hired and nobody can describe afterwards. The second "
                 "count came back one higher than the first."
+            ),
+            hook=(
+                "The town council wants to know who did the counting and "
+                "who the extra person is, quietly, before the news gets "
+                "out and Otari starts deciding for itself. You have the "
+                "second list. Somebody on it should not be."
             ),
             opening="the market square, the morning after the second count",
         ),

@@ -24,6 +24,14 @@ class DnD5e(TwoDegrees):
                 "stopped asking why. Something below the waterline is keeping "
                 "time, and it is counting down to something."
             ),
+            hook=(
+                "Ashfen's reeve has scraped together sixty marks to have "
+                "the ringing stopped, and has stopped pretending it is "
+                "about the noise. Three people have gone out along the "
+                "causeway this month. The tolls are coming closer "
+                "together, and the reeve wants you gone before dark "
+                "tomorrow, one way or the other."
+            ),
             opening="the causeway into Ashfen marsh, at dusk",
         ),
         Module(
@@ -33,6 +41,12 @@ class DnD5e(TwoDegrees):
                 "Three carters have gone missing on a stretch of road with "
                 "nowhere to hide. The ruts stop mid-track. The horses came "
                 "back, calm and well fed, and will not be led that way again."
+            ),
+            hook=(
+                "The carters' guild will pay for its three drivers found, "
+                "alive or otherwise, and will pay more if you can say why "
+                "the horses were not. The next convoy leaves at first "
+                "light and nobody has told those drivers anything."
             ),
             opening="the last waystation before the missing stretch of road",
         ),

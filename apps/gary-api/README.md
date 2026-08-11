@@ -98,9 +98,17 @@ about the other. A failed opening leaves the campaign openable, because half a
 turn stored here would make it look begun and nothing would ever open it
 properly.
 
-`GET /campaigns/{id}` carries the module's `premise` and `place` alongside
-`begun`, so a client can put a situation on screen for free while the opening
-is still being written.
+A module carries a **premise** and a **hook**, and they answer different
+questions: the premise is a situation in the world, the hook is why this party
+is standing in it tonight and who wants it dealt with. Without the second one
+gary opens on scenery, and — asked "why am I here?" — hands the question back:
+*"perhaps you have your own reasons"*. That is the one thing a game master may
+not say, so the module says why instead, and the system prompt draws the line
+explicitly: the world is gary's, the character's choices are the player's.
+
+`GET /campaigns/{id}` carries `premise`, `hook` and `place` alongside `begun`,
+so a client can put a situation on screen for free while the opening is still
+being written.
 
 ### Playing a turn
 
@@ -214,6 +222,7 @@ Looking at that gap is a manual step, and never an automatic one:
 
 ```sh
 pnpm --filter gary-api smoke                                        # one REAL turn
+pnpm --filter gary-api smoke -- --opening                          # the opening instead
 pnpm --filter gary-api smoke -- nvidia/nemotron-3-super-120b-a12b:free
 ```
 

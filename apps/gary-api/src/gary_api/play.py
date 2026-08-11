@@ -38,6 +38,9 @@ class ModuleResponse(BaseModel):
     slug: str
     title: str
     premise: str
+    # Why anybody would go. A catalogue entry without one is a situation
+    # nobody has been asked to do anything about.
+    hook: str
     opening: str
 
 
@@ -88,6 +91,9 @@ class CampaignResponse(BaseModel):
     # and true before gary has written anything — a situation on screen while
     # the opening is still arriving.
     premise: str
+    # Why the party is here. On screen from the moment the page loads, so the
+    # answer to "why am I here" is never only in gary's gift.
+    hook: str
     # Where the module starts. The world holds this too, but a client should
     # not have to ask twice to render a campaign nobody has opened yet.
     place: str
@@ -199,6 +205,7 @@ def _as_system(ruleset: systems.Ruleset) -> dict:
                 "slug": module.slug,
                 "title": module.title,
                 "premise": module.premise,
+                "hook": module.hook,
                 "opening": module.opening,
             }
             for module in ruleset.modules
@@ -218,6 +225,7 @@ def _as_campaign(campaign: Campaign, turns: int = 0) -> dict:
         "module": campaign.module_slug,
         "title": module.title,
         "premise": module.premise,
+        "hook": module.hook,
         "place": module.opening,
         "turns": turns,
         "begun": turns > 0,
@@ -866,11 +874,16 @@ async def take_turn(
 # only thing unusual about an opening — but it arrives by the same route,
 # because everything else about it is an ordinary turn.
 OPENING = (
-    "Open the scene. The party has just arrived and nothing has happened yet. "
-    "Set the situation: where they are, what they can see and hear, and what "
-    "is immediately in front of them. Address the players as 'you' and give "
-    "them something worth reacting to. Do not ask them what they do — the "
-    "scene should make that obvious."
+    "Open the campaign. Nothing has happened yet and nobody has said "
+    "anything.\n\n"
+    "Put the party in the situation, not in front of it. In two or three "
+    "short paragraphs: say plainly why they are here and who wants this "
+    "dealt with — you were told, so tell them — then show them the thing "
+    "that is wrong, happening now, close enough to touch.\n\n"
+    "End on pressure: something that has just changed, or is about to, and "
+    "that they will have to answer. Give them a way in they can take this "
+    "minute, not a landscape to admire. Do not end by asking what they do; "
+    "they know, and they will tell you."
 )
 
 
@@ -959,6 +972,7 @@ async def _stream(campaign_id, scene_id, message, gary):
             module_slug=campaign.module_slug,
             module_title=module.title,
             module_premise=module.premise,
+            module_hook=module.hook,
             world=world.render(state),
             message=message,
             transcript=[(turn.role, turn.content) for turn in turns],

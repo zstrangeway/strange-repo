@@ -99,6 +99,10 @@ class Prompt:
     module_slug: str
     module_title: str
     module_premise: str
+    # Why this party is here and who wants it dealt with. Sent separately
+    # from the premise because they answer different questions, and the one
+    # gary kept failing to answer was this one.
+    module_hook: str
     world: str
     # What the player just said, verbatim. The transcript holds it too, but
     # sanitised — and the double's instructions are exactly what sanitising

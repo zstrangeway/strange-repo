@@ -340,6 +340,9 @@ export default function CampaignPage({
                 {campaign.title}
               </p>
               <p className="mt-1 text-sm">{campaign.premise}</p>
+              <p className="mt-2 text-sm" data-testid="hook">
+                {campaign.hook}
+              </p>
             </div>
 
             <Transcript

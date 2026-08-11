@@ -24,6 +24,13 @@ class DnD35e(TwoDegrees):
                 "The families want their dead back. Neither has asked what "
                 "made the change."
             ),
+            hook=(
+                "The company is paying you by the day to get down the "
+                "shaft and report what the seam has become. The families "
+                "waiting at the winding-house have paid you nothing and "
+                "want their dead brought up, and both sides expect to hear "
+                "your answer first."
+            ),
             opening="the winding-house at the head of the Corvel shaft",
         ),
         Module(
@@ -34,6 +41,13 @@ class DnD35e(TwoDegrees):
                 "it, and staffed by servants who have not been paid in eleven "
                 "years and have not left. They are still keeping the house "
                 "exactly as the old master liked it."
+            ),
+            hook=(
+                "You are carrying the deed. The heir who inherited the "
+                "hall has never seen it, does not intend to, and has hired "
+                "you to take possession, pay off the staff and sell the "
+                "place by the end of the month. Nobody mentioned the staff "
+                "having stayed eleven years without wages."
             ),
             opening="the carriage drive, in sight of the hall's lit windows",
         ),

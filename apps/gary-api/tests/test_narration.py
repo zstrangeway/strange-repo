@@ -93,6 +93,7 @@ def a_prompt(message):
         module_slug="the-drowned-belfry",
         module_title="The Drowned Belfry",
         module_premise="A bell rings under the water.",
+        module_hook="The reeve is paying you to stop the ringing.",
         world="Where the party is: the causeway",
         message=message,
     )

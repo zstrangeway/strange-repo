@@ -308,6 +308,11 @@ Then("the page shows what the adventure is about", async function () {
     (shown ?? "").trim().length > 20,
     `no premise worth reading: ${shown}`,
   );
+
+  // And why you are here, which is the half that was missing: without it the
+  // answer to "why am I here" is only ever in gary's gift.
+  const why = await world.page.textContent('[data-testid="hook"]');
+  assert.ok((why ?? "").trim().length > 20, `no hook worth reading: ${why}`);
 });
 
 Then("gary should open the scene without my asking", async function () {

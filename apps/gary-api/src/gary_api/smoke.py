@@ -55,7 +55,29 @@ def spend() -> float | None:
         return None
 
 
-def a_world() -> world.World:
+def a_world(opening: bool = False) -> world.World:
+    """The world as gary would have it — mid-scene, or at the very start.
+
+    An opening gets the second. A campaign that has not begun has one event
+    in its log, the module's own starting place, and nothing else; opening
+    against a world that is already 25 minutes into a fight would report on a
+    prompt gary never sends.
+    """
+    if opening:
+        return world.World(
+            place=systems.rulesets()[0].modules[0].opening,
+            party=[
+                world.Member(
+                    id="00000000-0000-0000-0000-000000000001",
+                    name="Bramble",
+                    character_class="rogue",
+                    level=1,
+                    max_hp=8,
+                    hp=8,
+                )
+            ],
+        )
+
     return world.World(
         place="a stone chamber below the belfry, ankle-deep in water",
         minutes=25,
@@ -128,7 +150,7 @@ async def play(model: str, opening: bool = False) -> int:
     # exact line.
     ruleset = systems.rulesets()[0]
     module = ruleset.modules[0]
-    state = a_world()
+    state = a_world(opening)
 
     prompt = narration.Prompt(
         briefing=ruleset.briefing(),
@@ -137,6 +159,7 @@ async def play(model: str, opening: bool = False) -> int:
         module_slug=module.slug,
         module_title=module.title,
         module_premise=module.premise,
+        module_hook=module.hook,
         world=world.render(state),
         # The opening answers gary-api's instruction rather than a player, so
         # it is the one thing here where the transcript is genuinely empty.

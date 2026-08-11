@@ -24,6 +24,13 @@ class ADnD1e(TwoDegrees):
                 "opened twice in living memory. Both parties came out. Neither "
                 "came out with everyone."
             ),
+            hook=(
+                "The heath's tenants have petitioned to have the barrow "
+                "sealed for good, and the reeve will not seal it until "
+                "somebody goes down and says what is in it. There is coin "
+                "in the answer and more in whatever the last two parties "
+                "left behind them."
+            ),
             opening="the heath above the barrow, in a rising wind",
         ),
         Module(
@@ -33,6 +40,12 @@ class ADnD1e(TwoDegrees):
                 "A sorcerer's tomb with seven doors and one key, which fits "
                 "all of them and can only be turned six times. Vashk built it "
                 "that way on purpose and left a note saying so."
+            ),
+            hook=(
+                "You bought the key, and the seller was glad to be rid of "
+                "it. Six turns is what you have, seven doors is what Vashk "
+                "built, and whatever is worth having is behind one of "
+                "them. Nobody is coming to let you out."
             ),
             opening="the antechamber, the key cold in your hand",
         ),

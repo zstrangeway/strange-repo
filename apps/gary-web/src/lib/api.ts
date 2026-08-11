@@ -49,6 +49,9 @@ export type Module = {
   slug: string;
   title: string;
   premise: string;
+  /** Why anybody would go. A situation nobody has been asked to do anything
+   *  about is not an adventure. */
+  hook: string;
   opening: string;
 };
 
@@ -85,6 +88,9 @@ export type Campaign = {
   /** What the adventure is about, in the module's own words — a situation on
    *  screen before gary has written anything. */
   premise: string;
+  /** Why the party is here — on screen from the moment the page loads, so
+   *  the answer to "why am I here" is never only in gary's gift. */
+  hook: string;
   /** Where the module starts. */
   place: string;
   turns: number;

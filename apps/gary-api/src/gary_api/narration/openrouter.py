@@ -152,6 +152,11 @@ def system_prompt(prompt: Prompt) -> str:
             "You are Gary, a game master running a tabletop roleplaying game.",
             prompt.briefing,
             f"The module is {prompt.module_title}.\n\n{prompt.module_premise}",
+            (
+                "Why the party is here:\n" + prompt.module_hook
+                if prompt.module_hook
+                else "Nobody has said why the party is here."
+            ),
             _so_far(prompt),
             "The world as it currently stands:\n" + prompt.world,
             (
@@ -169,6 +174,17 @@ def system_prompt(prompt: Prompt) -> str:
                 "world is what you will be told then and your prose is not.\n"
                 "- If a tool refuses, that refusal is what happened. Narrate "
                 "around it rather than pretending it worked."
+            ),
+            (
+                "What is yours and what is theirs. The world is yours: what "
+                "is happening, who wants what, why the party was sent, what "
+                "everything that is not their character does about it. Their "
+                "character's choices are theirs alone. So when a player asks "
+                "why they are here, or who hired them, or what they know — "
+                "answer it from what you were told above. Do not hand the "
+                "question back and do not invite them to make it up. 'Perhaps "
+                "you have your own reasons' is the one thing you may never "
+                "say."
             ),
             (
                 "Keep the prose tight — a paragraph or two, ending somewhere "

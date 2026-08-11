@@ -6,7 +6,7 @@ import parse
 from behave import given, register_type, then, when
 
 from environment import sql, with_session
-from gary_api import dice, narration, world
+from gary_api import dice, narration, systems, world
 from gary_api.narration import fake
 from gary_api.narration.fake import DIRECTIVE
 
@@ -1155,3 +1155,35 @@ def step_campaign_place(context):
 @then("the campaign should say it has not begun")
 def step_campaign_not_begun(context):
     assert _body(context)["begun"] is False
+
+
+@then("gary should have been told what brought the party here")
+def step_told_the_hook(context):
+    assert fake.LAST, "gary was not asked anything"
+    # The module's own words, not a paraphrase: if the hook did not reach the
+    # prompt then "why am I here" has nowhere to be answered from.
+    module = systems.module(
+        context.campaign["system"], context.campaign["module"]
+    )
+    assert module.hook in fake.LAST.module_hook, (
+        "gary was told nothing about why the party is here"
+    )
+
+
+@then("every module should carry a hook")
+def step_modules_hooked(context):
+    for system in _body(context):
+        for module in system["modules"]:
+            hook = module.get("hook") or ""
+            assert len(hook.split()) > 10, (
+                f"{module['slug']} says nothing about why anybody would go"
+            )
+
+
+@then("no hook should merely repeat its premise")
+def step_hook_is_not_the_premise(context):
+    for system in _body(context):
+        for module in system["modules"]:
+            assert module["hook"].strip() != module["premise"].strip(), (
+                f"{module['slug']}'s hook is its premise again"
+            )

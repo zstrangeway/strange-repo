@@ -47,6 +47,15 @@ class Module:
     # A premise and not a plot: the module sets a situation, and what happens
     # in it is the game.
     premise: str
+    # Why this party is standing in that situation tonight, who wants it
+    # dealt with, and what happens if nobody does.
+    #
+    # Separate from the premise because they answer different questions, and
+    # the game only starts when the second one has an answer. Without it gary
+    # opens on scenery and, asked "why am I here", says "maybe you have your
+    # own reasons" — which is the one thing a game master must not hand back.
+    # It is not the model's to invent, so the module says it.
+    hook: str
     # Where the party is standing when the campaign begins. The world needs
     # somewhere to start and this is the only place that knows one; letting
     # the model pick would mean the first fact about the world came from the
