@@ -82,6 +82,10 @@ class Prompt:
     """Everything the narrator is told, assembled from things that are true."""
 
     briefing: str
+    # Which model to ask. Travels with the turn rather than being read from
+    # the environment at the last moment, because two campaigns on one
+    # deployment can be on different ones.
+    model: str
     system_slug: str
     module_slug: str
     module_title: str

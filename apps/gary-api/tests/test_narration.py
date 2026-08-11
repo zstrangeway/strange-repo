@@ -88,6 +88,7 @@ class CallTests(unittest.TestCase):
 def a_prompt(message):
     return narration.Prompt(
         briefing="You are running a game.",
+        model="anthropic/claude-opus-5",
         system_slug="dnd-5e",
         module_slug="the-drowned-belfry",
         module_title="The Drowned Belfry",
@@ -196,13 +197,15 @@ class SelectionTests(unittest.TestCase):
         with patch.dict("os.environ", {}, clear=True):
             self.assertFalse(narration.faking())
 
-    def test_the_default_model_is_the_one_we_meant(self):
+    def test_the_default_model_is_one_gary_offers(self):
         with patch.dict("os.environ", {}, clear=True):
-            self.assertEqual(narration.model(), narration.DEFAULT_MODEL)
+            self.assertEqual(
+                narration.models.default(), narration.models.BUILT_IN[0].id
+            )
 
-    def test_the_model_can_be_changed(self):
+    def test_the_default_can_be_changed(self):
         with patch.dict("os.environ", {"GM_MODEL": "anthropic/claude-sonnet-5"}):
-            self.assertEqual(narration.model(), "anthropic/claude-sonnet-5")
+            self.assertEqual(narration.models.default(), "anthropic/claude-sonnet-5")
 
     def test_refuses_to_build_a_real_narrator_without_a_key(self):
         with patch.dict("os.environ", {}, clear=True):

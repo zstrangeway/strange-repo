@@ -113,6 +113,10 @@ class Campaign(Base):
     # the app rather than living in a table, so there is nothing to point at.
     system_slug: Mapped[str] = mapped_column(String(64))
     module_slug: Mapped[str] = mapped_column(String(64))
+    # Which model runs this campaign. Null means whatever the deployment's
+    # GM_MODEL says, so a campaign started before models were selectable reads
+    # exactly the same way and the default stays a deployment concern.
+    model: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

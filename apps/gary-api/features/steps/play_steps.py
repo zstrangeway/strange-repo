@@ -29,7 +29,20 @@ def some_slugs(text):
     return [part.strip() for part in text.split(",")]
 
 
-register_type(Class=a_class, Names=some_names, Slugs=some_slugs)
+@parse.with_pattern(r'[^"]*')
+def inside_quotes(text):
+    """Anything that is not a quote.
+
+    Without this a trailing placeholder swallows its own closing quote and
+    everything after it, so `running "{module}"` also matches
+    `running "x" with "y"` and two distinct steps collide.
+    """
+    return text
+
+
+register_type(
+    Class=a_class, Names=some_names, Slugs=some_slugs, Q=inside_quotes
+)
 
 # A campaign id that is a real uuid and belongs to nobody, for the scenarios
 # about reaching something that is not there.
@@ -100,8 +113,8 @@ def step_modules_described(context):
 # ---------------------------------------------------------------- campaigns
 
 
-@given('I started "{name}" on "{system}" running "{module}"')
-@when('I start "{name}" on "{system}" running "{module}"')
+@given('I started "{name}" on "{system}" running "{module:Q}"')
+@when('I start "{name}" on "{system}" running "{module:Q}"')
 def step_start_campaign(context, name, system, module):
     context.response = context.client.post(
         "/campaigns",
@@ -725,3 +738,97 @@ def step_world_condition(context, who, condition):
 @then("the world should say {minutes:d} minutes have passed")
 def step_world_minutes(context, minutes):
     assert _world(context)["minutes"] == minutes, _world(context)["minutes"]
+
+
+# ------------------------------------------------------------------ models
+
+
+@then("every model should carry a name and a price")
+def step_models_described(context):
+    for model in _body(context):
+        assert model["name"].strip(), model
+        assert model["prompt_cost"] >= 0, model
+        assert model["completion_cost"] >= 0, model
+
+
+@then("every model offered should be able to call tools")
+def step_models_tool_capable(context):
+    # The list is filtered before it is offered, so this asserts the filter
+    # rather than the models: anything reachable here is something gary can
+    # actually be run on.
+    offered = {model["id"] for model in _body(context)}
+    from gary_api.narration import models as catalogue
+
+    assert offered, "no models offered at all"
+    assert offered <= {model.id for model in catalogue.available()}
+
+
+@then("some models should be suggested")
+def step_models_suggested(context):
+    suggested = [model for model in _body(context) if model["suggested"]]
+    assert suggested, "nothing suggested, so the list starts nowhere"
+    assert len(suggested) < len(_body(context)), (
+        "everything is suggested, which suggests nothing"
+    )
+
+
+@given('I started "{name}" on "{system}" running "{module}" with "{model}"')
+@when('I start "{name}" on "{system}" running "{module}" with "{model}"')
+def step_start_campaign_on_model(context, name, system, module, model):
+    context.response = context.client.post(
+        "/campaigns",
+        json={"name": name, "system": system, "module": module, "model": model},
+        headers=_headers(context),
+    )
+    if context.response.status_code == 201:
+        context.campaign = _body(context)
+        context.characters = {}
+
+
+@when('I move that campaign to "{model}"')
+def step_move_model(context, model):
+    context.response = context.client.patch(
+        f"/campaigns/{_campaign_id(context)}",
+        json={"model": model},
+        headers=_headers(context),
+    )
+
+
+@when("I move that campaign to the default model")
+def step_move_to_default(context):
+    context.response = context.client.patch(
+        f"/campaigns/{_campaign_id(context)}",
+        json={"model": None},
+        headers=_headers(context),
+    )
+
+
+@when('I move their campaign to "{model}"')
+def step_move_their_model(context, model):
+    context.response = context.client.patch(
+        f"/campaigns/{context.other_campaign['id']}",
+        json={"model": model},
+        headers=_headers(context),
+    )
+
+
+@then('the campaign should run on "{model}"')
+def step_campaign_model(context, model):
+    body = _body(context)
+    assert body["model"] == model, body
+    assert body["model_chosen"], body
+
+
+@then("the campaign should run on the default model")
+def step_campaign_default_model(context):
+    from gary_api.narration import models as catalogue
+
+    body = _body(context)
+    assert body["model"] == catalogue.default(), body
+    assert not body["model_chosen"], body
+
+
+@then('gary should have been asked for "{model}"')
+def step_prompt_model(context, model):
+    assert fake.LAST is not None, "gary was never asked"
+    assert fake.LAST.model == model, fake.LAST.model

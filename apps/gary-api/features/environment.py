@@ -78,6 +78,13 @@ def before_scenario(context, scenario):
     os.environ.pop("GM_MODEL", None)
     narration.narrator.cache_clear()
 
+    # No key, so the model menu is the built-in list rather than whatever
+    # OpenRouter is serving today. That is what makes these specs assert
+    # against something that cannot change under them — and it exercises the
+    # fallback, which is the path a keyless deployment actually takes.
+    os.environ.pop("OPENROUTER_API_KEY", None)
+    narration.models.forget()
+
     async def empty(engine):
         async with engine.begin() as connection:
             # CASCADE reaches sessions and identities through their foreign
@@ -118,6 +125,7 @@ def after_scenario(context, scenario):
     context.client.close()
     identity.provider.cache_clear()
     narration.narrator.cache_clear()
+    narration.models.forget()
 
 
 def sql(statement, **parameters):

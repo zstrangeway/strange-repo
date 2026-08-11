@@ -15,6 +15,7 @@ import os
 from functools import cache
 
 from gary_api import logs
+from gary_api.narration import models
 from gary_api.narration.base import (
     Call,
     Calls,
@@ -39,13 +40,12 @@ __all__ = [
     "Said",
     "TOOLS",
     "faking",
+    "models",
     "narrator",
     "report_configuration",
 ]
 
 logger = logs.get_logger(__name__)
-
-DEFAULT_MODEL = "anthropic/claude-opus-5"
 
 
 def faking() -> bool:
@@ -53,13 +53,14 @@ def faking() -> bool:
     return os.environ.get("GM_FAKE") == "1"
 
 
-def model() -> str:
-    return os.environ.get("GM_MODEL", DEFAULT_MODEL)
-
-
 @cache
-def narrator() -> Narrator:
-    """The narrator this deployment uses. Built once, then reused."""
+def narrator(model: str | None = None) -> Narrator:
+    """The narrator for a given model. Built once per model, then reused.
+
+    Per model rather than one per process, because which model runs a campaign
+    is the campaign's business now — two campaigns on one deployment can be on
+    different ones.
+    """
     if faking():
         return FakeNarrator()
 
@@ -71,7 +72,7 @@ def narrator() -> Narrator:
     # double does not need the SDK installed to start.
     from gary_api.narration.openrouter import OpenRouterNarrator
 
-    return OpenRouterNarrator(api_key=key, model=model())
+    return OpenRouterNarrator(api_key=key, model=model or models.default())
 
 
 def report_configuration() -> None:
@@ -90,4 +91,4 @@ def report_configuration() -> None:
     except NarrationError as error:
         logger.error("narration.misconfigured", reason=str(error))
     else:
-        logger.info("narration.configured", model=model())
+        logger.info("narration.configured", model=models.default())

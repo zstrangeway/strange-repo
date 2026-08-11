@@ -51,10 +51,23 @@ class SystemResponse(BaseModel):
     modules: list[ModuleResponse]
 
 
+class ModelResponse(BaseModel):
+    id: str
+    name: str
+    prompt_cost: float
+    completion_cost: float
+    context: int
+    reasons: bool
+    suggested: bool
+
+
 class NewCampaign(BaseModel):
     name: str = Field(max_length=120)
     system: str = Field(max_length=64)
     module: str = Field(max_length=64)
+    # Optional: naming no model is the common case, and the deployment's
+    # default fills in.
+    model: str | None = Field(default=None, max_length=128)
 
     @field_validator("name")
     @classmethod
@@ -72,6 +85,18 @@ class CampaignResponse(BaseModel):
     module: str
     title: str
     turns: int
+    # Resolved, never null: a client should not have to know what the
+    # deployment's default is to render which model a campaign runs on.
+    model: str
+    # Whether that came from the campaign or from the deployment, which is the
+    # part a client does need to know to render "default" rather than a name.
+    model_chosen: bool
+
+
+class ChangeCampaign(BaseModel):
+    """Null means hand it back to the deployment's default."""
+
+    model: str | None = Field(default=None, max_length=128)
 
 
 class NewCharacter(BaseModel):
@@ -155,6 +180,8 @@ def _as_campaign(campaign: Campaign, turns: int = 0) -> dict:
         "module": campaign.module_slug,
         "title": module.title,
         "turns": turns,
+        "model": campaign.model or narration.models.default(),
+        "model_chosen": campaign.model is not None,
     }
 
 
@@ -167,6 +194,25 @@ def _as_character(character: Character) -> dict:
         "max_hp": character.max_hp,
         "abilities": character.abilities or {},
     }
+
+
+def _runnable(identifier: str | None) -> str | None:
+    """Check a chosen model, or pass None straight through.
+
+    The one rule: it has to be able to call tools. gary asks for a check and
+    the rules grade it — a model that cannot call a tool would narrate a
+    plausible game that nothing was adjudicating, which fails silently and is
+    the worst kind available here.
+    """
+    if identifier is None:
+        return None
+
+    try:
+        return narration.models.model(identifier).id
+    except narration.models.ModelError as error:
+        raise Refusal(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "unsupported_model", str(error)
+        ) from error
 
 
 async def _mine(database, user, campaign_id: uuid.UUID) -> Campaign:
@@ -196,6 +242,24 @@ async def read_system(slug: str) -> SystemResponse:
         ) from error
 
 
+@router.get("/models")
+async def read_models() -> list[ModelResponse]:
+    # No session, like the catalogue: what gary can be run on is part of
+    # deciding whether to make an account.
+    return [
+        {
+            "id": model.id,
+            "name": model.name,
+            "prompt_cost": model.prompt_cost,
+            "completion_cost": model.completion_cost,
+            "context": model.context,
+            "reasons": model.reasons,
+            "suggested": model.suggested,
+        }
+        for model in narration.models.available()
+    ]
+
+
 @router.post("/campaigns", status_code=status.HTTP_201_CREATED)
 async def start_campaign(
     request: NewCampaign, database: Db, user: CurrentUser
@@ -220,6 +284,7 @@ async def start_campaign(
         name=request.name,
         system_slug=request.system,
         module_slug=request.module,
+        model=_runnable(request.model),
     )
     database.add(campaign)
     await database.flush()
@@ -248,6 +313,26 @@ async def read_campaign(
     campaign_id: uuid.UUID, database: Db, user: CurrentUser
 ) -> CampaignResponse:
     campaign = await _mine(database, user, campaign_id)
+    turns = await database.scalar(
+        select(func.count()).select_from(Turn).where(Turn.campaign_id == campaign.id)
+    )
+    return _as_campaign(campaign, turns or 0)
+
+
+@router.patch("/campaigns/{campaign_id}")
+async def change_campaign(
+    campaign_id: uuid.UUID, request: ChangeCampaign, database: Db, user: CurrentUser
+) -> CampaignResponse:
+    """Move a campaign to another model, mid-game.
+
+    Switching to something cheap while iterating and back for a session that
+    matters is the whole reason the choice is exposed, so it cannot be a
+    create-time decision.
+    """
+    campaign = await _mine(database, user, campaign_id)
+    campaign.model = _runnable(request.model)
+    await database.commit()
+
     turns = await database.scalar(
         select(func.count()).select_from(Turn).where(Turn.campaign_id == campaign.id)
     )
@@ -549,7 +634,7 @@ async def take_turn(
             "There is nobody in this campaign to play yet",
         )
 
-    gary = narration.narrator()
+    gary = narration.narrator(campaign.model or narration.models.default())
     said = gary.sanitise(request.message) or request.message
 
     player_turn = Turn(campaign_id=campaign.id, role="player", content=said)
@@ -596,6 +681,7 @@ async def _stream(campaign_id, player_turn_id, message, gary):
 
         prompt = narration.Prompt(
             briefing=ruleset.briefing(),
+            model=campaign.model or narration.models.default(),
             system_slug=campaign.system_slug,
             module_slug=campaign.module_slug,
             module_title=module.title,
