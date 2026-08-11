@@ -18,6 +18,12 @@ dependencies = [
     # Google and Facebook, behind one interface. Apple is not in its provider
     # list, which is why gary_api/identity/apple.py exists.
     "httpx-oauth>=0.17.0",
+    # The narrator talks to OpenRouter, which serves an OpenAI-compatible API
+    # and no Anthropic one — so this is the client even though the model on the
+    # other end is usually a Claude. Owning the SSE framing, the fragmented
+    # tool-call arguments and the retries ourselves is the part most likely to
+    # be subtly wrong.
+    "openai>=2.53.0",
     # Signs Apple's client secret (ES256) and verifies its id_token.
     "pyjwt[crypto]>=2.10.1",
     "sqlalchemy[asyncio]>=2.0.51",

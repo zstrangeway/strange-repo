@@ -1,0 +1,520 @@
+"""The real narrator, against a stubbed client.
+
+Nothing in the spec suites reaches this — they all run the double — so this
+is the only thing standing between a subtly wrong streaming client and a
+deploy. The fragment accumulation is the part worth the most attention: a
+stub that hands over whole tool calls would agree with an implementation that
+cannot handle split ones, and the split is what actually arrives.
+"""
+
+import asyncio
+import json
+import unittest
+from unittest.mock import patch
+
+from gary_api import narration
+from gary_api.narration import openrouter
+from gary_api.narration.base import Prompt
+
+
+def a_prompt(model="anthropic/claude-opus-5", transcript=None):
+    return Prompt(
+        briefing="You are running Some Edition. Checks resolve to: success, failure.",
+        model=model,
+        system_slug="dnd-5e",
+        module_slug="the-drowned-belfry",
+        module_title="The Drowned Belfry",
+        module_premise="A bell rings under the water.",
+        world="Where the party is: the causeway\nThe party:\n  - Bramble",
+        message="I push open the door",
+        transcript=transcript or [("player", "I push open the door")],
+    )
+
+
+class Delta:
+    def __init__(self, content=None, tool_calls=None):
+        self.content = content
+        self.tool_calls = tool_calls
+
+
+class ToolDelta:
+    def __init__(self, index=0, name=None, arguments=None):
+        self.index = index
+        self.function = type(
+            "Function", (), {"name": name, "arguments": arguments}
+        )()
+
+
+class Choice:
+    def __init__(self, delta=None, finish_reason=None):
+        self.delta = delta
+        self.finish_reason = finish_reason
+
+
+class Chunk:
+    def __init__(self, choices=None, error=None):
+        self.choices = choices or []
+        self.error = error
+
+
+class Stream:
+    def __init__(self, chunks):
+        self.chunks = chunks
+
+    def __aiter__(self):
+        async def go():
+            for chunk in self.chunks:
+                yield chunk
+
+        return go()
+
+
+def client_serving(*rounds):
+    """A stubbed OpenAI client that answers each round in turn."""
+    sent = []
+    remaining = list(rounds)
+
+    class Completions:
+        async def create(self, **kwargs):
+            sent.append(kwargs)
+            if not remaining:
+                raise AssertionError("asked for more rounds than were staged")
+            return Stream(remaining.pop(0))
+
+    class Chat:
+        completions = Completions()
+
+    class Client:
+        chat = Chat()
+
+    return Client(), sent
+
+
+def drive(narrator, prompt, answers=None):
+    """Run a narration to the end, answering tool calls from `answers`."""
+    told = []
+
+    async def go():
+        generator = narrator.narrate(prompt)
+        sending = None
+        while True:
+            try:
+                event = await generator.asend(sending)
+            except StopAsyncIteration:
+                break
+            told.append(event)
+            sending = None
+            if isinstance(event, narration.Calls):
+                sending = [
+                    narration.Result(call, (answers or {}).get(call.name, "done"))
+                    for call in event.calls
+                ]
+        await generator.aclose()
+
+    asyncio.run(go())
+    return told
+
+
+def narrator_with(client):
+    made = openrouter.OpenRouterNarrator(api_key="sk-or-test", model="a/model")
+    made.client = client
+    return made
+
+
+class StreamingTests(unittest.TestCase):
+    def test_says_what_it_streams(self):
+        client, _ = client_serving(
+            [
+                Chunk([Choice(Delta(content="The door "))]),
+                Chunk([Choice(Delta(content="groans open."), finish_reason="stop")]),
+            ]
+        )
+        told = drive(narrator_with(client), a_prompt())
+        said = "".join(e.text for e in told if isinstance(e, narration.Said))
+        self.assertEqual(said, "The door groans open.")
+
+    def test_passes_the_prompt_model_rather_than_its_own(self):
+        # The campaign's model wins. Two campaigns on one deployment can be on
+        # different ones, so the narrator cannot be the thing that decides.
+        client, sent = client_serving(
+            [Chunk([Choice(Delta(content="hi"), finish_reason="stop")])]
+        )
+        drive(narrator_with(client), a_prompt(model="deepseek/deepseek-v3.2"))
+        self.assertEqual(sent[0]["model"], "deepseek/deepseek-v3.2")
+
+    def test_offers_every_tool_in_the_contract(self):
+        client, sent = client_serving(
+            [Chunk([Choice(Delta(content="hi"), finish_reason="stop")])]
+        )
+        drive(narrator_with(client), a_prompt())
+        offered = {tool["function"]["name"] for tool in sent[0]["tools"]}
+        self.assertEqual(offered, set(narration.TOOLS))
+
+    def test_the_system_prompt_carries_the_world_and_the_module(self):
+        client, sent = client_serving(
+            [Chunk([Choice(Delta(content="hi"), finish_reason="stop")])]
+        )
+        drive(narrator_with(client), a_prompt())
+        system = sent[0]["messages"][0]["content"][0]["text"]
+        self.assertIn("The Drowned Belfry", system)
+        self.assertIn("the causeway", system)
+        self.assertIn("Some Edition", system)
+
+    def test_the_system_prompt_asks_for_caching(self):
+        client, sent = client_serving(
+            [Chunk([Choice(Delta(content="hi"), finish_reason="stop")])]
+        )
+        drive(narrator_with(client), a_prompt())
+        block = sent[0]["messages"][0]["content"][0]
+        self.assertEqual(block["cache_control"], {"type": "ephemeral"})
+
+    def test_the_transcript_becomes_alternating_turns(self):
+        client, sent = client_serving(
+            [Chunk([Choice(Delta(content="hi"), finish_reason="stop")])]
+        )
+        drive(
+            narrator_with(client),
+            a_prompt(transcript=[("player", "hello"), ("gm", "hi"), ("player", "again")]),
+        )
+        roles = [m["role"] for m in sent[0]["messages"]]
+        self.assertEqual(roles, ["system", "user", "assistant", "user"])
+
+    def test_chunks_with_no_choices_are_skipped(self):
+        client, _ = client_serving(
+            [
+                Chunk([]),
+                Chunk([Choice(Delta(content="fine"), finish_reason="stop")]),
+            ]
+        )
+        told = drive(narrator_with(client), a_prompt())
+        self.assertTrue([e for e in told if isinstance(e, narration.Said)])
+
+    def test_a_chunk_with_no_delta_is_skipped(self):
+        client, _ = client_serving(
+            [
+                Chunk([Choice(None)]),
+                Chunk([Choice(Delta(content="fine"), finish_reason="stop")]),
+            ]
+        )
+        told = drive(narrator_with(client), a_prompt())
+        self.assertTrue([e for e in told if isinstance(e, narration.Said)])
+
+
+class FragmentTests(unittest.TestCase):
+    """The part a stub is most likely to agree with wrongly."""
+
+    def test_arguments_split_across_chunks_are_reassembled(self):
+        client, _ = client_serving(
+            [
+                Chunk([Choice(Delta(tool_calls=[ToolDelta(0, "roll", '{"nota')]))]),
+                Chunk([Choice(Delta(tool_calls=[ToolDelta(0, None, 'tion": "1d')]))]),
+                Chunk(
+                    [
+                        Choice(
+                            Delta(tool_calls=[ToolDelta(0, None, '20+3"}')]),
+                            finish_reason="tool_calls",
+                        )
+                    ]
+                ),
+            ],
+            [Chunk([Choice(Delta(content="You find it."), finish_reason="stop")])],
+        )
+        told = drive(narrator_with(client), a_prompt())
+        calls = [e for e in told if isinstance(e, narration.Calls)]
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0].calls[0].name, "roll")
+        self.assertEqual(calls[0].calls[0].arguments, {"notation": "1d20+3"})
+
+    def test_two_tools_at_once_stay_apart(self):
+        client, _ = client_serving(
+            [
+                Chunk(
+                    [
+                        Choice(
+                            Delta(
+                                tool_calls=[
+                                    ToolDelta(0, "damage", '{"character":"A",'),
+                                    ToolDelta(1, "pass_time", '{"minu'),
+                                ]
+                            )
+                        )
+                    ]
+                ),
+                Chunk(
+                    [
+                        Choice(
+                            Delta(
+                                tool_calls=[
+                                    ToolDelta(0, None, '"amount":4}'),
+                                    ToolDelta(1, None, 'tes":30}'),
+                                ]
+                            ),
+                            finish_reason="tool_calls",
+                        )
+                    ]
+                ),
+            ],
+            [Chunk([Choice(Delta(content="Done."), finish_reason="stop")])],
+        )
+        told = drive(narrator_with(client), a_prompt())
+        calls = [e for e in told if isinstance(e, narration.Calls)][0].calls
+        self.assertEqual([call.name for call in calls], ["damage", "pass_time"])
+        self.assertEqual(calls[0].arguments, {"character": "A", "amount": 4})
+        self.assertEqual(calls[1].arguments, {"minutes": 30})
+
+    def test_arguments_that_never_became_json_are_handed_over_empty(self):
+        # Truncated mid-object. Passed on empty so the engines refuse it and
+        # say why, rather than taking down a turn that is already streaming.
+        client, _ = client_serving(
+            [
+                Chunk(
+                    [
+                        Choice(
+                            Delta(tool_calls=[ToolDelta(0, "roll", '{"notation": "1d')]),
+                            finish_reason="tool_calls",
+                        )
+                    ]
+                ),
+            ],
+            [Chunk([Choice(Delta(content="Anyway."), finish_reason="stop")])],
+        )
+        told = drive(narrator_with(client), a_prompt())
+        calls = [e for e in told if isinstance(e, narration.Calls)][0].calls
+        self.assertEqual(calls[0].arguments, {})
+
+    def test_an_opening_delta_carrying_only_the_name(self):
+        # The usual shape: the name arrives first and the arguments follow in
+        # later chunks.
+        client, _ = client_serving(
+            [
+                Chunk([Choice(Delta(tool_calls=[ToolDelta(0, "pass_time", None)]))]),
+                Chunk(
+                    [
+                        Choice(
+                            Delta(tool_calls=[ToolDelta(0, None, '{"minutes":10}')]),
+                            finish_reason="tool_calls",
+                        )
+                    ]
+                ),
+            ],
+            [Chunk([Choice(Delta(content="Ten minutes."), finish_reason="stop")])],
+        )
+        told = drive(narrator_with(client), a_prompt())
+        call = [e for e in told if isinstance(e, narration.Calls)][0].calls[0]
+        self.assertEqual(call.name, "pass_time")
+        self.assertEqual(call.arguments, {"minutes": 10})
+
+    def test_a_delta_with_no_function_at_all_is_skipped(self):
+        # An opening frame that announces an index and an id and nothing else.
+        class Bare:
+            def __init__(self, index):
+                self.index = index
+
+        client, _ = client_serving(
+            [
+                Chunk([Choice(Delta(tool_calls=[Bare(0)]))]),
+                Chunk(
+                    [
+                        Choice(
+                            Delta(
+                                tool_calls=[ToolDelta(0, "pass_time", '{"minutes":5}')]
+                            ),
+                            finish_reason="tool_calls",
+                        )
+                    ]
+                ),
+            ],
+            [Chunk([Choice(Delta(content="Five."), finish_reason="stop")])],
+        )
+        told = drive(narrator_with(client), a_prompt())
+        call = [e for e in told if isinstance(e, narration.Calls)][0].calls[0]
+        self.assertEqual(call.arguments, {"minutes": 5})
+
+    def test_a_nameless_index_beside_a_named_one_is_dropped(self):
+        client, _ = client_serving(
+            [
+                Chunk(
+                    [
+                        Choice(
+                            Delta(
+                                tool_calls=[
+                                    ToolDelta(0, "pass_time", '{"minutes":5}'),
+                                    ToolDelta(1, None, '{"orphan":true}'),
+                                ]
+                            ),
+                            finish_reason="tool_calls",
+                        )
+                    ]
+                ),
+            ],
+            [Chunk([Choice(Delta(content="Five."), finish_reason="stop")])],
+        )
+        told = drive(narrator_with(client), a_prompt())
+        calls = [e for e in told if isinstance(e, narration.Calls)][0].calls
+        self.assertEqual([call.name for call in calls], ["pass_time"])
+
+    def test_a_fragment_with_no_name_is_not_a_call(self):
+        client, _ = client_serving(
+            [
+                Chunk(
+                    [
+                        Choice(
+                            Delta(tool_calls=[ToolDelta(0, None, "{}")]),
+                            finish_reason="stop",
+                        )
+                    ]
+                ),
+            ]
+        )
+        told = drive(narrator_with(client), a_prompt())
+        self.assertFalse([e for e in told if isinstance(e, narration.Calls)])
+
+    def test_results_go_back_as_tool_messages(self):
+        client, sent = client_serving(
+            [
+                Chunk(
+                    [
+                        Choice(
+                            Delta(tool_calls=[ToolDelta(0, "roll", '{"notation":"1d20"}')]),
+                            finish_reason="tool_calls",
+                        )
+                    ]
+                ),
+            ],
+            [Chunk([Choice(Delta(content="A seventeen."), finish_reason="stop")])],
+        )
+        drive(narrator_with(client), a_prompt(), answers={"roll": "1d20 came up 17"})
+        second = sent[1]["messages"]
+        self.assertEqual(second[-1]["role"], "tool")
+        self.assertIn("came up 17", second[-1]["content"])
+        self.assertEqual(second[-2]["role"], "assistant")
+        self.assertEqual(
+            json.loads(second[-2]["tool_calls"][0]["function"]["arguments"]),
+            {"notation": "1d20"},
+        )
+
+    def test_a_refused_tool_is_reported_as_refused(self):
+        client, sent = client_serving(
+            [
+                Chunk(
+                    [
+                        Choice(
+                            Delta(tool_calls=[ToolDelta(0, "roll", '{"notation":"bad"}')]),
+                            finish_reason="tool_calls",
+                        )
+                    ]
+                ),
+            ],
+            [Chunk([Choice(Delta(content="Never mind."), finish_reason="stop")])],
+        )
+
+        async def go():
+            narrator = narrator_with(client)
+            generator = narrator.narrate(a_prompt())
+            sending = None
+            while True:
+                try:
+                    event = await generator.asend(sending)
+                except StopAsyncIteration:
+                    break
+                sending = None
+                if isinstance(event, narration.Calls):
+                    sending = [
+                        narration.Result(call, "gary cannot roll that", failed=True)
+                        for call in event.calls
+                    ]
+            await generator.aclose()
+
+        asyncio.run(go())
+        self.assertIn("refused:", sent[1]["messages"][-1]["content"])
+
+
+class FailureTests(unittest.TestCase):
+    def test_an_error_frame_mid_stream_is_a_narration_error(self):
+        # HTTP is still 200 — the headers went out long ago — so the failure
+        # arrives as content and has to be recognised as one.
+        client, _ = client_serving(
+            [
+                Chunk([Choice(Delta(content="The door "))]),
+                Chunk(error={"code": 502, "message": "upstream fell over"}),
+            ]
+        )
+        with self.assertRaises(narration.NarrationError):
+            drive(narrator_with(client), a_prompt())
+
+    def test_finish_reason_error_is_a_narration_error(self):
+        client, _ = client_serving(
+            [Chunk([Choice(Delta(content="half a "), finish_reason="error")])]
+        )
+        with self.assertRaises(narration.NarrationError):
+            drive(narrator_with(client), a_prompt())
+
+    def test_the_client_falling_over_is_a_narration_error(self):
+        class Exploding:
+            class chat:
+                class completions:
+                    @staticmethod
+                    async def create(**kwargs):
+                        raise RuntimeError("no route to host")
+
+        with self.assertRaises(narration.NarrationError):
+            drive(narrator_with(Exploding()), a_prompt())
+
+    def test_a_model_that_asks_forever_is_stopped(self):
+        # Otherwise one confused turn spends the account.
+        asking = Chunk(
+            [
+                Choice(
+                    Delta(tool_calls=[ToolDelta(0, "pass_time", '{"minutes":1}')]),
+                    finish_reason="tool_calls",
+                )
+            ]
+        )
+        client, sent = client_serving(*[[asking] for _ in range(20)])
+        told = drive(narrator_with(client), a_prompt())
+        self.assertLess(len(sent), 20)
+        self.assertTrue([e for e in told if isinstance(e, narration.Calls)])
+
+
+class SelectionTests(unittest.TestCase):
+    def setUp(self):
+        narration.narrator.cache_clear()
+
+    def tearDown(self):
+        narration.narrator.cache_clear()
+
+    def test_a_real_narrator_is_built_when_there_is_a_key(self):
+        with patch.dict(
+            "os.environ", {"OPENROUTER_API_KEY": "sk-or-test"}, clear=True
+        ):
+            built = narration.narrator("deepseek/deepseek-v3.2")
+        self.assertIsInstance(built, openrouter.OpenRouterNarrator)
+        self.assertEqual(built.model, "deepseek/deepseek-v3.2")
+
+    def test_one_per_model_rather_than_one_per_process(self):
+        with patch.dict(
+            "os.environ", {"OPENROUTER_API_KEY": "sk-or-test"}, clear=True
+        ):
+            first = narration.narrator("a/one")
+            again = narration.narrator("a/one")
+            other = narration.narrator("b/two")
+        self.assertIs(first, again)
+        self.assertIsNot(first, other)
+
+    def test_it_reports_itself_configured(self):
+        with patch.dict(
+            "os.environ", {"OPENROUTER_API_KEY": "sk-or-test"}, clear=True
+        ):
+            narration.report_configuration()
+
+    def test_a_real_narrator_takes_a_message_as_it_is(self):
+        with patch.dict(
+            "os.environ", {"OPENROUTER_API_KEY": "sk-or-test"}, clear=True
+        ):
+            built = narration.narrator("a/one")
+        said = "I search the room [[not a directive]]"
+        self.assertEqual(built.sanitise(said), said)
+
+
+if __name__ == "__main__":
+    unittest.main()
