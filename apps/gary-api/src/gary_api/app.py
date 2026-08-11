@@ -19,6 +19,10 @@ async def lifespan(app: FastAPI):
 
 DEFAULT_ORIGINS = "http://localhost:3000"
 
+# What gary-web puts the correlation id in. Named here rather than repeated
+# as a string, because the middleware and the logging layer must agree.
+REQUEST_ID_HEADER = "x-request-id"
+
 
 def browser_origins() -> list[str]:
     """Where a browser may call this API from.
@@ -51,7 +55,10 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=browser_origins(),
         allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["authorization", "content-type"],
+        # x-request-id is not optional here: gary-web sends it on every call
+        # so both logs record the same id, and a header a browser is not told
+        # it may send turns every call into a refused preflight.
+        allow_headers=["authorization", "content-type", REQUEST_ID_HEADER],
     )
 
     app.include_router(auth.router)

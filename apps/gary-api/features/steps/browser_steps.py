@@ -65,3 +65,11 @@ def step_authorization_allowed(context):
 def step_post_allowed(context):
     methods = context.response.headers.get("access-control-allow-methods", "")
     assert "POST" in methods.upper(), f"a browser could not sign in: {methods!r}"
+
+
+@then("the id that pairs the two logs should be allowed through")
+def step_request_id_allowed(context):
+    headers = context.response.headers.get("access-control-allow-headers", "")
+    assert "x-request-id" in headers.lower(), (
+        f"gary-web could not send the correlation id: {headers!r}"
+    )

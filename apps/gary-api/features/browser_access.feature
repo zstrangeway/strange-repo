@@ -14,6 +14,9 @@ Feature: Being called from a browser
     When a page at "https://gary-web.fly.dev" asks what it may send
     Then the answer should be addressed to "https://gary-web.fly.dev"
     And a session token should be allowed through
+    # Without this every call is a refused preflight, because a browser will
+    # not send a header it has not been told it may.
+    And the id that pairs the two logs should be allowed through
 
   Scenario: An origin gary does not know gets nothing back
     Given "https://gary-web.fly.dev" is allowed in a browser
