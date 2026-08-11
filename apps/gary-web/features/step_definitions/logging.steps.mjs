@@ -4,7 +4,7 @@ import { Then, When } from "@cucumber/cucumber";
 
 import * as apiStub from "../support/api-stub.mjs";
 import * as stack from "../support/stack.mjs";
-import { webOutput, world } from "../support/hooks.mjs";
+import { browserOutput, world } from "../support/hooks.mjs";
 
 // Both apps write one JSON object per line. Anything else in the output —
 // `next dev`'s banner, uvicorn's startup — is not a log line and is skipped
@@ -24,7 +24,7 @@ function objects(raw) {
   return found;
 }
 
-const webLines = () => objects(webOutput());
+const webLines = () => objects(browserOutput());
 const apiLines = () => objects(stack.apiOutput());
 
 /**

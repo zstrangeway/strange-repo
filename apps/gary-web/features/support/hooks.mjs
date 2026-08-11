@@ -33,8 +33,16 @@ export const world = {
 
 let webServer = null;
 let webLog = "";
+let browserLog = "";
+
+/** gary-web's own log lines, as written to the browser console. */
+export function browserOutput() {
+  return browserLog;
+}
 
 /** Everything gary-web's server has written since the last scenario began. */
+/** What `next dev` itself wrote. gary-web's own log lines are no longer in
+ *  here — it runs in the browser now, so they are in the console. */
 export function webOutput() {
   return webLog;
 }
@@ -111,9 +119,17 @@ Before(async function () {
   }
 
   webLog = "";
+  browserLog = "";
   world.resetToken = null;
   world.verificationToken = null;
   world.page = await world.browser.newPage();
+
+  // gary-web logs to the console now, so the console is where its lines are.
+  // Collected rather than asserted on directly: a line is written when the
+  // call finishes, which is not the moment the step that caused it returns.
+  world.page.on("console", (message) => {
+    browserLog += `${message.text()}\n`;
+  });
 });
 
 After(async function () {

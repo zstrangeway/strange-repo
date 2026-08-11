@@ -144,5 +144,21 @@ export async function callApi<T>(
     return { ok: true, data: undefined as T };
   }
 
-  return { ok: true, data: JSON.parse(body) as T };
+  try {
+    return { ok: true, data: JSON.parse(body) as T };
+  } catch (error) {
+    // A 200 carrying a proxy error page or a truncated body. This used to
+    // throw out of here and be caught by Next as a server crash; there is no
+    // server to crash now, so it would have thrown inside a render and shown
+    // a blank page with the reason in nobody's hands.
+    log.error("api.unreadable", {
+      request_id,
+      method,
+      path,
+      status: response.status,
+      duration_ms: elapsed(),
+      error,
+    });
+    return { ok: false, status: response.status, message: UNAVAILABLE };
+  }
 }

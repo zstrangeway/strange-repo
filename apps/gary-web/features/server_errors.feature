@@ -1,16 +1,17 @@
-Feature: A server crash is logged, not only reported
-  As an operator of gary
-  I want gary-web's own crashes in the same log as everything else it writes
-  So that the log and Sentry cannot disagree about whether a request failed
+Feature: An answer gary-web cannot read is reported, not a blank page
+  As someone using gary
+  I want a broken answer from gary-api to say so
+  So that a failure looks like a failure rather than an empty screen
 
-  # Sentry is where these get triaged, but the Fly log is where every other
-  # line this app writes lives. An error in one and not the other leaves two
-  # accounts of the same request that do not match.
-  #
   # The trigger is a real failure rather than a debug route: gary-api
   # answering with something that is not JSON — a proxy error page, a
-  # truncated body. callApi parses it, the parse throws inside a Server
-  # Component, and Next hands that to onRequestError.
+  # truncated body. It arrives as a 200, so nothing about the status says
+  # anything is wrong; only parsing it does.
+  #
+  # This used to be a server crash, caught by Next and logged through
+  # onRequestError. gary-web has no server now, so an unhandled parse would
+  # throw inside a render and leave a blank page. Handling it where the call
+  # is made is what keeps that from happening.
 
   Scenario: gary-api answers with something that is not JSON
     Given I am signed in as "Ada"
@@ -18,5 +19,6 @@ Feature: A server crash is logged, not only reported
     Then the page shows "Welcome Home, Ada"
     When gary-api starts answering with something that is not JSON
     And I reload the page
-    Then gary-web should have logged a "server.error" line for "/"
+    Then I should be on the sign in page
+    And gary-web should have logged a "api.unreadable" line for "/auth/me"
     And that line should name the error type and message

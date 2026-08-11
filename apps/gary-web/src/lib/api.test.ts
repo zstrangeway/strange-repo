@@ -242,6 +242,20 @@ describe("error messages", () => {
     );
   });
 
+  it("reports a success whose body cannot be read", async () => {
+    // A 200 carrying a proxy error page. Nothing about the status says so,
+    // and an unhandled parse here would throw inside a render.
+    nextReply = { status: 200, body: "<html><body>502 Bad Gateway</body></html>" };
+    const result = await callApi("/auth/me");
+
+    expect(result).toMatchObject({ ok: false, status: 200 });
+    expect(logged().at(-1)).toMatchObject({
+      message: "api.unreadable",
+      path: "/auth/me",
+      level: "error",
+    });
+  });
+
   it("falls back when an error body is not JSON at all", async () => {
     expect(
       await messageFor({ status: 502, body: "<html>bad gateway</html>", contentType: "text/html" }),

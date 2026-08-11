@@ -37,13 +37,24 @@ async function through(provider, testId) {
   ]);
 }
 
-Given("I am signed out", async function () {
+/** The session is a value in localStorage now, not a cookie, so clearing
+ *  cookies signs nobody out — it merely looked like it did, because the
+ *  server used to be the thing holding the session. */
+async function forgetTheSession() {
+  // localStorage belongs to an origin, so the page has to be on ours before
+  // there is anything to clear.
+  if (!world.page.url().startsWith(world.baseUrl)) {
+    await world.page.goto(`${world.baseUrl}/login`, {
+      waitUntil: "domcontentloaded",
+    });
+  }
+  await world.page.evaluate(() => window.localStorage.clear());
   await world.page.context().clearCookies();
-});
+}
 
-Given("I have never signed in", async function () {
-  await world.page.context().clearCookies();
-});
+Given("I am signed out", forgetTheSession);
+
+Given("I have never signed in", forgetTheSession);
 
 Given(
   '{word} will say I am "{}" named "{}"',
