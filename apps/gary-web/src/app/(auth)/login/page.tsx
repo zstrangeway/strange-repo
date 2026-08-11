@@ -1,26 +1,27 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { Button } from "@gary/ui/components/button";
 import { FormCard } from "@gary/ui/components/form-card";
 
+import { FLASH_COOKIE, readFlash } from "@/lib/flash";
 import { currentUser } from "@/lib/session";
 import { absoluteUrl, withState } from "@/lib/urls";
 
 import { waysToSignIn } from "../../actions";
+import { ClearFlash } from "../../clear-flash";
 import { Notice } from "../../form-parts";
 
 export const dynamic = "force-dynamic";
 
 const NOWHERE_TO_GO = "gary is unavailable, try again shortly";
 
-export default async function LoginPage({
-  searchParams,
-}: PageProps<"/login">) {
+export default async function LoginPage() {
   if (await currentUser()) {
     redirect("/");
   }
 
-  const { error } = await searchParams;
+  const { error } = readFlash((await cookies()).get(FLASH_COOKIE)?.value);
 
   // The list comes from gary-api rather than being hard-coded here, so a
   // provider added or withdrawn there needs no change in this app.
@@ -32,9 +33,8 @@ export default async function LoginPage({
       description="gary has no password of yours. Choose who should vouch for you."
     >
       <div className="flex flex-col gap-3">
-        <Notice
-          error={typeof error === "string" ? error : undefined}
-        />
+        {error ? <ClearFlash /> : null}
+        <Notice error={error} />
         {providers.length === 0 ? <Notice error={NOWHERE_TO_GO} /> : null}
         {providers.map((provider) => (
           <Button

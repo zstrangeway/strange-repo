@@ -17,6 +17,7 @@ Feature: Connected accounts
     And I connect facebook
     Then facebook should be connected
     And google should be connected
+    And the address bar carries no message
 
   Scenario: Either provider then reaches the same account
     Given facebook will say I am "ada@example.com" named "Ada Lovelace"
@@ -33,6 +34,7 @@ Feature: Connected accounts
     When I open the profile page
     And I connect facebook
     Then the page shows an error "That Facebook account is already connected to another gary account"
+    And the address bar carries no message
     And facebook should not be connected
 
   Scenario: My only way in cannot be disconnected

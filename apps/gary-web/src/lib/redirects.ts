@@ -1,3 +1,5 @@
+import { flashCookie, type Flash } from "./flash";
+
 /** Send the browser on, without claiming to know where this app lives.
  *
  * The Location is deliberately relative. An absolute one has to name the
@@ -10,14 +12,15 @@
  *
  * Not to be confused with `absoluteUrl`: a redirect_uri really is absolute,
  * because the provider — not the browser — has to resolve it.
+ *
+ * Anything to say on arrival travels as a flash cookie, so the URL the person
+ * lands on carries nothing but a path.
  */
-export function seeOther(
-  path: string,
-  params: Record<string, string> = {},
-): Response {
-  const query = new URLSearchParams(params).toString();
-  return new Response(null, {
-    status: 303,
-    headers: { Location: query ? `${path}?${query}` : path },
-  });
+export function seeOther(path: string, message: Flash = {}): Response {
+  const headers = new Headers({ Location: path });
+  if (message.error || message.confirmation) {
+    headers.set("Set-Cookie", flashCookie(message));
+  }
+
+  return new Response(null, { status: 303, headers });
 }

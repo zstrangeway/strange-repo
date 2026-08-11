@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     return seeOther("/profile", { error: result.error });
   }
   if (result.confirmation) {
-    return seeOther("/profile", { connected: result.confirmation });
+    return seeOther("/profile", { confirmation: result.confirmation });
   }
 
   return seeOther("/profile");

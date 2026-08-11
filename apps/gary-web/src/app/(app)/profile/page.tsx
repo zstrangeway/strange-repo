@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import {
@@ -8,20 +9,22 @@ import {
   CardTitle,
 } from "@gary/ui/components/card";
 
+import { FLASH_COOKIE, readFlash } from "@/lib/flash";
 import { currentUser } from "@/lib/session";
 import { absoluteUrl, withState } from "@/lib/urls";
 
 import { connectedAccounts, waysToSignIn } from "../../actions";
+import { ClearFlash } from "../../clear-flash";
 import { Notice } from "../../form-parts";
 import ConnectedAccounts from "./connected";
 import { DisplayNameForm } from "./forms";
 
-export default async function ProfilePage({
-  searchParams,
-}: PageProps<"/profile">) {
+export default async function ProfilePage() {
   // See the note on the home page: the layout's guard does not stop this
   // from running, and currentUser is request-cached.
-  const { error, connected: justConnected } = await searchParams;
+  const { error, confirmation } = readFlash(
+    (await cookies()).get(FLASH_COOKIE)?.value,
+  );
   const user = await currentUser();
   if (!user) {
     redirect("/login");
@@ -76,12 +79,8 @@ export default async function ProfilePage({
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <Notice
-            error={typeof error === "string" ? error : undefined}
-            confirmation={
-              typeof justConnected === "string" ? justConnected : undefined
-            }
-          />
+          {error || confirmation ? <ClearFlash /> : null}
+          <Notice error={error} confirmation={confirmation} />
           <ConnectedAccounts connections={connections} />
         </CardContent>
       </Card>

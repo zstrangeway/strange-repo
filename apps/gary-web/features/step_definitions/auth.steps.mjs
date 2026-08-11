@@ -236,3 +236,17 @@ Then("I cannot disconnect {word}", async function (provider) {
   );
   assert.notEqual(disabled, null, `${provider} could still be disconnected`);
 });
+
+/** What a message in the URL would look like. Anyone can hand out a link
+ *  carrying one, and the page would render it in gary's voice — so the
+ *  address bar is required to stay a path. */
+Then("the address bar carries no message", async function () {
+  const url = new URL(world.page.url());
+  const carried = [...url.searchParams.keys()];
+
+  assert.deepEqual(
+    carried,
+    [],
+    `the address bar carried ${carried.join(", ")}: ${url.href}`,
+  );
+});

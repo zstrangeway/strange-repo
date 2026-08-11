@@ -66,12 +66,19 @@ describe("coming back from a provider", () => {
   it("carries a refusal back to the sign-in page", async () => {
     completeSignIn.mockResolvedValue({ error: "Google did not work" });
     const response = await arriveBack("?code=abc&state=google");
-    const location = response.headers.get("location") ?? "";
 
-    expect(location).not.toContain("0.0.0.0");
-    expect(location.startsWith("/login?")).toBe(true);
-    expect(new URLSearchParams(location.split("?")[1]).get("error")).toBe(
-      "Google did not work",
+    // In a cookie, not the URL: a message in the address bar is one anybody
+    // can put there, and ours would be indistinguishable from theirs.
+    expect(response.headers.get("location")).toBe("/login");
+    expect(response.headers.get("set-cookie") ?? "").toContain(
+      encodeURIComponent("Google did not work"),
     );
+  });
+
+  it("leaves no message in the address bar", async () => {
+    completeSignIn.mockResolvedValue({ error: "Google did not work" });
+    const response = await arriveBack("?code=abc&state=google");
+
+    expect(response.headers.get("location")).not.toContain("?");
   });
 });
