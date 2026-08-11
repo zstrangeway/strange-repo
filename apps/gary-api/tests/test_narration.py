@@ -199,9 +199,18 @@ class SelectionTests(unittest.TestCase):
 
     def test_the_default_model_is_one_gary_offers(self):
         with patch.dict("os.environ", {}, clear=True):
-            self.assertEqual(
-                narration.models.default(), narration.models.BUILT_IN[0].id
+            offered = {model.id for model in narration.models.BUILT_IN}
+            self.assertIn(narration.models.default(), offered)
+
+    def test_the_default_is_not_the_dearest_thing_on_the_list(self):
+        # Deliberate: the list is ordered by what to suggest, and a campaign
+        # nobody thought about should not be billed at the top of it.
+        with patch.dict("os.environ", {}, clear=True):
+            chosen = narration.models.model(narration.models.default())
+            dearest = max(
+                narration.models.BUILT_IN, key=lambda one: one.completion_cost
             )
+            self.assertLess(chosen.completion_cost, dearest.completion_cost)
 
     def test_the_default_can_be_changed(self):
         with patch.dict("os.environ", {"GM_MODEL": "anthropic/claude-sonnet-5"}):

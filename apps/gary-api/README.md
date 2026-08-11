@@ -98,7 +98,7 @@ and server-side refusal fallbacks.
 | Variable | What it does |
 | --- | --- |
 | `OPENROUTER_API_KEY` | The key narration needs. Unset means the built-in model list, and a narrator that cannot run. |
-| `GM_MODEL` | What a campaign that names no model runs on. Default `anthropic/claude-opus-5`. |
+| `GM_MODEL` | What a campaign that names no model runs on. Default `anthropic/claude-sonnet-5` — the suggestion list leads with Opus 5, but the thing to suggest first is not the thing to bill by default. |
 | `GM_FAKE=1` | Stand in for the model, as `IDENTITY_FAKE` does for the providers. Set by the specs. |
 | `DICE_SEED` | Fix the dice, so a spec can assert a number rather than only that a number arrived. |
 

@@ -55,6 +55,24 @@ Check what the project already pulls in before reaching for something new — an
 existing dependency usually covers it. If nothing does, bring me the options and
 discuss before adding anything.
 
+## Model spend
+
+OpenRouter is my money. The budget is about $50 a day of Sonnet 5 — enough to
+work with, not enough to be careless with.
+
+Anything run by hand — a smoke check, seeing whether a prompt change took —
+names a `:free` model. They cost nothing and exercise the same path, and one
+already caught a model skipping a tool. Reach for a paid model only when the
+question is about that model.
+
+Where a paid model is the default, it is Sonnet 5. Don't reach for the most
+capable thing available as a starting point; reach for it when something has
+shown it needs one.
+
+Before a run that will cost more than a few cents, say what you expect it to
+cost and wait. Afterwards, say what it did cost — the number is already
+printed, so passing it on is free.
+
 ## Commands
 
 Every app gets a `Taskfile.yml`, and its `package.json` scripts delegate to it,

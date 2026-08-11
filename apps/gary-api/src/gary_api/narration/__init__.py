@@ -4,7 +4,7 @@ Selected from the environment once, the same arrangement as ``identity``:
 
     GM_FAKE          set to 1 to use the spec double
     OPENROUTER_API_KEY   the key the real narrator needs
-    GM_MODEL         which model to ask for, default anthropic/claude-opus-5
+    GM_MODEL         which model to ask for, default anthropic/claude-sonnet-5
 
 The real narrator goes through OpenRouter, which serves an OpenAI-compatible
 API and no Anthropic one — so the client is the openai SDK pointed at a

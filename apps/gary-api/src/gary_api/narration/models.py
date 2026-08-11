@@ -72,6 +72,13 @@ BUILT_IN: tuple[Model, ...] = (
     Model("qwen/qwen3.7-plus", "Qwen3.7 Plus", 0.32, 1.28, 1_000_000, True),
 )
 
+# What a campaign that names no model runs on. Named rather than taken off the
+# front of BUILT_IN: the list is ordered by what to suggest, and the thing to
+# suggest first is not the thing to bill by default. Opus 5 costs 2.5x this per
+# input token and 2.5x per output token, on every turn, carrying the whole
+# transcript — a campaign nobody thought about should not be doing that.
+FALLBACK = "anthropic/claude-sonnet-5"
+
 # Which of the fetched list to put at the top. Kept small on purpose: a
 # suggestion that covers everything suggests nothing.
 SUGGESTED = tuple(model.id for model in BUILT_IN if model.suggested)
@@ -182,4 +189,4 @@ def model(identifier: str) -> Model:
 
 def default() -> str:
     """What a campaign that names no model runs on."""
-    return os.environ.get("GM_MODEL", BUILT_IN[0].id)
+    return os.environ.get("GM_MODEL", FALLBACK)

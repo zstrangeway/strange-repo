@@ -115,6 +115,15 @@ const MODELS = [
     suggested: true,
   },
   {
+    id: "anthropic/claude-sonnet-5",
+    name: "Claude Sonnet 5",
+    prompt_cost: 2.0,
+    completion_cost: 10.0,
+    context: 1000000,
+    reasons: true,
+    suggested: true,
+  },
+  {
     id: "anthropic/claude-haiku-4.5",
     name: "Claude Haiku 4.5",
     prompt_cost: 1.0,
@@ -124,6 +133,11 @@ const MODELS = [
     suggested: false,
   },
 ];
+
+// What gary-api runs a campaign on when it names no model. Named rather than
+// taken off the front of MODELS, because gary-api names it too — the list
+// leads with what to suggest and that is not what to bill by default.
+const FALLBACK_MODEL = "anthropic/claude-sonnet-5";
 
 export function answerWithGarbage() {
   answeringWithGarbage = true;
@@ -208,7 +222,7 @@ function asCampaign(campaign) {
       .length,
     // Resolved, never null — a client should not have to know what the
     // deployment's default is to render which model a campaign runs on.
-    model: campaign.model ?? MODELS[0].id,
+    model: campaign.model ?? FALLBACK_MODEL,
     model_chosen: campaign.model !== null,
   };
 }
