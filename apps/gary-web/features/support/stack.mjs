@@ -16,6 +16,9 @@ const API_DIR = path.resolve(
 export const API_PORT = 8798;
 export const API_URL = `http://127.0.0.1:${API_PORT}`;
 
+/** Where the specs serve gary-web, which is what a browser will call from. */
+const WEB_ORIGIN = "http://localhost:3999";
+
 let api = null;
 let database = null;
 let log = "";
@@ -72,7 +75,10 @@ export async function start() {
         // unflushed for as long as it takes to fill 8KB — long enough for a
         // step to read an empty log and conclude nothing was sent.
         PYTHONUNBUFFERED: "1",
-        WEB_BASE_URL: `http://localhost:3999`,
+        // gary-web calls this from the page, so its origin has to be named
+        // here or the browser makes every request and then refuses to hand
+        // back the answer. The default is port 3000; the specs are not on it.
+        BROWSER_ORIGINS: WEB_ORIGIN,
       },
     },
   );
