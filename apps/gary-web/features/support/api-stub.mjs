@@ -278,6 +278,27 @@ export async function start() {
       const url = new URL(request.url, BASE_URL);
       const path = url.pathname;
 
+      // gary-web runs in the browser and calls this from the page, so every
+      // answer needs the same welcome gary-api gives — without it the browser
+      // makes the call and then refuses to hand back the result, and the
+      // scenario sees an app that renders nothing for no stated reason.
+      const origin = request.headers.origin;
+      if (origin) {
+        response.setHeader("access-control-allow-origin", origin);
+        response.setHeader("vary", "origin");
+      }
+
+      // The preflight. A POST carrying JSON is not a request a browser makes
+      // without asking first.
+      if (request.method === "OPTIONS") {
+        response.writeHead(204, {
+          "access-control-allow-methods": "GET,POST,PATCH,DELETE,OPTIONS",
+          "access-control-allow-headers": "authorization,content-type,x-request-id",
+        });
+        response.end();
+        return;
+      }
+
       // The provider half. A real one shows a consent screen; this one has
       // nothing to ask, so it bounces straight back with the code for
       // whoever the scenario said would be there.
