@@ -85,3 +85,14 @@ Feature: Campaigns
     When I open the campaigns page
     And I sign out
     Then I should be on the sign in page
+
+  # A table where everyone has sat down and nobody has spoken. The game should
+  # start by happening to you, not by asking what you do before anything has.
+  Scenario: A new campaign drops you into a situation
+    Given I have signed in at google as "ada@example.com" named "Ada"
+    And I already have a campaign called "A Light in the Deep"
+    When I open that campaign
+    Then the page shows what the adventure is about
+    When I add "Bramble" the "rogue"
+    Then gary should open the scene without my asking
+    And the composer should be waiting for me afterwards
