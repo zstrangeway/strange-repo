@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from gary_api import db, dice, logs, narration, scenes, systems, world
 from gary_api.auth import CurrentUser, Db, Refusal
-from gary_api.models import Campaign, Character, Roll, Scene, Turn
+from gary_api.models import Campaign, Character, Roll, Scene, Turn, WorldEvent
 
 logger = logs.get_logger(__name__)
 
@@ -998,6 +998,24 @@ async def begin_campaign(
     )
 
 
+async def _left_a_mark(database, turn_id: uuid.UUID) -> bool:
+    """Did this turn change anything that outlives it?
+
+    Asked of the database rather than tracked in a variable, because what
+    matters is what was actually written — a tool the engines refused looks
+    exactly like a tool that ran, right up until you go looking for the row.
+    """
+    rolled = await database.scalar(
+        select(func.count()).select_from(Roll).where(Roll.turn_id == turn_id)
+    )
+    changed = await database.scalar(
+        select(func.count())
+        .select_from(WorldEvent)
+        .where(WorldEvent.turn_id == turn_id)
+    )
+    return bool(rolled or changed)
+
+
 async def _stream(campaign_id, scene_id, message, gary):
     """The turn, as it happens.
 
@@ -1080,12 +1098,14 @@ async def _stream(campaign_id, scene_id, message, gary):
                     sending = results
                 else:
                     # Refused. Not an error: gary declined, and that is an
-                    # answer. No turn is kept, because nothing was narrated.
-                    # An else rather than a third isinstance because the three
-                    # are the whole union — a fourth arm would be a branch
-                    # nothing can reach.
-                    await database.delete(gm_turn)
-                    await database.commit()
+                    # answer. An else rather than a third isinstance because
+                    # the three are the whole union — a fourth arm would be a
+                    # branch nothing can reach.
+                    #
+                    # Whether the turn survives is decided in one place, below,
+                    # on whether it did anything. A decline that changed
+                    # nothing leaves nothing behind; a decline that came after
+                    # the dice were already thrown is not nothing.
                     yield _frame(
                         "refusal", {"detail": event.detail, "code": "gm_refused"}
                     )
@@ -1093,15 +1113,16 @@ async def _stream(campaign_id, scene_id, message, gary):
 
         except narration.NarrationError as error:
             logger.error("gm.unreachable", campaign_id=str(campaign_id))
-            await database.delete(gm_turn)
-            await database.commit()
             yield _frame(
                 "error", {"detail": str(error), "code": "gm_unavailable"}
             )
             return
 
         finally:
-            # Reached on a normal end and on the client walking away alike.
+            # Reached on a normal end, on a refusal, on an unreachable model
+            # and on the client walking away alike — which is why the decision
+            # about what to keep is only made here.
+            #
             # A turn cut off is kept and marked rather than dropped: the next
             # turn is told the transcript, and a hole in it is a story that
             # never happened.
@@ -1109,6 +1130,17 @@ async def _stream(campaign_id, scene_id, message, gary):
             if spoken:
                 gm_turn.content = "".join(spoken).strip()
                 gm_turn.complete = finished
+                await database.commit()
+            elif await _left_a_mark(database, gm_turn.id):
+                # Silence is not nothing. Gary can spend a whole turn calling
+                # tools and never reach a word of prose — and deleting that
+                # turn takes its rolls with it, because they cascade, while
+                # leaving the damage it dealt behind, because world events do
+                # not. What that produces is a transcript in which nothing
+                # happened beside a party that is bleeding, and no way to ever
+                # find out why.
+                gm_turn.content = ""
+                gm_turn.complete = False
                 await database.commit()
             else:
                 await database.delete(gm_turn)

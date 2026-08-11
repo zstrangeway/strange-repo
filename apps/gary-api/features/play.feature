@@ -201,6 +201,21 @@ Feature: Playing
 
   # A client that reloads mid-campaign has to get the table back, and the
   # stream only carries what happens next.
+  # Reported from a real session: seven rolls landed, two people lost hit
+  # points, and gary never got to say what happened — it spent the whole turn
+  # calling tools and ran out of rounds. The turn was then deleted for having
+  # no prose, which took its rolls with it (they cascade) and left the damage
+  # behind (world events do not). A refresh showed a story where nothing
+  # happened, beside a party that was bleeding.
+  #
+  # A turn is only nothing if it did nothing. Silence is not nothing.
+  Scenario: A turn that did things but said nothing is still a turn
+    Given I said "we cross the planks [[check Bramble 12 avoid collapse]] [[damage Bramble 5]] [[mute]]"
+    When I read the transcript
+    Then the transcript should read back 2 turns
+    And gary's turn should carry a roll of "1d20"
+    And the world should have "Bramble" 5 hit points down
+
   Scenario: Reading the transcript back
     Given I said "I push open the door"
     When I read the transcript

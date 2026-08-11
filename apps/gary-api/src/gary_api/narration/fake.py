@@ -21,6 +21,7 @@ brackets at a real narrator is just a player typing square brackets.
     [[refuse]]                      decline, in words
     [[fail]]                        be unreachable
     [[stall]]                       start, then never finish
+    [[mute]]                        do the tools and never say a word
 
 Anything else is narrated: the double echoes the message back inside a
 sentence, which is enough for a spec to assert the narration mentions what
@@ -160,16 +161,25 @@ class FakeNarrator:
             yield Refused(REFUSAL)
             return
 
+        # Everything a real narrator does before it has said anything, and
+        # nothing after. What this stands in for is the model that spends its
+        # whole turn calling tools and runs out of rounds before it narrates:
+        # dice thrown, hit points taken, and not one word about any of it.
+        mute = "mute" in asked
+
         # In pieces, always. A double that answered in one go would let a
         # client that never learned to stream pass the specs.
         said = strip(latest) or "something"
-        yield Said("You " if said[:1].islower() else "")
-        yield Said(f"{said}. ")
+        if not mute:
+            yield Said("You " if said[:1].islower() else "")
+            yield Said(f"{said}. ")
 
         calls = [call for call in (_call(one) for one in asked) if call]
         if calls:
             results = yield Calls(calls)
             for result in results or []:
+                if mute:
+                    continue
                 if result.failed:
                     # The narrator is told what went wrong and carries on, the
                     # same way it would when a real model asks for something
@@ -177,6 +187,9 @@ class FakeNarrator:
                     yield Said(f"That does not work: {result.summary}. ")
                 else:
                     yield Said(f"{result.summary} ")
+
+        if mute:
+            return
 
         if "stall" in asked:
             # Started and never finished, for the scenario where the tab shuts
