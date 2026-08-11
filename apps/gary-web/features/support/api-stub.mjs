@@ -123,9 +123,14 @@ function handle(method, path, body, request, query) {
       body: providers.map((name) => ({
         name,
         label: LABELS[name],
+        // The empty state is not padding: gary-api hands back exactly this
+        // for a caller that has not chosen one, and the caller is meant to
+        // set it rather than append to it. Leaving it out here let a caller
+        // that appended look correct in the specs and carry state twice
+        // against a real provider, which refuses to load such a URL at all.
         authorization_url:
           `${BASE_URL}/fake/${name}/authorize` +
-          `?redirect_uri=${encodeURIComponent(redirectUri)}`,
+          `?redirect_uri=${encodeURIComponent(redirectUri)}&state=`,
       })),
     };
   }
@@ -279,6 +284,15 @@ export async function start() {
       const authorizing = path.match(/^\/fake\/([a-z]+)\/authorize$/);
       if (authorizing) {
         const provider = authorizing[1];
+
+        // As Facebook does: a URL carrying state twice is refused outright,
+        // not read leniently. Without this the double is invisible here.
+        if (url.searchParams.getAll("state").length > 1) {
+          response.writeHead(400, { "content-type": "text/plain" });
+          response.end("Can't load URL: state given more than once");
+          return;
+        }
+
         const back = new URL(url.searchParams.get("redirect_uri"));
         const person = waiting.get(provider);
         if (person) {

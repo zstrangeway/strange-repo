@@ -4,7 +4,7 @@ import { Button } from "@gary/ui/components/button";
 import { FormCard } from "@gary/ui/components/form-card";
 
 import { currentUser } from "@/lib/session";
-import { absoluteUrl } from "@/lib/urls";
+import { absoluteUrl, withState } from "@/lib/urls";
 
 import { waysToSignIn } from "../../actions";
 import { Notice } from "../../form-parts";
@@ -53,12 +53,4 @@ export default async function LoginPage({
       </div>
     </FormCard>
   );
-}
-
-/** Which provider came back is carried in state, since one callback serves
- *  all of them and the code alone does not say where it came from. */
-function withState(url: string, provider: string): string {
-  const target = new URL(url);
-  target.searchParams.set("state", provider);
-  return target.toString();
 }

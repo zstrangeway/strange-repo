@@ -9,7 +9,7 @@ import {
 } from "@gary/ui/components/card";
 
 import { currentUser } from "@/lib/session";
-import { absoluteUrl } from "@/lib/urls";
+import { absoluteUrl, withState } from "@/lib/urls";
 
 import { connectedAccounts, waysToSignIn } from "../../actions";
 import { Notice } from "../../form-parts";
@@ -41,7 +41,7 @@ export default async function ProfilePage({
       provider: provider.name,
       label: provider.label,
       email: held?.email ?? null,
-      authorizationUrl: `${provider.authorization_url}&state=${provider.name}`,
+      authorizationUrl: withState(provider.authorization_url, provider.name),
     };
   });
 
