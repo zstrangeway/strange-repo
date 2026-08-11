@@ -6,12 +6,12 @@ grep for substrings. Call it like this::
     from gary_api import logs
 
     logger = logs.get_logger(__name__)
-    logger.info("mail.sent", provider="resend", to=user.email)
+    logger.info("identity.configured", provider="google")
 
 which lands as::
 
     {"timestamp": "2026-08-09T17:50:00.123Z", "level": "info",
-     "logger": "gary_api.mail", "message": "mail.sent", "app": "gary-api",
+     "logger": "gary_api.identity", "message": "identity.configured", "app": "gary-api",
      "request_id": "5f2c...", "provider": "resend", "to": "ada@example.com"}
 
 This configures the *root* logger rather than wrapping one of our own, so
@@ -161,8 +161,8 @@ def _safe(fields: dict[str, Any]) -> dict[str, Any]:
 class Logger:
     """A standard logger that takes fields as keyword arguments.
 
-    ``logger.info("mail.sent", provider="resend")`` rather than
-    ``logger.info("mail.sent", extra={"provider": "resend"})``. Thin on
+    ``logger.info("identity.configured", provider="google")`` rather than
+    ``logger.info("identity.configured", extra={...})``. Thin on
     purpose — underneath is an ordinary stdlib logger, so levels, handlers
     and third-party configuration all still apply.
 
