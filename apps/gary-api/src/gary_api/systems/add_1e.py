@@ -1,5 +1,11 @@
 from gary_api.dice import Roll
-from gary_api.systems.base import Module, SystemError, TwoDegrees
+from gary_api.systems.base import (
+    ROLL_3D6_IN_ORDER,
+    ROLL_4D6,
+    Module,
+    SystemError,
+    TwoDegrees,
+)
 
 
 class ADnD1e(TwoDegrees):
@@ -15,6 +21,16 @@ class ADnD1e(TwoDegrees):
         "assassin", "bard", "cleric", "druid", "fighter", "illusionist",
         "magic-user", "monk", "paladin", "ranger", "thief",
     )
+    # Three dice straight down the page is the Player's Handbook, and four
+    # dropping the lowest and arranged is the Dungeon Master's Guide's own
+    # Method I. Both are first edition; neither is a point buy, which is not.
+    offers = (ROLL_3D6_IN_ORDER, ROLL_4D6)
+    hit_dice = {
+        "fighter": 10, "paladin": 10,
+        "cleric": 8, "druid": 8, "ranger": 8,
+        "assassin": 6, "bard": 6, "thief": 6,
+        "illusionist": 4, "magic-user": 4, "monk": 4,
+    }
     modules = (
         Module(
             slug="the-moaning-barrow",

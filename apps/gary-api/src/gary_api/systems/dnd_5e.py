@@ -1,4 +1,10 @@
-from gary_api.systems.base import Module, TwoDegrees
+from gary_api.systems.base import (
+    POINT_BUY,
+    ROLL_4D6,
+    STANDARD_ARRAY,
+    Module,
+    TwoDegrees,
+)
 
 
 class DnD5e(TwoDegrees):
@@ -14,6 +20,17 @@ class DnD5e(TwoDegrees):
         "barbarian", "bard", "cleric", "druid", "fighter", "monk",
         "paladin", "ranger", "rogue", "sorcerer", "warlock", "wizard",
     )
+    # All three are in the Player's Handbook: the array and point buy as the
+    # ways to build one, and four dice dropping the lowest as the way to roll
+    # one. Ordered gently rather than alphabetically — the first is the one to
+    # take if you do not care.
+    offers = (STANDARD_ARRAY, ROLL_4D6, POINT_BUY)
+    hit_dice = {
+        "barbarian": 12,
+        "fighter": 10, "paladin": 10, "ranger": 10,
+        "bard": 8, "cleric": 8, "druid": 8, "monk": 8, "rogue": 8, "warlock": 8,
+        "sorcerer": 6, "wizard": 6,
+    }
     modules = (
         Module(
             slug="the-drowned-belfry",

@@ -11,6 +11,7 @@ import unittest
 import uuid
 
 from gary_api import narration, play, systems
+from gary_api.auth import Refusal
 from gary_api.dice import Roll
 from gary_api.systems.base import D20Ruleset, Degree, FourDegrees
 
@@ -239,3 +240,42 @@ class FightTests(unittest.TestCase):
         result, _ = self.refusing("end_turn")
         self.assertTrue(result.failed)
         self.assertIn("no fight", result.summary)
+
+
+class SheetTests(unittest.TestCase):
+    """What may be written on a sheet, checked against the system's own list."""
+
+    def setUp(self):
+        # Any registered system would do; this asks the registry for one
+        # rather than naming it, the way everything outside the package has
+        # to — see test_pluggable.
+        self.ruleset = next(iter(systems.rulesets()))
+
+    def sheet(self, wanted):
+        return play._sheet_for(self.ruleset, wanted)
+
+    def test_nobody_has_to_supply_any(self):
+        # A campaign started before scores existed has characters who never
+        # gave any, and not everybody wants to arrange six numbers to play.
+        made = self.sheet(None)
+        self.assertEqual(set(made), set(self.ruleset.abilities))
+        self.assertEqual(set(made.values()), {self.ruleset.default_score})
+
+    def test_what_is_supplied_is_kept(self):
+        ability = self.ruleset.abilities[0]
+        self.assertEqual(self.sheet({ability: 16})[ability], 16)
+
+    def test_an_ability_this_system_does_not_have(self):
+        with self.assertRaises(Refusal):
+            self.sheet({"nonsense": 16})
+
+    def test_a_score_outside_the_range(self):
+        with self.assertRaises(Refusal):
+            self.sheet({self.ruleset.abilities[0]: self.ruleset.scores[1] + 1})
+
+    def test_a_boolean_is_not_a_score(self):
+        # Pydantic types the field as int and is happy to make one out of a
+        # boolean, so `{"dex": true}` arrives here as a dexterity of 1 rather
+        # than as a rejection.
+        with self.assertRaises(Refusal):
+            self.sheet({self.ruleset.abilities[0]: True})

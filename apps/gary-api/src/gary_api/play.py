@@ -35,11 +35,10 @@ logger = logs.get_logger(__name__)
 
 router = APIRouter(tags=["play"])
 
-# What a character starts with when nobody says otherwise. Deriving hit points
-# from class and constitution is the rules engine's job and it does not do
-# that yet, so this is a stated default rather than a guess dressed as one.
-DEFAULT_HP = 8
-DEFAULT_ABILITY = 10
+# Nothing here. What a character starts with, what an unarmoured one is worth
+# hitting, what an unspecified swing does and which ability any of it comes
+# off are all the system's to say — see gary_api.systems.base. A default kept
+# here would be this module quietly holding a rule.
 
 
 class ModuleResponse(BaseModel):
@@ -52,6 +51,17 @@ class ModuleResponse(BaseModel):
     opening: str
 
 
+class MethodResponse(BaseModel):
+    slug: str
+    name: str
+    blurb: str
+    # Whether gary produces the numbers, and whether you place them after.
+    # Two questions and not one: rolling in order generates without arranging,
+    # and typing them in arranges without generating.
+    generates: bool
+    arrange: bool
+
+
 class SystemResponse(BaseModel):
     slug: str
     name: str
@@ -59,6 +69,13 @@ class SystemResponse(BaseModel):
     classes: list[str]
     abilities: list[str]
     degrees: list[str]
+    # How this edition lets you arrive at six scores. Typing them in is always
+    # last and always there.
+    methods: list[MethodResponse]
+    # Why, when a system generates nothing. Empty for the ones that do.
+    cannot_generate: str
+    # What a score may be, so a client can refuse a typo before sending it.
+    scores: list[int]
     modules: list[ModuleResponse]
 
 
@@ -131,7 +148,10 @@ class NewCharacter(BaseModel):
     # the deliberate act.
     mine: bool = False
     level: int = Field(default=1, ge=1, le=30)
-    max_hp: int = Field(default=DEFAULT_HP, ge=1, le=999)
+    # Null means "whatever the class and constitution come to", which is the
+    # ordinary case. A number here is somebody importing a character that was
+    # made elsewhere, and is taken at its word.
+    max_hp: int | None = Field(default=None, ge=1, le=999)
     abilities: dict[str, int] | None = None
 
     @field_validator("name")
@@ -244,6 +264,18 @@ def _as_system(ruleset: systems.Ruleset) -> dict:
         "classes": list(ruleset.classes),
         "abilities": list(ruleset.abilities),
         "degrees": [degree.value for degree in ruleset.degrees],
+        "methods": [
+            {
+                "slug": method.slug,
+                "name": method.name,
+                "blurb": method.blurb,
+                "generates": method.generates,
+                "arrange": method.arrange,
+            }
+            for method in ruleset.methods
+        ],
+        "cannot_generate": ruleset.cannot_generate,
+        "scores": list(ruleset.scores),
         "modules": [
             {
                 "slug": module.slug,
@@ -276,6 +308,43 @@ def _as_campaign(campaign: Campaign, turns: int = 0) -> dict:
         "model": campaign.model or narration.models.default(),
         "model_chosen": campaign.model is not None,
     }
+
+
+def _sheet_for(ruleset, wanted: dict[str, int] | None) -> dict[str, int]:
+    """Six scores, checked against what this system has and allows.
+
+    Nobody has to supply any: a campaign started before this existed has
+    characters who never did, and not everybody wants to arrange six numbers
+    before they can play. What is supplied has to be real.
+    """
+    sheet = {ability: ruleset.default_score for ability in ruleset.abilities}
+    low, high = ruleset.scores
+
+    for ability, score in (wanted or {}).items():
+        if ability not in sheet:
+            raise Refusal(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                "no_such_ability",
+                f"{ability!r} is not an ability in this system",
+            )
+        if isinstance(score, bool):
+            # Pydantic guarantees an int by here, and is happy to make one out
+            # of a boolean: `{"dex": true}` arrives as a dexterity of 1. Only
+            # this half needs saying, because only this half gets through.
+            raise Refusal(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                "bad_score",
+                f"{score!r} is not a score",
+            )
+        if not low <= score <= high:
+            raise Refusal(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                "bad_score",
+                f"a score in this system is between {low} and {high}",
+            )
+        sheet[ability] = score
+
+    return sheet
 
 
 def _as_character(character: Character) -> dict:
@@ -503,6 +572,68 @@ async def change_campaign(
     return _as_campaign(campaign, turns or 0)
 
 
+class WantScores(BaseModel):
+    method: str = Field(max_length=64)
+
+
+class ScoreResponse(BaseModel):
+    score: int
+    # The dice that made it, kept rather than summed away: "15" and "6, 5, 4
+    # and a discarded 1" are different things to read while you decide where
+    # to put it. Empty for a method that throws none.
+    dice: list[int]
+    dropped: int | None
+
+
+class ScoresResponse(BaseModel):
+    method: str
+    scores: list[ScoreResponse]
+    # Which ability each is already against, when the method places them for
+    # you. Null when they are yours to arrange.
+    assigned: dict[str, int] | None
+
+
+@router.post("/campaigns/{campaign_id}/scores")
+async def roll_scores(
+    campaign_id: uuid.UUID, request: WantScores, database: Db, user: CurrentUser
+) -> ScoresResponse:
+    """Six scores, by a method this system offers.
+
+    gary-api's dice and not the browser's, for the reason they are not the
+    model's either: a number a client sent is a number somebody typed.
+
+    Nothing is stored. A set nobody made a character out of is not a fact
+    about the campaign, which is also why re-rolling is not refused — it costs
+    nothing that matters, and refusing would only make people delete the
+    character and start again.
+    """
+    campaign = await _mine(database, user, campaign_id)
+    ruleset = systems.ruleset(campaign.system_slug)
+
+    try:
+        wanted = ruleset.method(request.method)
+        thrown = ruleset.generate(request.method)
+    except systems.SystemError as error:
+        raise Refusal(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "no_such_method", str(error)
+        ) from error
+
+    return {
+        "method": wanted.slug,
+        "scores": thrown,
+        # Placed already, when the method does not let you arrange them —
+        # three dice straight down the page is the whole of first edition's
+        # character creation and there is nothing left to decide.
+        "assigned": (
+            None
+            if wanted.arrange
+            else dict(
+                zip(ruleset.abilities, [one["score"] for one in thrown], strict=True)
+            )
+        ),
+    }
+
+
 @router.post(
     "/campaigns/{campaign_id}/characters", status_code=status.HTTP_201_CREATED
 )
@@ -543,16 +674,22 @@ async def add_character(
             )
 
     ruleset = systems.ruleset(campaign.system_slug)
-    abilities = request.abilities or {
-        ability: DEFAULT_ABILITY for ability in ruleset.abilities
-    }
+    abilities = _sheet_for(ruleset, request.abilities)
 
     character = Character(
         campaign_id=campaign.id,
         name=request.name,
         character_class=spelled,
         level=request.level,
-        max_hp=request.max_hp,
+        # The class's hit die plus what their constitution is worth. Asked of
+        # the ruleset rather than worked out here, because it is a rule — and
+        # a system with no hit dice typed in yet says so by handing back its
+        # own default rather than by being special-cased.
+        max_hp=(
+            request.max_hp
+            if request.max_hp is not None
+            else ruleset.hit_points(spelled, abilities)
+        ),
         abilities=abilities,
         played_by="player" if request.mine else "gary",
     )
@@ -813,15 +950,6 @@ def _named(party: list[Character], name: str) -> Character:
     raise world.WorldError(f"nobody here is called {name!r}")
 
 
-# What a character is worth defending themselves with. Armour class belongs on
-# a sheet and characters do not have one yet — deriving it from class and
-# equipment is the rules engine's job and it does not do that either — so this
-# is a stated default rather than a guess dressed as one.
-DEFAULT_AC = 12
-# And what an unarmed or unspecified swing does. Weapons are not modelled.
-DEFAULT_DAMAGE = "1d6"
-
-
 def _text_of(payload: dict, key: str) -> str:
     value = payload.get(key)
     if not isinstance(value, str) or not value.strip():
@@ -900,7 +1028,7 @@ async def _fighting(
                 max_hp=_count_of(one, "hit_points"),
                 armour_class=_count_of(one, "armour_class"),
                 attack_bonus=int(one.get("attack_bonus") or 0),
-                damage=str(one.get("damage") or DEFAULT_DAMAGE)[:32],
+                damage=str(one.get("damage") or ruleset.unarmed_damage)[:32],
             )
             database.add(adversary)
             made.append(adversary)
@@ -979,9 +1107,13 @@ async def _fighting(
     bonus = (
         attacker.attack_bonus
         if hitting
-        else ruleset.modifier((swinging.abilities or {}).get("str", 10))
+        else ruleset.attack_bonus(swinging.abilities)
     )
-    guard = target.armour_class if isinstance(target, world.Foe) else DEFAULT_AC
+    guard = (
+        target.armour_class
+        if isinstance(target, world.Foe)
+        else ruleset.default_armour_class
+    )
     swing = ruleset.resolve(
         dc=guard, modifier=bonus, reason=f"attack on {target.name}"
     )
@@ -997,7 +1129,7 @@ async def _fighting(
     said = f"{attacker.name} missed {target.name}"
     if landed:
         hurt = dice.roll(
-            attacker.damage if hitting else DEFAULT_DAMAGE,
+            attacker.damage if hitting else ruleset.unarmed_damage,
             f"{attacker.name} hits {target.name}",
         )
         frames.append(_frame("roll", rolled(hurt, **mine)))
