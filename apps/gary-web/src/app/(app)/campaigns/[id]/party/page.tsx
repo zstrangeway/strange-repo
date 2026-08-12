@@ -97,6 +97,38 @@ export default function PartyPage({
   const chosen = system?.methods.find((one) => one.slug === method);
   const classes = system?.classes ?? [];
 
+  // What a generating method produces arrives without being asked for. The
+  // standard array is a fixed six numbers: there is nothing to decide about
+  // fetching it, and a button to fetch it again would hand back the same six.
+  // Whether it can usefully be asked for a second time is a different
+  // question, and the answer is in what came back — see the score step.
+  useEffect(() => {
+    if (!chosen?.generates) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setRolled(null);
+      return;
+    }
+
+    let live = true;
+    void (async () => {
+      const result = await rollScores(id, chosen.slug);
+      if (!live) return;
+      if (!result.rolled) {
+        setError(result.error);
+        return;
+      }
+      setRolled(result.rolled.scores);
+      // Placed already when the method does not let you arrange them, and
+      // left for you when it does.
+      setScores(result.rolled.assigned ?? {});
+    })();
+
+    // A method switched away from mid-flight must not land on the new one.
+    return () => {
+      live = false;
+    };
+  }, [id, chosen?.generates, chosen?.slug]);
+
   if (!campaign || party === null || !system) {
     return <Skeleton className="h-64 w-full" data-testid="party-loading" />;
   }
