@@ -51,7 +51,7 @@ Feature: Making a character
   # to make the character at all.
   Scenario: Pathfinder generates nothing, and says so
     When I read the system "pathfinder-2e"
-    Then it should offer no way of generating scores
+    Then gary should generate nothing for it
     And it should say why
     But it should offer typing them in
 
@@ -90,7 +90,7 @@ Feature: Making a character
   # are not the model's: a number a browser sent is a number somebody typed.
   Scenario: The dice belong to the API
     Given I have a campaign on "dnd-5e"
-    And the dice are seeded
+    And the dice are seeded with 7
     When I roll scores with "roll-4d6-drop-lowest"
     And I roll scores with "roll-4d6-drop-lowest" again
     Then the two sets should differ
@@ -102,9 +102,9 @@ Feature: Making a character
   # produced them. Which is what makes typing them in free.
   Scenario: A character made with scores keeps them
     Given I have a campaign on "dnd-5e"
-    When I add "Bramble" the rogue with dex 16 and con 14
+    When I add "Bramble" the rogue with dex 16 and con 14 as mine
     Then "Bramble" should have dex 16
-    And a check on their dexterity should use a modifier of 3
+    And a check on "Bramble" should use a modifier of 3
 
   Scenario: Scores typed in for a system that generates none
     Given I have a campaign on "pathfinder-2e"
@@ -127,7 +127,7 @@ Feature: Making a character
     Given I have a campaign on "dnd-5e"
     When I add "Bramble" the rogue with luck 16
     Then the response status should be 422
-    And the refusal should name "luck"
+    And the body should mention "luck"
 
   # ---------------------------------------------------------- hit points
 
@@ -147,9 +147,11 @@ Feature: Making a character
     Then "Bruna" should have more hit points than "Wren"
 
   Scenario: A frail character still has one hit point
-    # A constitution modifier can be worse than the hit die is big, and a
-    # character created already dead is nobody's idea of a rule.
-    Given I have a campaign on "dnd-5e"
+    # A constitution modifier can be worse than the hit die is big — a 3.5
+    # wizard rolls a d4 and a constitution of 3 is worth minus four, which
+    # comes to nothing at all. A character created already dead is nobody's
+    # idea of a rule.
+    Given I have a campaign on "dnd-3-5e"
     When I add "Wren" the wizard with con 3
     Then "Wren" should have 1 hit point
 
@@ -160,3 +162,10 @@ Feature: Making a character
     Given I have a campaign on "pathfinder-2e"
     When I add "Ket" the rogue
     Then "Ket" should have 8 hit points
+
+  Scenario: A score that is not a number
+    # Pydantic would coerce "sixteen" into nothing useful and a boolean into
+    # a one, so the sheet checks rather than trusts what arrived.
+    Given I have a campaign on "dnd-5e"
+    When I add "Bramble" the rogue with dex sixteen
+    Then the response status should be 422

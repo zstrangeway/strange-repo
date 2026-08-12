@@ -22,6 +22,21 @@ class Pathfinder2e(FourDegrees):
         "fighter", "investigator", "monk", "oracle", "ranger", "rogue",
         "sorcerer", "swashbuckler", "witch", "wizard",
     )
+    # Nothing. Pathfinder does not roll or buy scores: everyone starts at ten
+    # and takes boosts from ancestry, background, class and a free choice, and
+    # gary has no ancestries or backgrounds to take them from. Inventing a
+    # method would be running fifth edition's rule in a Pathfinder game.
+    #
+    # Typing them in is still offered, as it is everywhere, so somebody who
+    # worked their scores out properly is not stopped from playing.
+    offers = ()
+    cannot_generate = (
+        "Pathfinder scores come from ancestry, background and class boosts "
+        "rather than dice, and gary has no ancestries or backgrounds yet. "
+        "Work them out and type them in."
+    )
+    # And hit points are ancestry plus class plus constitution, for the same
+    # missing reason, so a stated default stands in.
     modules = (
         Module(
             slug="salt-and-cinder",

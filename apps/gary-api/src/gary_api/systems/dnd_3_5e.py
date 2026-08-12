@@ -1,4 +1,9 @@
-from gary_api.systems.base import Module, TwoDegrees
+from gary_api.systems.base import (
+    POINT_BUY,
+    ROLL_4D6,
+    Module,
+    TwoDegrees,
+)
 
 
 class DnD35e(TwoDegrees):
@@ -14,6 +19,17 @@ class DnD35e(TwoDegrees):
         "barbarian", "bard", "cleric", "druid", "fighter", "monk",
         "paladin", "ranger", "rogue", "sorcerer", "wizard",
     )
+    # No standard array: that is a fifth edition idea, and this edition's own
+    # book offers rolling and a point buy. Adding it here would be a house
+    # rule gary imposed on every 3.5 table.
+    offers = (ROLL_4D6, POINT_BUY)
+    hit_dice = {
+        "barbarian": 12,
+        "fighter": 10, "paladin": 10, "ranger": 10,
+        "cleric": 8, "druid": 8, "monk": 8,
+        "bard": 6, "rogue": 6,
+        "sorcerer": 4, "wizard": 4,
+    }
     modules = (
         Module(
             slug="the-glass-mine",

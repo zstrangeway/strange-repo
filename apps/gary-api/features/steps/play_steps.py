@@ -1726,3 +1726,228 @@ def step_knock_down(context, name):
 def step_foe_hurt(context, name, amount):
     foe = next(one for one in _fight(context)["enemies"] if one["name"] == name)
     assert foe["max_hp"] - foe["hp"] == amount, foe
+
+
+# --------------------------------------------------------------- creation
+
+
+@when('I read the system "{slug}"')
+def step_read_system(context, slug):
+    context.response = context.client.get(f"/catalogue/{slug}")
+    assert context.response.status_code == 200, context.response.text
+
+
+def _offers(context):
+    return {method["slug"] for method in _body(context)["methods"]}
+
+
+OFFERED = {
+    "the standard array": "standard-array",
+    "point buy": "point-buy",
+    "rolling 4d6 and dropping the lowest": "roll-4d6-drop-lowest",
+    "rolling 3d6 in order": "roll-3d6-in-order",
+    "typing them in": "manual",
+}
+
+
+@parse.with_pattern(r"|".join(OFFERED))
+def parse_offered(text):
+    return text
+
+
+register_type(Offered=parse_offered)
+
+
+@then("it should offer the {what}")
+@then("it should offer {what:Offered}")
+def step_offers(context, what):
+    assert OFFERED[what] in _offers(context), _offers(context)
+
+
+@then("it should not offer {what:Offered}")
+def step_does_not_offer(context, what):
+    assert OFFERED[what] not in _offers(context), _offers(context)
+
+
+@then("every system should offer typing them in")
+def step_all_offer_manual(context):
+    """Not a method so much as the absence of one, so nothing may lack it.
+
+    A system with no way in at all would be registered, listed, and then
+    discovered to be unplayable at the first party page.
+    """
+    context.response = context.client.get("/catalogue")
+    for system in _body(context):
+        context.execute_steps(f'When I read the system "{system["slug"]}"')
+        assert "manual" in _offers(context), system["slug"]
+
+
+@then("gary should generate nothing for it")
+def step_generates_nothing(context):
+    generating = [
+        method for method in _body(context)["methods"] if method["generates"]
+    ]
+    assert not generating, generating
+
+
+@then("it should say why")
+def step_says_why(context):
+    assert _body(context)["cannot_generate"].strip(), _body(context)
+
+
+@given('I have a campaign on "{system}"')
+def step_campaign_on(context, system):
+    context.execute_steps(
+        f'Given I started "A test" on "{system}" running '
+        f'"{_first_module(system)}"'
+    )
+
+
+def _roll_scores(context, method):
+    context.response = context.client.post(
+        f"/campaigns/{_campaign_id(context)}/scores",
+        json={"method": method},
+        headers=_headers(context),
+    )
+    if context.response.status_code == 200:
+        context.scores = context.scores + [_body(context)] if hasattr(
+            context, "scores"
+        ) else [_body(context)]
+
+
+@when('I roll scores with "{method}"')
+def step_roll_scores(context, method):
+    context.scores = []
+    _roll_scores(context, method)
+
+
+@when('I roll scores with "{method}" again')
+def step_roll_scores_again(context, method):
+    _roll_scores(context, method)
+
+
+@then("I should get {count:d} scores")
+def step_score_count(context, count):
+    assert len(_body(context)["scores"]) == count, _body(context)
+
+
+@then("each should be between {low:d} and {high:d}")
+def step_scores_within(context, low, high):
+    for one in _body(context)["scores"]:
+        assert low <= one["score"] <= high, one
+
+
+@then("the roll should be recorded as dice, not as a number")
+def step_scores_show_dice(context):
+    """Four dice and the one thrown away, not just the total.
+
+    "15" and "6, 5, 4 and a discarded 1" are different things to read while
+    you are deciding where to put it.
+    """
+    for one in _body(context)["scores"]:
+        assert len(one["dice"]) == 4, one
+        assert one["dropped"] == min(one["dice"]), one
+        assert one["score"] == sum(one["dice"]) - one["dropped"], one
+
+
+@then("the scores should already be assigned to abilities")
+def step_scores_assigned(context):
+    assigned = _body(context)["assigned"]
+    assert assigned, "nothing was placed"
+    from gary_api import systems
+
+    ruleset = systems.ruleset(context.campaign["system"])
+    assert set(assigned) == set(ruleset.abilities), assigned
+
+
+@then("the refusal should name the method")
+def step_refusal_names_method(context):
+    assert "roll-3d6-in-order" in _body(context)["detail"], _body(context)
+
+
+@then("the two sets should differ")
+def step_sets_differ(context):
+    """Seeded, so this is not luck: two draws from one seeded generator are
+    different draws, and a client that cached the first would show the same
+    six numbers twice."""
+    first, second = (
+        [one["score"] for one in got["scores"]] for got in context.scores
+    )
+    assert first != second, first
+
+
+def _add_with(context, name, character_class, abilities, mine=False):
+    context.response = context.client.post(
+        f"/campaigns/{_campaign_id(context)}/characters",
+        json={
+            "name": name,
+            "character_class": character_class,
+            "abilities": abilities,
+            "mine": mine,
+        },
+        headers=_headers(context),
+    )
+    if context.response.status_code == 201:
+        context.characters[name] = _body(context)
+
+
+@when('I add "{name}" the {character_class:Class} with {sheet} as mine')
+def step_add_with_mine(context, name, character_class, sheet):
+    step_add_with(context, name, character_class, sheet, mine=True)
+
+
+@when('I add "{name}" the {character_class:Class} with {sheet}')
+def step_add_with(context, name, character_class, sheet, mine=False):
+    """One step for however many scores a scenario cares to state.
+
+    "with dex 16" and "with dex 16 and con 14" are the same sentence with more
+    of it, and two step definitions competing over which owns the tail is a
+    match that goes wrong quietly.
+    """
+    words = sheet.replace(" and ", " ").split()
+    pairs = dict(zip(words[::2], words[1::2], strict=True))
+    _add_with(
+        context,
+        name,
+        character_class,
+        {
+            ability: int(score) if score.lstrip("-").isdigit() else score
+            for ability, score in pairs.items()
+        },
+        mine,
+    )
+
+
+@then('"{name}" should have {ability} {score:d}')
+def step_character_score(context, name, ability, score):
+    assert context.characters[name]["abilities"][ability] == score, (
+        context.characters[name]["abilities"]
+    )
+
+
+@then('a check on "{name}" should use a modifier of {modifier:d}')
+def step_their_check_modifier(context, name, modifier):
+    """The point of the whole feature, asserted end to end: a score typed at
+    creation reaches a check made in play."""
+    context.execute_steps(
+        f'When I say "they duck [[check {name} dex 12 dodging]]"'
+    )
+    context.execute_steps(f"Then the check should have used a modifier of {modifier}")
+
+
+@then('"{name}" should have {count:d} hit point')
+@then('"{name}" should have {count:d} hit points')
+def step_character_hp(context, name, count):
+    assert context.characters[name]["max_hp"] == count, context.characters[name]
+
+
+@then('"{first}" should have more hit points than "{second}"')
+def step_more_hp(context, first, second):
+    assert (
+        context.characters[first]["max_hp"] > context.characters[second]["max_hp"]
+    ), (context.characters[first]["max_hp"], context.characters[second]["max_hp"])
+
+
+@then('the body should mention "{what}"')
+def step_body_mentions(context, what):
+    assert what in context.response.text, context.response.text

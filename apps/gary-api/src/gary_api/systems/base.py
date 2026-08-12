@@ -64,6 +64,75 @@ class Module:
 
 
 @dataclass(frozen=True)
+class Method:
+    """One way an edition lets you arrive at six numbers.
+
+    Which of these exist is the system's to say. Not a global list with
+    exceptions: an edition permits what it permits, and asking for one it does
+    not offer is refused the way an unknown class is.
+
+    ``generates`` is whether gary produces the numbers; ``arrange`` is whether
+    you place them afterwards. Those are two questions and not one — rolling
+    three dice straight down the page generates and does not arrange, and
+    typing them in arranges without generating anything.
+    """
+
+    slug: str
+    name: str
+    blurb: str
+    generates: bool
+    arrange: bool
+
+
+# Offered by every system, because it is not really a method: somebody who
+# rolled at a real table, or built a character by a rule gary does not
+# implement, has an answer already and needs somewhere to put it. It is free
+# to offer, too — nothing downstream cares whether dice, a table or a person
+# produced a score.
+MANUAL = Method(
+    slug="manual",
+    name="Type them in",
+    blurb="Enter six scores you worked out somewhere else.",
+    generates=False,
+    arrange=True,
+)
+
+STANDARD_ARRAY = Method(
+    slug="standard-array",
+    name="The standard array",
+    blurb="15, 14, 13, 12, 10, 8 — put them where you like.",
+    generates=True,
+    arrange=True,
+)
+
+POINT_BUY = Method(
+    slug="point-buy",
+    name="Point buy",
+    blurb="Spend a budget on scores, so two characters are comparable.",
+    generates=False,
+    arrange=True,
+)
+
+ROLL_4D6 = Method(
+    slug="roll-4d6-drop-lowest",
+    name="Roll 4d6, drop the lowest",
+    blurb="Six sets of four dice, worst of each thrown away. Arrange as you like.",
+    generates=True,
+    arrange=True,
+)
+
+ROLL_3D6_IN_ORDER = Method(
+    slug="roll-3d6-in-order",
+    name="Roll 3d6 in order",
+    blurb="Three dice, six times, straight down the page. You play what you got.",
+    generates=True,
+    arrange=False,
+)
+
+ARRAY = (15, 14, 13, 12, 10, 8)
+
+
+@dataclass(frozen=True)
 class Outcome:
     reason: str
     dc: int
@@ -95,6 +164,27 @@ class Ruleset(Protocol):
 
     def initiative(self, modifier: int) -> Roll:
         """Roll for turn order. Raises SystemError if this system cannot."""
+        ...
+
+    def generate(self, method: str) -> list[dict]:
+        """Six scores by that method, with the dice that made them.
+
+        Raises SystemError if this system does not offer it, or if it does but
+        produces nothing to generate — point buy and typing them in are both
+        real methods that gary has no numbers for.
+        """
+        ...
+
+    def hit_points(self, character_class: str, abilities: dict[str, int]) -> int:
+        """What somebody of that class starts on.
+
+        Handed the whole sheet rather than one score, because which ability
+        hit points come off is this system's business and nobody else's.
+        """
+        ...
+
+    def attack_bonus(self, abilities: dict[str, int]) -> int:
+        """What a character adds to hit, from their own sheet."""
         ...
 
     def briefing(self) -> str:
@@ -143,6 +233,98 @@ class D20Ruleset:
         """One roll each, ordered highest first."""
         notation = f"{self.check_die}{modifier:+d}" if modifier else self.check_die
         return roll(notation, "initiative")
+
+    # What this edition permits, in the order it should be offered. Typing
+    # them in is appended rather than listed, because every system has it and
+    # a system that forgot would be a system with no way in at all.
+    #
+    # Offering is not generating: point buy is a method an edition permits and
+    # gary produces no numbers for, which is why `Method.generates` is a
+    # separate question from being on this list.
+    offers: tuple[Method, ...] = ()
+    # Why, when nothing a system offers produces numbers. Empty for the ones
+    # that do.
+    cannot_generate: str = ""
+    # What a score may be. Rolled ones cannot leave it; typed ones must not.
+    scores: tuple[int, int] = (3, 18)
+    # Hit die by class, and what somebody with no entry gets. A class missing
+    # from here is a class this system has not had its hit dice typed in yet,
+    # which is a gap rather than a rule.
+    hit_dice: dict[str, int] = {}
+    default_hp: int = 8
+    # What an ability nobody has set is worth, which is a system's to say —
+    # ten is the d20 games' idea of average and not a universal one.
+    default_score: int = 10
+    # Which ability each of these comes off. Named here rather than spelled
+    # into the router, because a system with a different vocabulary would
+    # otherwise need the router changed to add it.
+    hit_point_ability: str = "con"
+    attack_ability: str = "str"
+    # What a character without armour is worth hitting, and what an
+    # unspecified swing does. Both are stated defaults rather than derived —
+    # sheets carry no armour and no weapons yet — but they are the system's
+    # stated defaults, not the router's.
+    default_armour_class: int = 12
+    unarmed_damage: str = "1d6"
+
+    @property
+    def methods(self) -> tuple[Method, ...]:
+        return (*self.offers, MANUAL)
+
+    def method(self, slug: str) -> Method:
+        for offered in self.methods:
+            if offered.slug == slug:
+                return offered
+        raise SystemError(f"{self.name} does not offer {slug!r}")
+
+    def generate(self, method: str) -> list[dict]:
+        wanted = self.method(method)
+        if not wanted.generates:
+            raise SystemError(f"there is nothing to generate for {wanted.name!r}")
+
+        if wanted is STANDARD_ARRAY:
+            # No dice, but the same shape as the rolled ones — a client should
+            # not have to hold two ideas of what a score is.
+            return [{"score": score, "dice": [], "dropped": None} for score in ARRAY]
+
+        thrown = []
+        for _ in self.abilities:
+            if wanted is ROLL_3D6_IN_ORDER:
+                made = roll("3d6", "ability score")
+                thrown.append(
+                    {"score": made.total, "dice": list(made.dice), "dropped": None}
+                )
+                continue
+            # Four dice and the worst thrown away. Kept rather than summed
+            # away, because "15" and "6, 5, 4 and a discarded 1" are different
+            # things to read while you decide where to put it.
+            made = roll("4d6", "ability score")
+            faces = sorted(made.dice)
+            thrown.append(
+                {
+                    "score": sum(faces[1:]),
+                    "dice": list(made.dice),
+                    "dropped": faces[0],
+                }
+            )
+        return thrown
+
+    def hit_points(self, character_class: str, abilities: dict[str, int]) -> int:
+        """The hit die at full, plus the constitution modifier, never below one.
+
+        A constitution penalty can be worse than a hit die is big, and a
+        character created already dead is nobody's idea of a rule.
+        """
+        die = self.hit_dice.get(character_class)
+        if die is None:
+            return self.default_hp
+        return max(1, die + self.modifier(self.score(abilities, self.hit_point_ability)))
+
+    def attack_bonus(self, abilities: dict[str, int]) -> int:
+        return self.modifier(self.score(abilities, self.attack_ability))
+
+    def score(self, abilities: dict[str, int], ability: str) -> int:
+        return (abilities or {}).get(ability, self.default_score)
 
     def briefing(self) -> str:
         listed = ", ".join(degree.value for degree in self.degrees)
