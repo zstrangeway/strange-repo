@@ -25,6 +25,7 @@ Feature: Making a character
     Then it should offer the standard array
     And it should offer point buy
     And it should offer rolling 4d6 and dropping the lowest
+    And it should offer typing them in
 
   # First edition rolls three dice straight down the page and you play what
   # you got, which is a different thing from arranging six numbers — the DMG's
@@ -35,14 +36,24 @@ Feature: Making a character
     And it should offer rolling 4d6 and dropping the lowest
     And it should not offer point buy
 
-  # Pathfinder does not generate scores at all. Everyone starts at ten and
-  # takes boosts from ancestry, background and class — none of which gary has —
-  # so it offers nothing rather than quietly running 5e's rule in a Pathfinder
-  # game. Same as its first edition cousin refusing to roll initiative.
-  Scenario: Pathfinder offers none, and says so
+  # Typing them in is offered by everything, because it is not a method so
+  # much as the absence of one: somebody who rolled at a real table, or built
+  # a character by a rule gary does not implement, has an answer already and
+  # needs somewhere to put it.
+  Scenario: Every system lets you type them in
+    Then every system should offer typing them in
+
+  # Which is what gives Pathfinder a way in. It generates nothing — everyone
+  # starts at ten and takes boosts from ancestry, background and class, none
+  # of which gary has, and inventing a method would be quietly running 5e's
+  # rule in a Pathfinder game. But somebody who worked their scores out
+  # properly can type the result, and that is a better answer than refusing
+  # to make the character at all.
+  Scenario: Pathfinder generates nothing, and says so
     When I read the system "pathfinder-2e"
     Then it should offer no way of generating scores
     And it should say why
+    But it should offer typing them in
 
   # ------------------------------------------------------------- rolling one
 
@@ -70,6 +81,11 @@ Feature: Making a character
     When I roll scores with "roll-4d6-drop-lowest"
     Then the response status should be 422
 
+  Scenario: There is nothing to roll for typing them in
+    Given I have a campaign on "dnd-5e"
+    When I roll scores with "manual"
+    Then the response status should be 422
+
   # The dice are gary-api's and not the client's, for exactly the reason they
   # are not the model's: a number a browser sent is a number somebody typed.
   Scenario: The dice belong to the API
@@ -81,11 +97,19 @@ Feature: Making a character
 
   # ---------------------------------------------------------- making one
 
+  # However the numbers were arrived at, they arrive here the same way: the
+  # endpoint takes scores and does not care whether dice, a table or a person
+  # produced them. Which is what makes typing them in free.
   Scenario: A character made with scores keeps them
     Given I have a campaign on "dnd-5e"
     When I add "Bramble" the rogue with dex 16 and con 14
     Then "Bramble" should have dex 16
     And a check on their dexterity should use a modifier of 3
+
+  Scenario: Scores typed in for a system that generates none
+    Given I have a campaign on "pathfinder-2e"
+    When I add "Ket" the rogue with dex 18 and con 14
+    Then "Ket" should have dex 18
 
   Scenario: A character made with nothing still works
     # Not everybody wants to arrange six numbers, and a campaign started
