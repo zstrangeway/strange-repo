@@ -45,6 +45,7 @@ export default function Scores({
   const [low, high] = system.scores;
   const budget = system.point_budget;
   const paid = budget ? spent(scores, system.point_costs) : 0;
+  const byDice = (rolled ?? []).some((one) => one.dice.length > 0);
 
   return (
     <div className="flex flex-col gap-3" data-testid="scores">
@@ -77,7 +78,13 @@ export default function Scores({
         </p>
       ) : null}
 
-      {method?.generates ? (
+      {/* Asking again is only worth offering when the answer could differ, and
+          what settles that is whether dice were behind it. The standard array
+          generates its six the same way every time, so it gets no button; 4d6
+          and three-in-order get one. Read off what came back rather than off a
+          list here of which methods are random — that would be a second place
+          for the rules to live and the first to go stale. */}
+      {byDice ? (
         <div className="flex items-center gap-3">
           <Button
             type="button"
@@ -87,13 +94,14 @@ export default function Scores({
             disabled={rolling}
             onClick={onRoll}
           >
-            {rolled ? "Roll again" : "Roll"}
+            Roll again
           </Button>
           {/* Nobody is stopped from re-rolling: gary-api rolls it and stores
               nothing, so it costs nothing that matters, and refusing would
               only make people delete the character and start again. */}
           <span className="text-xs text-muted-foreground">
-            {rolled ? "Not what you wanted? Roll again." : "Nothing is kept until you add them."}
+            Not what you wanted? Roll again — nothing is kept until you add
+            them.
           </span>
         </div>
       ) : null}
