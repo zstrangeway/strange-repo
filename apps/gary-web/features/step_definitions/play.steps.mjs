@@ -510,3 +510,157 @@ Then("the page should say it is my turn", async function () {
   const shown = await world.page.textContent('[data-testid="fight-yours"]');
   assert.match(shown ?? "", /your turn/i, shown ?? "");
 });
+
+// ------------------------------------------------------------- creation
+
+Given('I already have a campaign on {string}', async function (system) {
+  const account = apiStub.onlyAccount();
+  assert.ok(account, "no account to hang a campaign on — sign in first");
+  world.campaign = apiStub.addCampaign(account.id, {
+    name: "Salt in the wind",
+    system,
+    module: "salt-and-cinder",
+  });
+});
+
+Then("I should be able to choose how scores are decided", async function () {
+  await world.page.waitForSelector('[data-testid="method"]', { timeout: 15_000 });
+});
+
+Then("the choices should be the system's own", async function () {
+  // Never a list this app keeps. A second place for the rules to live is the
+  // first place for them to go stale, so what is offered is compared against
+  // what the catalogue said rather than against anything written here.
+  await world.page.getByTestId("method").click();
+  const offered = await world.page.getByRole("option").allTextContents();
+  const answered = await world.page.evaluate(async (base) => {
+    const response = await fetch(`${base}/catalogue/dnd-5e`);
+    return (await response.json()).methods.map((one) => one.name);
+  }, apiStub.BASE_URL);
+
+  assert.deepEqual(offered.map((one) => one.trim()), answered);
+  await world.page.keyboard.press("Escape");
+});
+
+When("I choose {string}", async function (label) {
+  await world.page.getByTestId("method").click();
+  await world.page.getByRole("option", { name: label, exact: false }).click();
+});
+
+async function rolledNow() {
+  return (
+    await world.page.locator('[data-testid="rolled-score"]').allTextContents()
+  ).join("|");
+}
+
+/** Roll, and wait for a set that is not the one already on screen. */
+async function rollScores() {
+  world.wasRolled = await rolledNow();
+  await world.page.getByTestId("roll-scores").click();
+  await world.page.waitForFunction(
+    (before) => {
+      const shown = [
+        ...document.querySelectorAll('[data-testid="rolled-score"]'),
+      ]
+        .map((one) => one.textContent)
+        .join("|");
+      return shown.length > 0 && shown !== before;
+    },
+    world.wasRolled,
+    { timeout: 15_000 },
+  );
+}
+
+When("I roll for scores", rollScores);
+When("I roll for scores again", rollScores);
+
+Then("I should see {int} scores to place", async function (count) {
+  const boxes = await world.page.locator('[data-testid^="score-"]').count();
+  assert.ok(boxes > 0, "nothing to place");
+  await world.page.waitForFunction(
+    (want) =>
+      [...document.querySelectorAll('[data-testid="sheet"] input')].length >=
+      want,
+    Math.min(count, 3),
+    { timeout: 15_000 },
+  );
+});
+
+Then("there should be nothing to roll", async function () {
+  const found = await world.page.$('[data-testid="roll-scores"]');
+  assert.equal(found, null, "a method that generates nothing offered a roll");
+});
+
+Then("the scores should have changed", async function () {
+  assert.notEqual(await rolledNow(), world.wasRolled, "the same set twice");
+});
+
+Then("I should be able to type each score", async function () {
+  for (const ability of ["str", "dex", "con"]) {
+    assert.equal(
+      await world.page.getByTestId(`score-${ability}`).isEditable(),
+      true,
+      `${ability} was not typeable`,
+    );
+  }
+});
+
+async function place(scores) {
+  for (const [ability, score] of Object.entries(scores)) {
+    await world.page.getByTestId(`score-${ability}`).fill(String(score));
+  }
+}
+
+When(
+  "I place them and add {string} the {string} as mine",
+  async function (name, characterClass) {
+    await place({ str: 15, dex: 14, con: 13 });
+    await makeCharacter(name, characterClass);
+  },
+);
+
+When(
+  "I type {int} for {string} and add {string} the {string} as mine",
+  async function (score, ability, name, characterClass) {
+    await place({ [ability]: score });
+    await world.page.getByTestId("field-character_name").fill(name);
+    await world.page.getByTestId("character-class").click();
+    await world.page.getByRole("option", { name: characterClass }).click();
+    await world.page.getByTestId("add-character").click();
+  },
+);
+
+Then("the party should show what {word} is made of", async function (name) {
+  const shown = await world.page.textContent(`[data-testid="member-${name}"]`);
+  assert.match(shown ?? "", /\d+\/\d+/, shown ?? "");
+});
+
+Then("the party should not show {string}", async function (what) {
+  const shown = await world.page.textContent('[data-testid="party"]');
+  assert.ok(!shown?.includes(what), `the party still shows ${what}`);
+});
+
+Then(
+  "the page should say scores cannot be generated for this system",
+  async function () {
+    const shown = await world.page.textContent(
+      '[data-testid="cannot-generate"]',
+    );
+    assert.ok((shown ?? "").trim().length > 20, shown ?? "");
+  },
+);
+
+Then("I should be able to choose {string}", async function (label) {
+  await world.page.getByTestId("method").click();
+  await world.page
+    .getByRole("option", { name: label, exact: false })
+    .waitFor({ timeout: 15_000 });
+  await world.page.keyboard.press("Escape");
+});
+
+Then(
+  "I should still be able to add {string} the {string} as mine",
+  async function (name, characterClass) {
+    await makeCharacter(name, characterClass);
+  },
+);

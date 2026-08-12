@@ -247,6 +247,14 @@ class D20Ruleset:
     cannot_generate: str = ""
     # What a score may be. Rolled ones cannot leave it; typed ones must not.
     scores: tuple[int, int] = (3, 18)
+    # What each score costs under this edition's point buy, and what there is
+    # to spend. Empty for a system that does not offer one. Published rather
+    # than enforced here: the budget is a construction aid a client counts
+    # while you spend, and what reaches the sheet is range-checked like any
+    # other score. Anybody determined to hand-post an illegal spread can, and
+    # is only cheating themselves.
+    point_costs: dict[int, int] = {}
+    point_budget: int = 0
     # Hit die by class, and what somebody with no entry gets. A class missing
     # from here is a class this system has not had its hit dice typed in yet,
     # which is a gap rather than a rule.

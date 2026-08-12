@@ -50,6 +50,37 @@ const DEFAULT_HP = 8;
 // The catalogue, and it owes gary-api these exact slugs and titles. A stub
 // that invented its own would let these specs pass against a service where
 // every one of these pages 404s.
+const METHOD = {
+  "standard-array": {
+    slug: "standard-array",
+    name: "The standard array",
+    blurb: "15, 14, 13, 12, 10, 8 — put them where you like.",
+    generates: true,
+    arrange: true,
+  },
+  "roll-4d6-drop-lowest": {
+    slug: "roll-4d6-drop-lowest",
+    name: "Roll 4d6, drop the lowest",
+    blurb: "Six sets of four dice, worst of each thrown away.",
+    generates: true,
+    arrange: true,
+  },
+  "point-buy": {
+    slug: "point-buy",
+    name: "Point buy",
+    blurb: "Spend a budget on scores.",
+    generates: false,
+    arrange: true,
+  },
+  manual: {
+    slug: "manual",
+    name: "Type them in",
+    blurb: "Enter six scores you worked out somewhere else.",
+    generates: false,
+    arrange: true,
+  },
+};
+
 const CATALOGUE = [
   {
     slug: "dnd-5e",
@@ -59,8 +90,20 @@ const CATALOGUE = [
     // a class this stub invented would let a scenario pass against a service
     // that refuses it.
     classes: ["cleric", "fighter", "rogue", "wizard"],
-    abilities: ["strength", "dexterity", "constitution"],
+    abilities: ["str", "dex", "con"],
     degrees: ["success", "failure"],
+    // Owed to gary-api's own list, slug for slug. A method this stub invented
+    // would let a scenario pass against a service that refuses it.
+    methods: [
+      METHOD["standard-array"],
+      METHOD["roll-4d6-drop-lowest"],
+      METHOD["point-buy"],
+      METHOD.manual,
+    ],
+    cannot_generate: "",
+    scores: [3, 18],
+    point_costs: { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9 },
+    point_budget: 27,
     modules: [
       {
         slug: "the-drowned-belfry",
@@ -83,7 +126,16 @@ const CATALOGUE = [
     name: "Pathfinder 2nd Edition",
     blurb: "Four degrees of success, and a natural 20 shifts the ladder.",
     classes: ["fighter", "rogue"],
-    abilities: ["strength", "dexterity", "constitution"],
+    abilities: ["str", "dex", "con"],
+    // Pathfinder generates nothing: its scores come from ancestry and
+    // background boosts, and typing them in is the only way through.
+    methods: [METHOD.manual],
+    cannot_generate:
+      "Pathfinder scores come from ancestry, background and class boosts " +
+      "rather than dice. Work them out and type them in.",
+    scores: [3, 18],
+    point_costs: {},
+    point_budget: 0,
     degrees: [
       "critical success",
       "success",
@@ -215,7 +267,10 @@ export function addCampaign(userId, { name, system, module, model }) {
   return campaign;
 }
 
-export function addCharacterTo(campaignId, { name, character_class, mine }) {
+export function addCharacterTo(
+  campaignId,
+  { name, character_class, mine, abilities },
+) {
   const character = {
     id: randomUUID(),
     campaign_id: campaignId,
@@ -224,7 +279,8 @@ export function addCharacterTo(campaignId, { name, character_class, mine }) {
     played_by: mine ? "player" : "gary",
     level: 1,
     max_hp: DEFAULT_HP,
-    abilities: { strength: 10, dexterity: 10, constitution: 10 },
+    // Whatever was placed, over the system's default of ten for the rest.
+    abilities: { str: 10, dex: 10, con: 10, ...(abilities ?? {}) },
     at: characters.size,
   };
   characters.set(character.id, character);
@@ -689,8 +745,79 @@ function handle(method, path, body, request, query) {
           },
         };
       }
+      const system = CATALOGUE.find((one) => one.slug === campaign.system);
+      const [low, high] = system?.scores ?? [3, 18];
+      for (const [ability, score] of Object.entries(body.abilities ?? {})) {
+        // The same two refusals gary-api makes, because this stub owes it a
+        // contract: an ability the system does not have, and a score outside
+        // what it allows.
+        if (!system?.abilities.includes(ability)) {
+          return {
+            status: 422,
+            body: {
+              detail: `'${ability}' is not an ability in this system`,
+              code: "no_such_ability",
+            },
+          };
+        }
+        if (score < low || score > high) {
+          return {
+            status: 422,
+            body: {
+              detail: `a score in this system is between ${low} and ${high}`,
+              code: "bad_score",
+            },
+          };
+        }
+      }
+
       const made = addCharacterTo(campaign.id, body);
       return { status: 201, body: asCharacter(made) };
+    }
+
+    if (method === "POST" && under === "/scores") {
+      const system = CATALOGUE.find((one) => one.slug === campaign.system);
+      const wanted = system?.methods.find((one) => one.slug === body.method);
+      if (!wanted?.generates) {
+        return {
+          status: 422,
+          body: {
+            detail: `${campaign.system} does not generate ${body.method}`,
+            code: "no_such_method",
+          },
+        };
+      }
+
+      // Rolled here rather than fixed, because a scenario asserts that two
+      // draws differ — a stub handing back the same six numbers twice would
+      // agree with a client that cached the first set.
+      const scores = system.abilities.map(() => {
+        if (wanted.slug === "standard-array") {
+          return { score: 12, dice: [], dropped: null };
+        }
+        const dice = [0, 0, 0, 0].map(
+          () => 1 + Math.floor(Math.random() * 6),
+        );
+        const dropped = Math.min(...dice);
+        return {
+          score: dice.reduce((a, b) => a + b, 0) - dropped,
+          dice,
+          dropped,
+        };
+      });
+
+      return {
+        status: 200,
+        body: {
+          method: wanted.slug,
+          scores,
+          assigned: wanted.arrange
+            ? null
+            : Object.fromEntries(
+                system.abilities.map((one, at) => [one, scores[at].score]),
+              ),
+        },
+      };
     }
 
     if (method === "GET" && under === "/characters") {

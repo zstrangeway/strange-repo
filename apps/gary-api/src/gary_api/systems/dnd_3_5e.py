@@ -23,6 +23,14 @@ class DnD35e(TwoDegrees):
     # book offers rolling and a point buy. Adding it here would be a house
     # rule gary imposed on every 3.5 table.
     offers = (ROLL_4D6, POINT_BUY)
+    # The Dungeon Master's Guide's own table, which runs further up than the
+    # fifth edition one and costs more to get there. 25 points is the book's
+    # "standard fantasy" campaign.
+    point_costs = {
+        8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5,
+        14: 6, 15: 8, 16: 10, 17: 13, 18: 16,
+    }
+    point_budget = 25
     hit_dice = {
         "barbarian": 12,
         "fighter": 10, "paladin": 10, "ranger": 10,

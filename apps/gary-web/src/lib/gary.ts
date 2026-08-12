@@ -12,6 +12,7 @@ import {
   type Model,
   type Provider,
   type Scene,
+  type Scores,
   type SignedIn,
   type System,
   type Turn,
@@ -220,7 +221,14 @@ export async function changeModel(
 
 export async function addCharacter(
   id: string,
-  fields: { name: string; character_class: string; mine: boolean },
+  fields: {
+    name: string;
+    character_class: string;
+    mine: boolean;
+    /** Omitted by anybody who did not arrange any, which is allowed: not
+     *  everyone wants to place six numbers before they can play. */
+    abilities?: Record<string, number>;
+  },
 ): Promise<Outcome & { character?: Character }> {
   const result = await callApi<Character>(`/campaigns/${id}/characters`, {
     method: "POST",
@@ -229,6 +237,24 @@ export async function addCharacter(
   });
 
   return result.ok ? { character: result.data } : { error: result.message };
+}
+
+/** Six scores by a method this system offers.
+ *
+ *  gary-api's dice and not this app's, for the reason they are not the
+ *  model's either: a number a client produced is a number somebody typed.
+ *  Nothing is stored, so rolling again is free and is not refused. */
+export async function rollScores(
+  id: string,
+  method: string,
+): Promise<Outcome & { rolled?: Scores }> {
+  const result = await callApi<Scores>(`/campaigns/${id}/scores`, {
+    method: "POST",
+    body: { method },
+    token: storedToken(),
+  });
+
+  return result.ok ? { rolled: result.data } : { error: result.message };
 }
 
 /** Everybody at the table, and who plays each of them. */

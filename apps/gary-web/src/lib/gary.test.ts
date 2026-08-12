@@ -35,6 +35,7 @@ const {
   signOut,
   startCampaign,
   systemNamed,
+  rollScores,
   takeOver,
   transcript,
   updateDisplayName,
@@ -540,5 +541,36 @@ describe("takeOver", () => {
     answering(REFUSED);
 
     expect(await takeOver("c1", "nobody")).toEqual({ error: "Not allowed" });
+  });
+});
+
+
+describe("rollScores", () => {
+  it("asks gary-api for them rather than rolling any here", async () => {
+    // The same argument that keeps dice away from the model: a number this
+    // app produced is a number somebody typed.
+    answering({
+      ok: true,
+      data: {
+        method: "roll-4d6-drop-lowest",
+        scores: [{ score: 15, dice: [6, 5, 4, 1], dropped: 1 }],
+        assigned: null,
+      },
+    });
+
+    const result = await rollScores("c1", "roll-4d6-drop-lowest");
+    expect(result.rolled?.scores[0].score).toBe(15);
+    expect(callApi).toHaveBeenCalledWith("/campaigns/c1/scores", {
+      method: "POST",
+      body: { method: "roll-4d6-drop-lowest" },
+      token: "a-token",
+    });
+  });
+
+  it("passes on a method this system does not offer", async () => {
+    answering(REFUSED);
+    const result = await rollScores("c1", "roll-3d6-in-order");
+    expect(result.rolled).toBeUndefined();
+    expect(result.error).toBe(REFUSED.message);
   });
 });

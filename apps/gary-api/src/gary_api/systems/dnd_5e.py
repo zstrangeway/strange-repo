@@ -25,6 +25,10 @@ class DnD5e(TwoDegrees):
     # one. Ordered gently rather than alphabetically — the first is the one to
     # take if you do not care.
     offers = (STANDARD_ARRAY, ROLL_4D6, POINT_BUY)
+    # The Player's Handbook table: 27 points, nothing below 8 or above 15
+    # before anything else is applied.
+    point_costs = {8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9}
+    point_budget = 27
     hit_dice = {
         "barbarian": 12,
         "fighter": 10, "paladin": 10, "ranger": 10,

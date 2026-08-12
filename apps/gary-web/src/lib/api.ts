@@ -55,6 +55,20 @@ export type Module = {
   opening: string;
 };
 
+/** One way an edition lets you arrive at six scores. Which exist is the
+ *  system's to say, never this app's — a list here would be a second place
+ *  for the rules to live, and the first to go stale. */
+export type Method = {
+  slug: string;
+  name: string;
+  blurb: string;
+  /** Whether gary produces the numbers. */
+  generates: boolean;
+  /** Whether you place them afterwards. Two questions and not one: rolling in
+   *  order generates without arranging, and typing them in is the reverse. */
+  arrange: boolean;
+};
+
 /** A ruleset gary can run, and everything it can say about itself. */
 export type System = {
   slug: string;
@@ -64,7 +78,34 @@ export type System = {
   abilities: string[];
   /** How many ways this system grades a check. Two for most, four for some. */
   degrees: string[];
+  methods: Method[];
+  /** Why, when a system generates nothing. Empty for the ones that do. */
+  cannot_generate: string;
+  /** The lowest and highest a score may be. */
+  scores: number[];
+  /** What each score costs under this system's point buy, and the budget.
+   *  Empty when it has none. Counted here while you spend; gary-api range
+   *  checks what arrives like any other score. */
+  point_costs: Record<string, number>;
+  point_budget: number;
   modules: Module[];
+};
+
+/** One generated score, and the dice behind it. */
+export type Score = {
+  score: number;
+  /** Kept rather than summed away: "15" and "6, 5, 4 and a discarded 1" are
+   *  different things to read while deciding where to put it. */
+  dice: number[];
+  dropped: number | null;
+};
+
+export type Scores = {
+  method: string;
+  scores: Score[];
+  /** Already placed, when the method does not let you arrange them. Null when
+   *  they are yours to put where you like. */
+  assigned: Record<string, number> | null;
 };
 
 /** A model gary can be run on. Only ones that can call tools are offered. */

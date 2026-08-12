@@ -46,10 +46,60 @@ column somebody overwrote. `GET /campaigns/{id}/history` is that list.
 
 **Systems are pluggable.** One file under `src/gary_api/systems/` carries a
 ruleset's data and its behaviour, and adding one is that file plus its entry
-in `REGISTRY`. Nothing outside the package names a system —
-`tests/test_pluggable.py` fails the build if that stops being true. 5e and
+in `REGISTRY`. Nothing outside the package names a system — and nothing
+outside it names a system's *vocabulary* either. `tests/test_pluggable.py`
+fails the build on both.
+
+That second half was added after the first one turned out not to be enough:
+nothing named a system, and the router still spelled `"con"` to find hit
+points and `"str"` to find an attack bonus, and kept an armour class, an
+unarmed damage die and a starting score of its own. A system with different
+abilities would have needed the router changed to add it, which is exactly
+what one file per system is supposed to prevent. 5e and
 3.5e grade a check two ways; Pathfinder 2e grades it four, with the natural-20
 shift, and nothing between the model and the engine knows the difference.
+
+### Making a character
+
+**Which methods exist is the system's to say.** Not a global list with
+exceptions: an edition permits what it permits, the player picks from what
+their edition permits, and asking for one it does not offer is refused the way
+an unknown class is.
+
+| System | Generates | Types in |
+| --- | --- | --- |
+| D&D 5e | the standard array · 4d6 drop lowest · point buy | ✓ |
+| D&D 3.5e | 4d6 drop lowest · point buy | ✓ |
+| AD&D 1e | 3d6 in order · the DMG's Method I | ✓ |
+| Pathfinder 2e | nothing, and says why | ✓ |
+
+Offering is not generating, which is why `Method.generates` is a separate
+question from being on the list: point buy is a method an edition permits and
+gary produces no numbers for. `arrange` is the third question — rolling three
+dice down the page generates without arranging, and typing them in is the
+reverse.
+
+`POST /campaigns/{id}/scores` rolls a set. **The dice are gary-api's and not
+the client's**, for the reason they are not the model's: a number a browser
+sent is a number somebody typed. Nothing is stored — a set nobody made a
+character out of is not a fact about the campaign — which is also why rolling
+again is free and never refused.
+
+**Hit points** are the class's hit die plus the constitution modifier, floored
+at one, because a constitution penalty can be worse than a hit die is big and
+a character created already dead is nobody's idea of a rule. A class with no
+hit die typed in yet gets the system's default, which is a gap rather than a
+rule and reads as one.
+
+⚠️ **The point buy budget is a construction aid, not a gate.** The costs and
+the budget are published so a client can count the spend while you make
+choices; what finally arrives is range-checked like any other score. Anybody
+determined to hand-post an illegal spread can, and is only cheating
+themselves.
+
+⚠️ **No racial or ancestry modifiers, and no class minimums.** 1e will not
+stop you playing a paladin with a charisma of 9, and multiclass requirements
+do not exist.
 
 ### What a roll says
 

@@ -76,6 +76,11 @@ class SystemResponse(BaseModel):
     cannot_generate: str
     # What a score may be, so a client can refuse a typo before sending it.
     scores: list[int]
+    # What each score costs under this system's point buy, and the budget.
+    # Empty when it has none. A client counts the spend; gary-api range-checks
+    # what arrives, the same as it does for any other score.
+    point_costs: dict[int, int]
+    point_budget: int
     modules: list[ModuleResponse]
 
 
@@ -276,6 +281,8 @@ def _as_system(ruleset: systems.Ruleset) -> dict:
         ],
         "cannot_generate": ruleset.cannot_generate,
         "scores": list(ruleset.scores),
+        "point_costs": ruleset.point_costs,
+        "point_budget": ruleset.point_budget,
         "modules": [
             {
                 "slug": module.slug,
