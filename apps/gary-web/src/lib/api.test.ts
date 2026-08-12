@@ -230,6 +230,20 @@ describe("error messages", () => {
     ).toBe("odd");
   });
 
+  it("says what a 422 refused, when it refused on purpose", async () => {
+    // A code is what separates one of gary-api's own refusals from FastAPI
+    // failing to parse the body. This one has something to say.
+    expect(
+      await messageFor({
+        status: 422,
+        body: JSON.stringify({
+          detail: "a score in this system is between 3 and 18",
+          code: "bad_score",
+        }),
+      }),
+    ).toBe("a score in this system is between 3 and 18");
+  });
+
   it("copes with a 422 whose detail is not a list", async () => {
     expect(
       await messageFor({ status: 422, body: JSON.stringify({ detail: "unexpected" }) }),

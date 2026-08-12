@@ -287,9 +287,13 @@ async function refusalFrom(
 
   const code = typeof body.code === "string" ? body.code : undefined;
 
-  if (response.status === 422) {
+  if (response.status === 422 && code === undefined) {
     // Validation has no code: the useful part is which field, which the
-    // payload already carries.
+    // payload already carries. A refusal gary-api made on purpose does carry
+    // one — a score outside what the system allows is a 422 with `bad_score`
+    // on it — and that sentence says something worth reading, so it goes
+    // through the same copy lookup as any other refusal rather than being
+    // flattened into "that does not look right".
     return { message: validationMessage(body.detail) };
   }
 
