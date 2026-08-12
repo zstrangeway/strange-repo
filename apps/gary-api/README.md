@@ -86,6 +86,38 @@ ability check to spend one on, so handing back `(score - 10) // 2` would be
 quietly running third edition in a first edition game. Zero until somebody
 types the real tables in.
 
+### Fights
+
+**Order and outcome are the engine's.** Gary says who is fighting and what
+somebody tries; it never says who goes first, whether a blow lands, or what it
+cost. Four tools — `begin_combat`, `attack`, `end_turn`, `end_combat` — and
+the fight itself is three world events, so whose turn it is and which round
+are folded out of the log exactly as hit points are. There is no fight table
+to drift.
+
+Gary still authors the monster, because choosing what you fight is the one
+genuinely authorial thing in a fight and there is no bestiary to look one up
+in. From there it is an `adversaries` row and what happens to it is the
+engine's — damage, healing and conditions all reach either side.
+
+**Gary is told the order, the round and whose turn it is on every turn**, and
+told to stop when the order reaches the player's character. It may not end
+their turn. Taking it ends it: a turn holds one action, so an attack advances
+the order by itself, which is also the only reason a fight can ever move past
+the player at all.
+
+`add-1e` refuses fights outright. First edition rolls one d6 per *side* and
+moves whole sides at a time — a different shape from the flat order everything
+here assumes, not a different number in it — so approximating would log
+something that never happened at a first edition table.
+
+⚠️ **Not built, and deliberately:** movement, range and positioning; spells
+and resources; reactions and opportunity attacks; criticals; death saves. A
+fight is initiative, attacks, damage and down. Two shortcuts worth knowing:
+a character's armour class is a stated default because sheets have no armour,
+and a monster's initiative modifier is its attack bonus, which is not a rule
+anybody plays by.
+
 ### Who plays whom
 
 Exactly one character in a campaign is the player's; the rest are companions,

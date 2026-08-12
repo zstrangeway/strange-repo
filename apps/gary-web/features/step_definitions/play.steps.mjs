@@ -488,3 +488,25 @@ Then("the roll should show what the dice came up", async function () {
   const shown = await world.page.textContent('[data-testid="roll-sum"]');
   assert.match(shown ?? "", /rolled \d+/, shown ?? "");
 });
+
+Given("a fight is underway", async function () {
+  assert.ok(world.campaign, "no campaign to fight in");
+  apiStub.addCharacterTo(world.campaign.id, {
+    name: "Bramble",
+    character_class: "rogue",
+    mine: true,
+  });
+  apiStub.fightUnderway(0, 1);
+});
+
+Then("{string} should be up", async function (name) {
+  const shown = await world.page.textContent(`[data-testid="up-${name}"]`);
+  assert.match(shown ?? "", /up/i, `${name} is not shown as up`);
+});
+
+Then("the page should say it is my turn", async function () {
+  // The reason combat exists: the others are gary's to move through and it
+  // stops at you. A page that did not say so would leave you waiting.
+  const shown = await world.page.textContent('[data-testid="fight-yours"]');
+  assert.match(shown ?? "", /your turn/i, shown ?? "");
+});

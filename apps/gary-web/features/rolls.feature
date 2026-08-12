@@ -53,3 +53,20 @@ Feature: Rolls on the table
     And gary finishes
     Then the roll should show what the dice came up
     And the roll should say what it was against
+
+  # ------------------------------------------------------------------- fights
+
+  # A fight is the one time the only question on screen is whose turn it is,
+  # and it was the one thing the page could not answer: gary ran a whole
+  # encounter and the browser showed a column of numbers.
+  Scenario: A fight shows the order and whose turn it is
+    Given a fight is underway
+    When I open that campaign
+    Then the page shows "In a fight"
+    And the page shows "round 1"
+    And "Bramble" should be up
+
+  Scenario: My own turn says so
+    Given a fight is underway
+    When I open that campaign
+    Then the page should say it is my turn

@@ -162,6 +162,7 @@ export function reset() {
   providers = ["google", "facebook", "apple"];
   answeringWithGarbage = false;
   plan = null;
+  fighting = null;
   // Let go of anything still held, or the scenario that held it leaves a
   // socket open and the next one waits on it.
   garyFinishes();
@@ -170,6 +171,26 @@ export function reset() {
 /** What gary will do with the next thing said to it. */
 export function garyWill(next) {
   plan = next;
+}
+
+// A fight, when a scenario wants one on screen. One monster, because what the
+// browser has to render is an order and a position in it, and a second would
+// only make the fixture longer.
+const FOE = {
+  id: "foe-1",
+  name: "mud creature",
+  hp: 8,
+  max_hp: 11,
+  armour_class: 13,
+  conditions: [],
+  down: false,
+};
+
+let fighting = null;
+
+/** Put a fight on, with the order sitting on whoever the scenario names. */
+export function fightUnderway(at = 0, round = 1) {
+  fighting = { at, round };
 }
 
 /** Let the open turn end. Called by a scenario that has finished asserting on
@@ -696,6 +717,25 @@ function handle(method, path, body, request, query) {
             down: false,
             played_by: character.played_by,
           })),
+          enemies: fighting ? [FOE] : [],
+          // A fight, when a scenario asked for one. Arranged rather than
+          // simulated: what the browser has to prove is that it renders the
+          // order and whose turn it is, and gary-api's own specs are where
+          // the order being right is settled.
+          fight: fighting
+            ? {
+                order: [
+                  ...partyOf(campaign.id).map((character) => ({
+                    id: character.id,
+                    name: character.name,
+                    side: "party",
+                  })),
+                  { id: FOE.id, name: FOE.name, side: "adversary" },
+                ],
+                at: fighting.at,
+                round: fighting.round,
+              }
+            : null,
         },
       };
     }

@@ -49,7 +49,11 @@ function RolledDice({ roll }: { roll: Roll }) {
         <ItemDescription className="flex flex-wrap items-center gap-x-1.5">
           {roll.character ? (
             <span
-              className="font-medium text-foreground"
+              className={
+                roll.side === "adversary"
+                  ? "font-medium text-muted-foreground italic"
+                  : "font-medium text-foreground"
+              }
               data-testid="roll-character"
             >
               {roll.character}

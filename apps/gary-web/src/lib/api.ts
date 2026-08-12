@@ -125,11 +125,37 @@ export type Member = {
   played_by: string;
 };
 
+/** Something the party is fighting, as it currently stands. Its own shape
+ *  rather than a Member with a flag: a monster has an armour class and no
+ *  class, level or player. */
+export type Foe = {
+  id: string;
+  name: string;
+  hp: number;
+  max_hp: number;
+  armour_class: number;
+  conditions: string[];
+  down: boolean;
+};
+
+/** Turn order, decided once by the engine and folded back out of the log.
+ *  `at` is a position rather than a name, because the name is in the list. */
+export type Fight = {
+  order: { id: string; name: string; side: "party" | "adversary" }[];
+  at: number;
+  round: number;
+};
+
 export type World = {
   place: string;
   minutes: number;
   facts: Record<string, string>;
   party: Member[];
+  /** Everything fought, still standing or not: a monster that was killed is
+   *  a fact about the campaign. */
+  enemies: Foe[];
+  /** Null when nobody is fighting, which is most of the time. */
+  fight: Fight | null;
 };
 
 /** A roll that happened — gary asked, gary-api rolled, and where there was a
@@ -150,6 +176,9 @@ export type Roll = {
    *  say "+3 dex" rather than "+3": a number with no provenance is a number
    *  somebody has to take on trust. */
   ability?: string | null;
+  /** Which side rolled it, so a monster's roll reads as one without the page
+   *  having to know every name at the table. */
+  side?: "party" | "adversary";
 };
 
 /** A bounded stretch of play, and the unit of gary's memory: it is told this

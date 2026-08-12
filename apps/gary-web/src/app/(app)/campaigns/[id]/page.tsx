@@ -30,6 +30,7 @@ import { useRouter } from "next/navigation";
 
 import { Notice } from "../../../form-parts";
 import Composer from "./composer";
+import Fighting from "./fight";
 import ModelPicker from "./model-picker";
 import Party from "./party-card";
 import SceneBreak from "./scene-break";
@@ -393,7 +394,18 @@ export default function CampaignPage({
           </CardContent>
         </Card>
 
-        <Party campaignId={id} party={party} loading={world === null} />
+        <div className="flex flex-col gap-6">
+          {/* Above the party, because while there is a fight it is the only
+              question on screen: whose turn it is. */}
+          {world?.fight ? (
+            <Fighting
+              fight={world.fight}
+              party={party}
+              enemies={world.enemies ?? []}
+            />
+          ) : null}
+          <Party campaignId={id} party={party} loading={world === null} />
+        </div>
       </div>
     </div>
   );

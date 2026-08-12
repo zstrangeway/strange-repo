@@ -55,6 +55,19 @@ and covers the seconds the opening takes to arrive. They come off the screen
 once the opening lands, since by then they say the same thing twice and the
 worse prose is the one that was free.
 
+## A fight on screen
+
+While there is one, the only question on screen is whose turn it is, so the
+order goes above the party with a marker on whoever is up and the round beside
+it. Yours says so in words as well, because the others are gary's to move
+through on its own and it stops at you — a page that did not say that would
+leave you waiting for a turn that had already arrived.
+
+Nothing here decides anything. The order was rolled by the engine and where it
+is up to is folded out of the log, so this renders a fact rather than tracking
+one. A monster's roll is set in italic muted text off the `side` the frame
+carries, rather than off a list of names the page would have to keep.
+
 ## Streaming a turn
 
 A turn arrives as it is written, over SSE. **`EventSource` cannot be used**,
