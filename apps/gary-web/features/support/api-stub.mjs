@@ -104,6 +104,10 @@ const CATALOGUE = [
     scores: [3, 18],
     point_costs: { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9 },
     point_budget: 27,
+    // Owed to gary-api's own table, for the classes this stub offers. A
+    // system that names no hit dice — Pathfinder, below — falls back to the
+    // default, which is what gary-api does with one it has no die for.
+    hit_dice: { cleric: 8, fighter: 10, rogue: 8, wizard: 6 },
     modules: [
       {
         slug: "the-drowned-belfry",
@@ -267,10 +271,32 @@ export function addCampaign(userId, { name, system, module, model }) {
   return campaign;
 }
 
+/** The third-edition-onward formula, which 5e and Pathfinder kept. */
+function modifierFor(score) {
+  return Math.floor((score - 10) / 2);
+}
+
+/**
+ * The hit die at full plus the constitution modifier, never below one — the
+ * same sum gary-api makes, because a stub that handed back a flat eight would
+ * let a scenario about hit points following from a sheet pass against a
+ * service where they do.
+ */
+function hitPointsFor(system, characterClass, abilities) {
+  const die = system?.hit_dice?.[characterClass];
+  if (die === undefined) return DEFAULT_HP;
+  return Math.max(1, die + modifierFor(abilities.con));
+}
+
 export function addCharacterTo(
   campaignId,
   { name, character_class, mine, abilities },
 ) {
+  const campaign = campaigns.get(campaignId);
+  const system = CATALOGUE.find((one) => one.slug === campaign?.system);
+  // Whatever was placed, over the system's default of ten for the rest.
+  const sheet = { str: 10, dex: 10, con: 10, ...(abilities ?? {}) };
+
   const character = {
     id: randomUUID(),
     campaign_id: campaignId,
@@ -278,9 +304,8 @@ export function addCharacterTo(
     character_class,
     played_by: mine ? "player" : "gary",
     level: 1,
-    max_hp: DEFAULT_HP,
-    // Whatever was placed, over the system's default of ten for the rest.
-    abilities: { str: 10, dex: 10, con: 10, ...(abilities ?? {}) },
+    max_hp: hitPointsFor(system, character_class, sheet),
+    abilities: sheet,
     at: characters.size,
   };
   characters.set(character.id, character);
