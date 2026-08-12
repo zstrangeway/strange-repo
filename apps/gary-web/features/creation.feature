@@ -53,10 +53,29 @@ Feature: Making a character, in a browser
     And I place them and add "Bruna" the "fighter" as mine
     Then the party should not show "8/8"
 
+  # Not a method so much as the absence of one: somebody who rolled at a real
+  # table, or built a character by a rule gary does not implement, already has
+  # an answer and needs somewhere to put it.
+  Scenario: Typing them in myself
+    When I open that campaign's party
+    And I choose "type them in"
+    Then I should be able to type each score
+    And there should be nothing to roll
+    When I type 16 for "dex" and add "Bramble" the "rogue" as mine
+    Then the party should show what Bramble is made of
+
+  Scenario: Typing in a score the system will not have
+    When I open that campaign's party
+    And I choose "type them in"
+    And I type 30 for "dex" and add "Bramble" the "rogue" as mine
+    Then the page shows an error about the score
+
   # A system that generates nothing says so where the choice would have been,
-  # rather than showing an empty control.
-  Scenario: A system that does not generate scores says so
+  # rather than showing an empty control — and still lets you type, which is
+  # the only way to make a Pathfinder character with scores at all.
+  Scenario: A system that does not generate scores still lets me type
     Given I already have a campaign on "pathfinder-2e"
     When I open that campaign's party
     Then the page should say scores cannot be generated for this system
+    And I should be able to choose "type them in"
     And I should still be able to add "Ket" the "rogue" as mine
