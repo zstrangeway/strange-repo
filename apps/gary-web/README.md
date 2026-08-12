@@ -55,6 +55,26 @@ and covers the seconds the opening takes to arrive. They come off the screen
 once the opening lands, since by then they say the same thing twice and the
 worse prose is the one that was free.
 
+## Making a character
+
+The party page asks how the scores are decided before it asks for a name,
+because that is where a character stops being one. **Which methods are on the
+list comes from the system** — `/catalogue/{slug}` says what the edition
+permits, whether gary rolls it, and whether the results are yours to place.
+A list in this app would be a second place for the rules to live and the
+first one to go stale.
+
+So the same control covers four shapes without knowing any of their names:
+something to roll when the method generates, boxes to fill when it lets you
+arrange, read-only boxes when it does not (three dice down the page is the
+whole of first edition's character creation), and a running total when the
+system has a point buy. Rolled scores show the dice and the one thrown away,
+not just the total — "15" and "6, 5, 4 and a discarded 1" are different things
+to read while you decide where to put it.
+
+Nobody has to place any. A character made with nothing gets the system's
+default score, which is what every character made before this existed has.
+
 ## A fight on screen
 
 While there is one, the only question on screen is whose turn it is, so the

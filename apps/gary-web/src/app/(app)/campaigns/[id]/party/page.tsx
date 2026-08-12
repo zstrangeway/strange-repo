@@ -24,14 +24,17 @@ import {
 import { Skeleton } from "@gary/ui/components/skeleton";
 import { SubmitButton } from "@gary/ui/components/submit-button";
 
-import type { Campaign, Character } from "@/lib/api";
+import type { Campaign, Character, Score, System } from "@/lib/api";
 import {
   addCharacter,
   campaign as readCampaign,
   partyOf,
+  rollScores,
   systemNamed,
   takeOver,
 } from "@/lib/gary";
+
+import Scores from "./scores";
 
 import { Field, Notice } from "../../../../form-parts";
 
@@ -55,7 +58,14 @@ export default function PartyPage({
 
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [party, setParty] = useState<Character[] | null>(null);
-  const [classes, setClasses] = useState<string[]>([]);
+  const [system, setSystem] = useState<System | null>(null);
+  // Which method, what gary produced by it, and where the numbers currently
+  // sit. Held here rather than in the score step because the form below
+  // submits them, and two components owning one sheet is one too many.
+  const [method, setMethod] = useState<string>("");
+  const [rolled, setRolled] = useState<Score[] | null>(null);
+  const [scores, setScores] = useState<Record<string, number>>({});
+  const [rolling, setRolling] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const [pending, start] = useTransition();
 
@@ -66,13 +76,16 @@ export default function PartyPage({
       return;
     }
 
-    const [here, system] = await Promise.all([
+    const [here, found_system] = await Promise.all([
       partyOf(id),
       systemNamed(found.system),
     ]);
     setCampaign(found);
     setParty(here);
-    setClasses(system?.classes ?? []);
+    setSystem(found_system ?? null);
+    // The first one the system lists, which is the one to take if you do not
+    // care. Never a name this app knows.
+    setMethod(found_system?.methods[0]?.slug ?? "");
   }, [id, router]);
 
   useEffect(() => {
@@ -81,7 +94,10 @@ export default function PartyPage({
     void load();
   }, [load]);
 
-  if (!campaign || party === null) {
+  const chosen = system?.methods.find((one) => one.slug === method);
+  const classes = system?.classes ?? [];
+
+  if (!campaign || party === null || !system) {
     return <Skeleton className="h-64 w-full" data-testid="party-loading" />;
   }
 
@@ -182,6 +198,11 @@ export default function PartyPage({
               const shape = {
                 name: String(form.get("character_name") ?? ""),
                 character_class: String(form.get("character_class") ?? ""),
+                // Only what has actually been placed. Nobody has to arrange
+                // six numbers to play, and a campaign started before this
+                // existed has characters who never did.
+                abilities:
+                  Object.keys(scores).length > 0 ? scores : undefined,
                 // The first one is you unless you already are somebody. No
                 // choosing between two buttons for a decision that only has
                 // one sensible answer at the time it is made.
@@ -194,6 +215,10 @@ export default function PartyPage({
                 const result = await addCharacter(id, shape);
                 if (result.character) {
                   setParty(await partyOf(id));
+                  // Cleared for the next one: a companion arranged from the
+                  // last character's leftovers would be the same person twice.
+                  setScores({});
+                  setRolled(null);
                   return;
                 }
                 setError(result.error);
@@ -202,6 +227,37 @@ export default function PartyPage({
           >
             <FieldGroup className="gap-3">
               <Notice error={error} />
+              <Scores
+                system={system}
+                method={chosen}
+                onMethod={(slug) => {
+                  setMethod(slug);
+                  // What the last method produced is not what this one would.
+                  setRolled(null);
+                  setScores({});
+                }}
+                rolled={rolled}
+                scores={scores}
+                onScore={(ability, score) =>
+                  setScores((held) => ({ ...held, [ability]: score }))
+                }
+                rolling={rolling}
+                onRoll={() =>
+                  start(async () => {
+                    setRolling(true);
+                    const result = await rollScores(id, method);
+                    setRolling(false);
+                    if (!result.rolled) {
+                      setError(result.error);
+                      return;
+                    }
+                    setRolled(result.rolled.scores);
+                    // Placed already when the method does not let you
+                    // arrange them, and left for you when it does.
+                    setScores(result.rolled.assigned ?? {});
+                  })
+                }
+              />
               <Field
                 label="Character name"
                 name="character_name"
