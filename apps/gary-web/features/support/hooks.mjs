@@ -87,6 +87,12 @@ BeforeAll(async function () {
       // and nowhere else. None of it reaches the browser, so a scenario that
       // wants to see it has to read the server's own output.
       stdio: ["ignore", "pipe", "pipe"],
+      // Its own process group, so the teardown below can take the whole tree.
+      // `next dev` is a wrapper that forks the server that actually holds the
+      // port: killing the wrapper alone leaves that child listening on 3999,
+      // and the next run then dies in BeforeAll waiting for a port it will
+      // never get. That orphan is what makes a second run lie about the first.
+      detached: true,
     },
   );
 
@@ -149,7 +155,15 @@ After(async function () {
 
 AfterAll(async function () {
   await world.browser?.close();
-  webServer?.kill();
+  // The group, not the wrapper — see the spawn above. Negative pid is the
+  // group, and ESRCH just means it went on its own.
+  if (webServer?.pid) {
+    try {
+      process.kill(-webServer.pid, "SIGKILL");
+    } catch (error) {
+      if (error.code !== "ESRCH") throw error;
+    }
+  }
 
   if (fullStack) {
     await stack.stop();
