@@ -336,8 +336,8 @@ def _sheet_for(ruleset, wanted: dict[str, int] | None) -> dict[str, int]:
             )
         if isinstance(score, bool):
             # Pydantic guarantees an int by here, and is happy to make one out
-            # of a boolean: `{"dex": true}` arrives as a dexterity of 1. Only
-            # this half needs saying, because only this half gets through.
+            # of a boolean: an ability sent as `true` arrives as a score of 1.
+            # Only this half needs saying, because only this half gets through.
             raise Refusal(
                 status.HTTP_422_UNPROCESSABLE_ENTITY,
                 "bad_score",
