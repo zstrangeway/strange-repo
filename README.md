@@ -29,6 +29,10 @@ pnpm install     # once, from this directory
 pnpm test        # every app's specs
 ```
 
+[`BACKLOG.md`](BACKLOG.md) is what is known to be wrong or thin and not yet
+done. Things deliberately not built are not in it — those are in the app
+READMEs, marked ⚠️, beside the code that would change if they ever were.
+
 ### The three tiers
 
 `pnpm test` runs the first two. They need no setup beyond a Postgres for
