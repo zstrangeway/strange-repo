@@ -123,6 +123,7 @@ export default function CampaignPage({
         role: turn.role,
         text: turn.content,
         rolls: turn.rolls ?? [],
+        changes: turn.changes ?? [],
         complete: turn.complete,
         sceneId: turn.scene_id,
       })),
@@ -147,6 +148,7 @@ export default function CampaignPage({
           role: "gm",
           text: "",
           rolls: [],
+          changes: [],
           complete: false,
           sceneId: playing.current,
         },
@@ -186,9 +188,22 @@ export default function CampaignPage({
     }
 
     if (event.type === "world") {
-      // What changed is already on the stream; asking for the world again is
-      // how the party on screen agrees with the party gary is narrating
-      // about, rather than this page re-implementing the projection.
+      // Kept beside the turn as well as reloaded. Most changes have nothing
+      // to say on the table — the party moving is the party card's business —
+      // but advancement is a thing that happened to somebody, and the
+      // transcript is where things that happened go. Which of them are worth
+      // rendering is the transcript's to decide, not this handler's.
+      const at = answering.current;
+      setEntries((held) =>
+        held.map((entry) =>
+          entry.id !== at
+            ? entry
+            : { ...entry, changes: [...entry.changes, event.change] },
+        ),
+      );
+      // Asking for the world again is how the party on screen agrees with the
+      // party gary is narrating about, rather than this page re-implementing
+      // the projection.
       void loadWorld();
       return;
     }
@@ -253,6 +268,7 @@ export default function CampaignPage({
         role: "player",
         text: message,
         rolls: [],
+        changes: [],
         complete: true,
         sceneId: playing.current,
       },

@@ -75,6 +75,31 @@ to read while you decide where to put it.
 Nobody has to place any. A character made with nothing gets the system's
 default score, which is what every character made before this existed has.
 
+## Getting better at surviving
+
+The party card said "level 1 rogue" for every character in every campaign ever
+made here, because nothing could write that number. Now that something can, the
+card carries where somebody stands and what the next level costs — `450/900 xp`
+— because the running total is what makes a long campaign feel like it is going
+somewhere. A system that does not price a level, and anybody already at the top,
+both show a bare total instead: there is no next number to reach, and the card
+has the same thing to say about each.
+
+An award and a level arrive as **their own elements in the transcript**, on the
+same argument rolls are drawn on. Gary writing "you feel stronger, Bramble" in a
+paragraph is indistinguishable from gary having decided you levelled, and that
+is exactly what the engines exist to take out of its hands. A frame the page
+renders as a frame cannot be written in a sentence.
+
+Which of them are worth rendering is `src/lib/advancement.ts`'s to say, not the
+stream handler's — the same reason `rolls.ts` exists, and the same gate.
+
+Everything on the card is a fold over the log rather than something this page
+keeps, so a turn that advances somebody moves the card by asking gary-api again.
+The transcript's lines come back from `GET /campaigns/{id}/turns`, which now
+carries what each turn *changed* beside what it rolled — without that a reload
+would keep the prose and lose everything the engines did during it.
+
 ## A fight on screen
 
 While there is one, the only question on screen is whose turn it is, so the

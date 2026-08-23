@@ -254,6 +254,10 @@ class TurnResponse(BaseModel):
     # memory has one rather than showing an undivided scroll.
     scene_id: uuid.UUID
     rolls: list[dict[str, Any]]
+    # What this turn changed, beside what it rolled. The stream carries both
+    # as they happen; without this a reload would show the prose and lose
+    # everything the engines did during it.
+    changes: list[dict[str, Any]]
 
 
 class SceneResponse(BaseModel):
@@ -858,6 +862,21 @@ async def read_world(
     }
 
 
+def _as_change(event: WorldEvent, named: dict[str, str]) -> dict:
+    """One world event in the shape the stream sends it.
+
+    Whoever it names is named rather than identified, which is the only
+    difference between what is stored and what is read: the log keeps an id
+    because that is what can be checked, and a card shows a name because that
+    is what somebody reads.
+    """
+    payload = dict(event.payload)
+    for key in ("character_id", "adversary_id"):
+        if key in payload:
+            payload["character"] = named.get(payload.pop(key))
+    return {"kind": event.kind, **payload}
+
+
 @router.get("/campaigns/{campaign_id}/turns")
 async def read_transcript(
     campaign_id: uuid.UUID, database: Db, user: CurrentUser
@@ -873,6 +892,18 @@ async def read_transcript(
         .where(Turn.campaign_id == campaign.id)
         .order_by(Turn.created_at, Turn.id)
     )
+    # The log keeps ids because a name is not a key. The stream sends names
+    # because everything downstream of it is something a person reads, so a
+    # reloaded turn has to say the same thing the live one did.
+    named = {
+        str(one.id): one.name
+        for one in (await _party(database, campaign.id))
+        + list(
+            await database.scalars(
+                select(Adversary).where(Adversary.campaign_id == campaign.id)
+            )
+        )
+    }
     return [
         {
             "id": turn.id,
@@ -902,6 +933,12 @@ async def read_transcript(
                     "ability": roll.ability,
                 }
                 for roll in turn.rolls
+            ],
+            # The same shape the stream sent, for the same reason the rolls
+            # are: a reloaded turn should read like the one that was on
+            # screen a moment ago.
+            "changes": [
+                _as_change(event, named) for event in turn.events
             ],
         }
         for turn in turns

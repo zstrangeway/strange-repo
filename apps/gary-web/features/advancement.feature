@@ -16,22 +16,17 @@ Feature: Advancement on the table
   Background:
     Given I have signed in at google as "ada@example.com" named "Ada"
     And I already have a campaign called "A Light in the Deep"
+    And I open that campaign's party
+    And I add "Bramble" the "rogue" as mine
+    And I take them in
 
   # ------------------------------------------------------------- on the card
 
+  # The numbers are a fold over the log rather than something this page keeps,
+  # for the fight order's reason: it renders a fact rather than tracking one.
   Scenario: The party card says how far along somebody is
-    When I open that campaign
     Then "Bramble" should show as level 1
-    And "Bramble" should show how much experience they have
-    And "Bramble" should show what the next level costs
-
-  # The number is a fold over the log, not a column the page tracks, for the
-  # same reason the fight order is: this renders a fact rather than keeping
-  # one.
-  Scenario: What is on the card came from gary-api
-    Given "Bramble" has earned their way to level 3
-    When I open that campaign
-    Then "Bramble" should show as level 3
+    And "Bramble" should show 0 of the 300 they need
 
   # ------------------------------------------------------- as a turn arrives
 

@@ -3,7 +3,13 @@
 import { Badge } from "@gary/ui/components/badge";
 import { Item, ItemContent, ItemDescription, ItemTitle } from "@gary/ui/components/item";
 
-import type { Roll, Scene } from "@/lib/api";
+import type { Roll, Scene, WorldChange } from "@/lib/api";
+import {
+  asAward,
+  asLevel,
+  readAward,
+  readLevel,
+} from "@/lib/advancement";
 import { abilityAside, workedOut } from "@/lib/rolls";
 
 /** One thing said, and anything the engines did while it was being said. */
@@ -12,6 +18,9 @@ export type Entry = {
   role: "player" | "gm";
   text: string;
   rolls: Roll[];
+  /** What the engines changed while it was being said. Kept beside the prose
+   *  for the rolls' reason: they are things that happened, not sentences. */
+  changes: WorldChange[];
   complete: boolean;
   sceneId: string;
 };
@@ -97,6 +106,10 @@ function Turn({ entry, who }: { entry: Entry; who: string }) {
         <RolledDice key={`${entry.id}-${index}`} roll={roll} />
       ))}
 
+      {entry.changes.map((change, index) => (
+        <Advanced key={`${entry.id}-change-${index}`} change={change} />
+      ))}
+
       {entry.text ? (
         <p className="whitespace-pre-wrap">{entry.text}</p>
       ) : (
@@ -113,6 +126,29 @@ function Turn({ entry, who }: { entry: Entry; who: string }) {
         </p>
       ) : null}
     </div>
+  );
+}
+
+// Advancement is a thing that happened, for a roll's reason.
+//
+// Gary saying "you feel stronger, Bramble" in a paragraph is indistinguishable
+// from gary having decided you levelled, which is exactly what the engine
+// exists to take out of its hands. A frame the page renders as a frame cannot
+// be written in a sentence.
+//
+// An award that crossed nothing still shows: "300 of the 900 you need" is what
+// makes a long campaign feel like it is going somewhere.
+function Advanced({ change }: { change: WorldChange }) {
+  const award = asAward(change);
+  const level = asLevel(change);
+  if (!award && !level) return null;
+
+  return (
+    <Item variant="muted" size="sm" data-testid={award ? "award" : "level"}>
+      <ItemContent>
+        <ItemTitle>{award ? readAward(award) : readLevel(level!)}</ItemTitle>
+      </ItemContent>
+    </Item>
   );
 }
 

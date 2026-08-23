@@ -252,3 +252,28 @@ def step_gary_told_experience(context, who):
 def step_no_next_level(context, who):
     standing = _standing(context, who)
     assert standing["next_level"] is None, standing
+
+
+def _changes(context):
+    """Everything every turn in the transcript says it changed."""
+    return [
+        change for turn in _body(context) for change in turn["changes"]
+    ]
+
+
+@then('the turn should carry an award to "{who}"')
+def step_turn_carries_award(context, who):
+    changes = _changes(context)
+    assert any(
+        one["kind"] == "experience-gained" and one["character"] == who
+        for one in changes
+    ), changes
+
+
+@then('the turn should carry a level for "{who}"')
+def step_turn_carries_level(context, who):
+    changes = _changes(context)
+    assert any(
+        one["kind"] == "level-gained" and one["character"] == who
+        for one in changes
+    ), changes

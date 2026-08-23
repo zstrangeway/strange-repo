@@ -191,6 +191,15 @@ Feature: Advancement
     When I say "nothing happened [[award Bramble 0 standing about]]"
     Then the tool should be refused
 
+  # A turn carries what it rolled; it has to carry what it changed for the
+  # same reason. Without this a reload shows the prose and loses everything
+  # the engines did during it, which is most of what a turn is.
+  Scenario: A turn keeps what it changed, not just what it said
+    When I say "it stops moving [[award Bramble 300 the mud creature]]"
+    And I read the transcript
+    Then the turn should carry an award to "Bramble"
+    And the turn should carry a level for "Bramble"
+
   # ---------------------------------------------- it is the log, not a column
 
   # The same property hit points have, and the reason there is no snapshot

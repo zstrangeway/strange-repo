@@ -20,6 +20,5 @@ folder of things nobody is going to build reads like a roadmap.
 
 ## Waiting
 
-| Proposal | For | What it decides |
-| --- | --- | --- |
-| [`advancement/`](advancement) | gary-api, gary-web | Whether experience is gary's to award, and levels the engine's to grant |
+Nothing at the moment. Advancement was the first thing through here and has
+moved into both apps with its steps.

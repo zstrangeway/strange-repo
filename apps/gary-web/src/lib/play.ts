@@ -12,7 +12,7 @@
 // a failure are both events on the open stream, and the caller renders them
 // in the transcript rather than as a broken page.
 
-import type { Roll } from "./api";
+import type { Roll, WorldChange } from "./api";
 import { getLogger, REQUEST_ID_HEADER, requestId } from "./logger";
 import { storedToken } from "./session";
 
@@ -25,7 +25,9 @@ const log = getLogger("play");
 // the stream looks for it.
 export type { Roll };
 
-export type WorldChange = { kind: string } & Record<string, unknown>;
+// Declared in api.ts, where the shape comes from, and re-exported here
+// because this is where a reader meets it — a frame off the stream.
+export type { WorldChange };
 
 export type TurnEvent =
   | { type: "turn"; turn_id: string; role: string }
