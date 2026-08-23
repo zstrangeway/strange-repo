@@ -34,7 +34,7 @@ async function choose(label) {
 
 /** Type into the composer and send it. The turn stays open afterwards — the
  *  stub holds it — so this does not wait for the answer to finish. */
-async function say(message) {
+export async function say(message) {
   world.said = message;
   await composer().fill(message);
   await world.page.getByTestId("say").click();

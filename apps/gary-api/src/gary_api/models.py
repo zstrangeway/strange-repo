@@ -251,6 +251,13 @@ class Turn(Base):
     rolls: Mapped[list["Roll"]] = relationship(
         back_populates="turn", cascade="all, delete-orphan", lazy="selectin"
     )
+    # What this turn changed about the world, so a reloaded transcript can
+    # show it the way the stream did. Not a cascade: an event outlives the
+    # turn that caused it — the log is the truth and a deleted turn does not
+    # unmake what happened, which is why the column is nullable and set null.
+    events: Mapped[list["WorldEvent"]] = relationship(
+        back_populates="turn", lazy="selectin", order_by="WorldEvent.seq"
+    )
 
 
 class Adversary(Base):
@@ -381,3 +388,4 @@ class WorldEvent(Base):
     )
 
     campaign: Mapped[Campaign] = relationship(back_populates="events")
+    turn: Mapped["Turn | None"] = relationship(back_populates="events")

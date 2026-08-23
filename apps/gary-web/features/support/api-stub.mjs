@@ -108,6 +108,11 @@ const CATALOGUE = [
     // system that names no hit dice — Pathfinder, below — falls back to the
     // default, which is what gary-api does with one it has no die for.
     hit_dice: { cleric: 8, fighter: 10, rogue: 8, wizard: 6 },
+    // Owed to gary-api's own advancement table, level 1 first. Short of its
+    // twenty on purpose: a scenario here proves the card reads a number it
+    // was given, and where the number comes from is settled by gary-api's
+    // specs. A system that prices no level leaves this out, as add-1e does.
+    experience_table: [0, 300, 900, 2700, 6500],
     modules: [
       {
         slug: "the-drowned-belfry",
@@ -288,6 +293,19 @@ function hitPointsFor(system, characterClass, abilities) {
   return Math.max(1, die + modifierFor(abilities.con));
 }
 
+/**
+ * What the next level costs, or null when there is no next number to reach.
+ *
+ * The same two silences gary-api answers alike: the top of a table, and a
+ * system with no table at all.
+ */
+function nextLevelFor(systemSlug, level) {
+  const table = CATALOGUE.find((one) => one.slug === systemSlug)
+    ?.experience_table;
+  if (!table) return null;
+  return level < table.length ? table[level] : null;
+}
+
 export function addCharacterTo(
   campaignId,
   { name, character_class, mine, abilities },
@@ -304,6 +322,9 @@ export function addCharacterTo(
     character_class,
     played_by: mine ? "player" : "gary",
     level: 1,
+    // Where they started. gary-api sets this from what the level costs; a
+    // character made here is always level 1, which costs nothing anywhere.
+    experience: 0,
     max_hp: hitPointsFor(system, character_class, sheet),
     abilities: sheet,
     at: characters.size,
@@ -396,6 +417,7 @@ function asCharacter(character) {
     name: character.name,
     character_class: character.character_class,
     level: character.level,
+    experience: character.experience,
     max_hp: character.max_hp,
     abilities: character.abilities,
     played_by: character.played_by,
@@ -863,6 +885,11 @@ function handle(method, path, body, request, query) {
             name: character.name,
             character_class: character.character_class,
             level: character.level,
+            experience: character.experience,
+            // What the next level costs. Counted the way gary-api counts it
+            // rather than hardcoded, so a scenario that advances somebody
+            // gets a card that moves with them.
+            next_level: nextLevelFor(campaign.system, character.level),
             hp: character.max_hp,
             max_hp: character.max_hp,
             conditions: [],
@@ -945,6 +972,7 @@ function handle(method, path, body, request, query) {
             complete: turn.complete,
             scene_id: turn.scene_id,
             rolls: turn.rolls,
+            changes: turn.changes ?? [],
           })),
       };
     }
@@ -1057,6 +1085,7 @@ async function stream(request, response, body, campaign, opening = false) {
     content: "",
     complete: false,
     rolls: [],
+    changes: [],
     at: turns.size,
   };
   turns.set(answer.id, answer);
@@ -1066,6 +1095,48 @@ async function stream(request, response, body, campaign, opening = false) {
   if (doing.roll) {
     answer.rolls.push(doing.roll);
     await write("roll", doing.roll);
+  }
+
+  // An award, and whatever the engine did about it. Both are frames on the
+  // open stream and both are kept on the turn, because gary-api sends them
+  // that way and a reload gets them back from the transcript.
+  //
+  // The level is worked out here rather than dictated by the scenario, so a
+  // scenario that awards enough gets a level for the same reason it would
+  // against gary-api — but the table is the one above, kept short, and where
+  // the number comes from is settled by gary-api's own specs.
+  if (doing.award) {
+    const { who, amount, reason = "the mud creature" } = doing.award;
+    const character = partyOf(campaign.id).find((one) => one.name === who);
+    if (character) {
+      character.experience += amount;
+      const earned = { kind: "experience-gained", character: who, amount, reason };
+      answer.changes.push(earned);
+      await write("world", earned);
+
+      const table =
+        CATALOGUE.find((one) => one.slug === campaign.system)
+          ?.experience_table ?? [];
+      let reached = 1;
+      table.forEach((needed, at) => {
+        if (character.experience >= needed) reached = at + 1;
+      });
+      while (character.level < reached) {
+        character.level += 1;
+        // The engine's die. Fixed here because a browser spec asserting on a
+        // random number would be a spec that fails one run in six.
+        const gained = 5;
+        character.max_hp += gained;
+        const levelled = {
+          kind: "level-gained",
+          character: who,
+          level: character.level,
+          hit_points: gained,
+        };
+        answer.changes.push(levelled);
+        await write("world", levelled);
+      }
+    }
   }
 
   const pieces =

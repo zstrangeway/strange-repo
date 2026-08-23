@@ -146,12 +146,21 @@ export type Character = {
   id: string;
   name: string;
   character_class: string;
+  /** Both as created. What somebody currently is comes off the world, because
+   *  a level is a fold over the log the same way hit points are. */
   level: number;
+  experience: number;
   max_hp: number;
   abilities: Record<string, number>;
   /** "player" for the one you are, "gary" for the ones it speaks for. */
   played_by: string;
 };
+
+/** One thing the engines changed, as the stream sends it and as a turn keeps
+ *  it. Open rather than a union of every kind: this app renders the few it
+ *  has something to say about and passes the rest by, so a new kind in
+ *  gary-api is not a build failure here. */
+export type WorldChange = { kind: string } & Record<string, unknown>;
 
 /** A character as they currently stand, projected from what has happened. */
 export type Member = {
@@ -159,6 +168,11 @@ export type Member = {
   name: string;
   character_class: string;
   level: number;
+  experience: number;
+  /** What the next level costs, or null when there is no next number to
+   *  reach — at the top, and in a system that does not price a level at all.
+   *  One answer for both, because a card has the same thing to say. */
+  next_level: number | null;
   hp: number;
   max_hp: number;
   conditions: string[];
@@ -244,6 +258,10 @@ export type Turn = {
   /** Beside the turn they happened in, so a reloaded transcript shows a roll
    *  as a roll rather than losing it into the prose. */
   rolls: Roll[];
+  /** What the turn changed, for the same reason — the stream carries both as
+   *  they happen, and a reload would otherwise keep the prose and lose
+   *  everything the engines did during it. */
+  changes: WorldChange[];
 };
 
 function baseUrl(): string {

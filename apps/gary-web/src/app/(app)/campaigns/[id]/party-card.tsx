@@ -15,6 +15,7 @@ import Link from "next/link";
 
 import { Button } from "@gary/ui/components/button";
 
+import { progress } from "@/lib/advancement";
 import type { Member } from "@/lib/api";
 
 // Who is at the table, as they currently stand.
@@ -61,8 +62,19 @@ export default function Party({
               >
                 <ItemContent>
                   <ItemTitle>{member.name}</ItemTitle>
-                  <ItemDescription>
+                  <ItemDescription data-testid={`standing-${member.name}`}>
                     level {member.level} {member.character_class}
+                    {/* How far along, when there is a next number to reach.
+                        Nothing at the top, and nothing in a system that does
+                        not price a level — both would otherwise read as a
+                        character who has stopped rather than as a table with
+                        nothing left to say. */}
+                    {(() => {
+                      const so_far = progress(member);
+                      return so_far
+                        ? ` · ${so_far.have}/${so_far.needed} xp`
+                        : ` · ${member.experience} xp`;
+                    })()}
                     {member.conditions.length > 0
                       ? ` · ${member.conditions.join(", ")}`
                       : ""}
