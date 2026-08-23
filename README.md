@@ -32,6 +32,8 @@ pnpm test        # every app's specs
 [`BACKLOG.md`](BACKLOG.md) is what is known to be wrong or thin and not yet
 done. Things deliberately not built are not in it — those are in the app
 READMEs, marked ⚠️, beside the code that would change if they ever were.
+[`proposals/`](proposals) is Gherkin waiting to be agreed, held outside the
+apps' `features/` trees because both runners fail on an undefined step.
 
 ### The three tiers
 
