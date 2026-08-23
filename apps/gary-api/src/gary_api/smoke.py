@@ -128,6 +128,24 @@ def run_tool(call, ruleset, state, log):
             return f"{arguments.get('character')} is noted as {call.name}d", None
         if call.name in ("add_condition", "remove_condition"):
             return f"condition {call.name.split('_')[0]}ed", None
+        if call.name == "award_experience":
+            # Priced by the real ruleset, so a smoke run shows whether the
+            # model respects the bound rather than only whether it can spell
+            # the tool. Nothing is stored — this whole harness holds the world
+            # in memory — so the level is worked out from the award alone.
+            wanted = arguments.get("awarded") or []
+            amount = int(arguments.get("experience") or 0)
+            most = ruleset.most_per_award(1)
+            if amount > most:
+                return (
+                    f"refused: {amount} is more than the {most} this system "
+                    f"allows in one award"
+                ), None
+            reached = ruleset.level_at(amount)
+            return (
+                f"{', '.join(str(one) for one in wanted) or 'nobody'} gained "
+                f"{amount} experience and is level {reached}"
+            ), None
         if call.name == "begin_combat":
             # Named back, so a smoke run shows whether the model authored a
             # monster or asked for a fight with nothing in it.

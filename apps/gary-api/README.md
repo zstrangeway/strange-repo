@@ -168,6 +168,54 @@ a character's armour class is a stated default because sheets have no armour,
 and a monster's initiative modifier is its attack bonus, which is not a rule
 anybody plays by.
 
+### Advancement
+
+**Gary awards experience. It never awards a level.** The precedent is
+`damage`: gary already names a number and the engine applies it, so naming
+what something was worth is authorship it already has. What that adds up to,
+when it crosses a threshold and what a level is worth are rules, so the system
+says them and the engine writes them down. There is no tool that grants a
+level, and `tests/test_pluggable.py` fails the build if one ever appears.
+
+So an award is **two events, not one**. `experience-gained` is what gary
+proposed; `level-gained` is the engine's answer to it, and carries hit points
+the engine rolled. Folding them together would put dice inside gary's event,
+and a fold that rolls dice answers differently every time the log is replayed
+— which is the one property `world_events` exists to have.
+
+`characters.experience` is the sheet, like `max_hp`: a character made at level
+3 is created holding whatever level 3 costs, so being made there and earning
+your way there are the same character afterwards. Everything since is the log.
+`GET /campaigns/{id}/world` is therefore where a current level comes from;
+`GET /campaigns/{id}/characters` is the sheet and does not move.
+
+| System | Level 2 costs | Stops at |
+| --- | --- | --- |
+| D&D 5e | 300 | 20 |
+| D&D 3.5e | 1000 | 20 |
+| Pathfinder 2e | 1000 | 20 |
+| AD&D 1e | refuses | — |
+
+⚠️ **First edition refuses to price a level at all.** It does not have an
+advancement table, it has one per class — a fighter reaches second level at
+2,000 and a magic-user at 2,500, and they keep diverging. Lending them a
+shared curve would be quietly running third edition, which `modifier()`
+already declines to do; typing eleven tables in from half-memory would be
+worse, because wrong numbers look exactly like right ones. Filling it in means
+widening the interface too: every question would have to take the character's
+class, which no other system needs.
+
+**One award is worth at most one level.** Damage is bounded by a fight and
+experience is bounded by nothing, so without a bound a model having a strange
+turn could hand out ten thousand and jump four levels in a sentence. The
+system says the most, measured from where somebody is, and a dungeon worth
+three levels arrives as three awards — which the log then shows line by line.
+
+⚠️ **The close pass may not award.** A level rolls a hit die, and closing a
+scene is the one tool set with no dice in it: a die thrown there decides
+something nobody was there for. Experience for a scene's last fight is the
+next turn's to give.
+
 ### Who plays whom
 
 Exactly one character in a campaign is the player's; the rest are companions,

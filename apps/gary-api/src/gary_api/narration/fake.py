@@ -19,6 +19,8 @@ brackets at a real narrator is just a player typing square brackets.
     [[heal Bramble 2]]              put them back
     [[afflict Bramble frightened]]  add a condition
     [[time 30]]                     let time pass
+    [[award Bramble 300 the belfry]] give experience for something
+    [[award Bramble,Sara 300 x]]     give the same to several of them
     [[fight mud-creature]]          start a fight with one of those
     [[attack Sara mud-creature]]    have whoever is up swing
     [[endturn]]                     finish the current turn
@@ -120,6 +122,21 @@ def _call(directive: str) -> Call | None:
         if ability:
             call["ability"] = ability
         return Call("check", call)
+    if head == "award":
+        # names amount reason — the same comma-separated list a check takes,
+        # because an award covers a party for the same reason a check does.
+        names, _, tail = rest.partition(" ")
+        amount, _, reason = tail.partition(" ")
+        return Call(
+            "award_experience",
+            {
+                "awarded": [one for one in names.split(",") if one],
+                # Left as written when it is not a number, so a spec can
+                # reach the same refusal a model's bad argument would.
+                "experience": int(amount) if _is_number(amount) else amount,
+                "reason": reason.strip(),
+            },
+        )
     if head == "fight":
         # One adversary, named, with numbers a scenario does not care about —
         # what a fight is *for* here is the order and the outcomes, and those

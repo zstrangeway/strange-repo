@@ -172,7 +172,11 @@ class CharacterResponse(BaseModel):
     id: uuid.UUID
     name: str
     character_class: str
+    # As created, both of them. What somebody currently is comes off the world
+    # — `GET /campaigns/{id}/world` — because a level is a fold over the log
+    # the same way hit points are. This is the sheet, not the state.
     level: int
+    experience: int
     max_hp: int
     abilities: dict[str, int]
     # "player" for the one you are, "gary" for the ones it speaks for.
@@ -184,6 +188,12 @@ class MemberResponse(BaseModel):
     name: str
     character_class: str
     level: int
+    experience: int
+    # What the next level costs, so a client can show how far along somebody
+    # is without holding a copy of the table. None at the top, and in a system
+    # that does not price a level at all — both are "there is no next number
+    # to reach", which is the only thing a card can usefully say.
+    next_level: int | None
     hp: int
     max_hp: int
     conditions: list[str]
@@ -354,12 +364,41 @@ def _sheet_for(ruleset, wanted: dict[str, int] | None) -> dict[str, int]:
     return sheet
 
 
+def _starting_experience(ruleset, level: int) -> int:
+    """What that level costs to reach, or nothing when the system cannot say.
+
+    Nothing rather than a refusal: a system with no advancement table still
+    makes characters, and add-1e refusing to price a level is not a reason to
+    refuse to build one.
+    """
+    try:
+        return ruleset.experience_for(level)
+    except systems.SystemError:
+        return 0
+
+
+def _next_level(campaign: Campaign, level: int) -> int | None:
+    """What the level after this one costs, or nothing to reach.
+
+    Two different silences answer the same way on purpose: a system that does
+    not price a level at all (add-1e, until its per-class tables are typed in)
+    and somebody already at the top both have no next number, and a card has
+    the same thing to say about each.
+    """
+    try:
+        ruleset = systems.ruleset(campaign.system_slug)
+        return ruleset.experience_for(level + 1)
+    except systems.SystemError:
+        return None
+
+
 def _as_character(character: Character) -> dict:
     return {
         "id": character.id,
         "name": character.name,
         "character_class": character.character_class,
         "level": character.level,
+        "experience": character.experience,
         "max_hp": character.max_hp,
         "abilities": character.abilities or {},
         "played_by": character.played_by,
@@ -697,6 +736,11 @@ async def add_character(
             if request.max_hp is not None
             else ruleset.hit_points(spelled, abilities)
         ),
+        # Where that level starts, so being made at level 3 and earning your
+        # way to 3 are the same character afterwards. A system that does not
+        # price a level leaves this at nothing, which is what every character
+        # made before any of this existed has.
+        experience=_starting_experience(ruleset, request.level),
         abilities=abilities,
         played_by="player" if request.mine else "gary",
     )
@@ -767,6 +811,8 @@ async def read_world(
                 "name": member.name,
                 "character_class": member.character_class,
                 "level": member.level,
+                "experience": member.experience,
+                "next_level": _next_level(campaign, member.level),
                 "hp": member.hp,
                 "max_hp": member.max_hp,
                 "conditions": member.conditions,
@@ -1383,6 +1429,119 @@ async def _run(
                 {"character_id": str(character.id), "condition": condition},
                 f"{character.name} {became} {condition}",
             )
+
+        if call.name == "award_experience":
+            ruleset = systems.ruleset(campaign.system_slug)
+
+            # All of them or none, for the check's reason: a party survives a
+            # thing together, and half an award applied says two of them were
+            # there for something all four came through.
+            names = arguments.get("awarded") or []
+            if isinstance(names, str):
+                names = [names]
+            if not names:
+                raise world.WorldError("an award needs somebody to give it to")
+            earning = [_named(party, str(name)) for name in names]
+
+            amount = arguments.get("experience")
+            if isinstance(amount, bool) or not isinstance(amount, int):
+                raise world.WorldError(f"{amount!r} is not an amount of experience")
+            reason = arguments.get("reason", "")
+
+            # Folded once, before anything is written. Where somebody stands
+            # is the sheet plus what the log did to it, never the row — the
+            # row is where they started and nothing ever writes it again.
+            folded = {
+                one.id: one for one in (await world.of(database, campaign.id)).party
+            }
+            said, frames = [], []
+            for character in earning:
+                # A lookup rather than a search: `_named` already found them
+                # in the party and the fold is built from that same party, so
+                # a miss here is impossible and a branch guarding it would be
+                # one nothing could ever take.
+                standing = folded[str(character.id)]
+
+                # The bound, before anything is written. Damage is bounded by
+                # a fight and experience by nothing, so without this a model
+                # having a strange turn could hand out ten thousand and jump
+                # four levels in a sentence.
+                most = ruleset.most_per_award(standing.level)
+                if amount > most:
+                    raise world.WorldError(
+                        f"{amount} is more experience than this system allows "
+                        f"in one award at level {standing.level}; the most is "
+                        f"{most}"
+                    )
+
+                await world.record(
+                    database,
+                    campaign.id,
+                    world.EARNED,
+                    {
+                        "character_id": str(character.id),
+                        "amount": amount,
+                        "reason": reason,
+                    },
+                    turn_id,
+                    scene_id,
+                )
+                frames.append(
+                    _frame(
+                        "world",
+                        {
+                            "kind": world.EARNED,
+                            "character": character.name,
+                            "amount": amount,
+                            "reason": reason,
+                        },
+                    )
+                )
+                total = standing.experience + amount
+                said.append(
+                    f"{character.name} gained {amount} experience"
+                    f"{f' for {reason}' if reason else ''} and is on {total}"
+                )
+
+                # Gary proposed the award; everything below is the engine's
+                # answer to it, which is why it is a second event rather than
+                # a field on the first one.
+                for reached in range(
+                    standing.level + 1, ruleset.level_at(total) + 1
+                ):
+                    gained = ruleset.gains(
+                        character.character_class, character.abilities or {}
+                    )
+                    await world.record(
+                        database,
+                        campaign.id,
+                        world.LEVELLED,
+                        {
+                            "character_id": str(character.id),
+                            "level": reached,
+                            "hit_points": gained,
+                        },
+                        turn_id,
+                        scene_id,
+                    )
+                    frames.append(
+                        _frame(
+                            "world",
+                            {
+                                "kind": world.LEVELLED,
+                                "character": character.name,
+                                "level": reached,
+                                "hit_points": gained,
+                            },
+                        )
+                    )
+                    said.append(
+                        f"{character.name} reached level {reached} "
+                        f"and gained {gained} hit points"
+                    )
+
+            await database.flush()
+            return narration.Result(call, "; ".join(said)), frames
 
         if call.name == "pass_time":
             minutes = arguments.get("minutes")

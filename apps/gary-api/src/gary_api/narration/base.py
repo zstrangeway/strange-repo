@@ -48,6 +48,13 @@ TOOLS = {
     "remove_condition": ("character", "condition"),
     "pass_time": ("minutes",),
     "scene": ("title",),
+    # Experience, and never a level. Gary says what was overcome and what it
+    # was worth — the same authorship it already has over how much damage
+    # something did. What that adds up to, when it crosses a threshold and
+    # what a level is worth are rules, so the system says them and the engine
+    # writes the level down. Several at once for the check's reason: a party
+    # survives a thing together.
+    "award_experience": ("awarded", "experience", "reason"),
     # A fight. Gary says who is in it and what they try; it never says who
     # goes first, whether a blow lands, or how much it hurt.
     "begin_combat": ("adversaries",),
@@ -68,6 +75,11 @@ CLOSING_TOOLS = tuple(
         "roll",
         "check",
         "scene",
+        # Nor an award. A level rolls a hit die, and this is the tool set
+        # with no dice in it — the close pass looks back at what was already
+        # decided, so a die thrown here decides something nobody was there
+        # for. Experience for a scene's last fight is the next turn's to give.
+        "award_experience",
         # Nor a fight. Reconciling looks back at a scene that has ended; a
         # fight started or advanced there would be one nobody played.
         "begin_combat",

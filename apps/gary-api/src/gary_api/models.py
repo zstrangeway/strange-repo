@@ -197,6 +197,13 @@ class Character(Base):
     # Spelled the way the system spells it, because the system is asked.
     character_class: Mapped[str] = mapped_column(String(40))
     level: Mapped[int] = mapped_column(Integer, default=1)
+    # Experience as created, which is whatever the level above costs in this
+    # system. On the sheet rather than folded from nothing for the same reason
+    # max_hp is: the sheet says where somebody started, and the log says what
+    # has happened to them since. A character made at level 3 therefore holds
+    # level 3's cost from the start, so being made there and earning your way
+    # there are the same character afterwards.
+    experience: Mapped[int] = mapped_column(Integer, default=0)
     # Keyed by whatever the system calls its abilities, so a system with a
     # different set needs no migration here.
     abilities: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)

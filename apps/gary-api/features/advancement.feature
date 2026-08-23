@@ -38,7 +38,7 @@ Feature: Advancement
   Background:
     Given I am signed in at google as "ada@example.com" named "Ada Lovelace"
     And I started "A Light in the Deep" on "dnd-5e" running "the-drowned-belfry"
-    And "Bramble" the rogue is mine
+    And I add "Bramble" the rogue
 
   # ------------------------------------------------- the table is the system's
 
@@ -54,12 +54,32 @@ Feature: Advancement
     When I read the system "dnd-3-5e"
     Then level 2 should cost 1000 experience
 
-  # First edition does not have one table, it has one per class. A fighter and
-  # a magic-user who survive the same dungeon do not come out the same level,
-  # which is why what a level costs is asked with the class in hand.
-  Scenario: First edition prices each class separately
+  # First edition does not have one table, it has one per class: a fighter
+  # reaches second level at 2,000 and a magic-user at 2,500, and they keep
+  # diverging all the way up. Lending them a shared curve would be quietly
+  # running third edition, which `modifier` already declines to do one method
+  # away — and typing eleven tables in from half-memory would be worse,
+  # because wrong numbers look exactly like right ones. So it refuses, the way
+  # it refuses fights.
+  Scenario: First edition refuses to price a level at all
     When I read the system "add-1e"
-    Then level 2 should cost a fighter and a magic-user different experience
+    Then it should say it cannot price a level
+
+  # What a card shows when there is no next number to reach. The same answer
+  # covers somebody at the top of a system that does price levels, because a
+  # client has the same thing to say about both.
+  Scenario: A world it cannot price offers no next level
+    Given I started "The barrow" on "add-1e" running "the-moaning-barrow"
+    And I add "Rook" the fighter
+    When I read the world
+    Then "Rook" should have no next level to reach
+
+  Scenario: A campaign it cannot price refuses the award
+    Given I started "The barrow" on "add-1e" running "the-moaning-barrow"
+    And I add "Rook" the fighter
+    When I say "well fought [[award Rook 300 the barrow]]"
+    Then the tool should be refused
+    And the refusal should say first edition prices a level per class
 
   Scenario: A system says where advancement stops
     When I read the system "dnd-5e"
@@ -77,7 +97,7 @@ Feature: Advancement
   # people is one thing that happened, and awarding it one at a time costs a
   # round trip each and reaches the round cap describing a single moment.
   Scenario: A whole party is awarded together
-    Given "Sara" the cleric is in the party
+    Given I add "Sara" the cleric
     When I say "the belfry is quiet [[award Bramble,Sara 300 the mud creature]]"
     Then "Bramble" should have 300 experience
     And "Sara" should have 300 experience
@@ -109,16 +129,18 @@ Feature: Advancement
     Then the history should hold a level for "Bramble"
     And the level should not be something gary asked for
 
-  # A model that says "you are now level 5" is doing the thing this whole
-  # design exists to stop. It is refused like any other assertion.
-  Scenario: Gary may not hand out a level directly
-    When I say "you feel stronger [[level Bramble 5]]"
-    Then the tool should be refused
-    And the refusal should say levels are not gary's to give
+  # "Gary may not hand out a level" is not a refusal anybody can reach from
+  # here, because there is no tool that would express it. That is the whole
+  # guarantee, and it is guarded where it can be — tests/test_pluggable.py
+  # fails the build if a tool ever appears that writes a level.
 
-  Scenario: Enough at once crosses more than one
-    When I say "the whole barrow [[award Bramble 900 clearing the barrow]]"
-    Then "Bramble" should be level 4
+  # The other half of the bound: a dungeon worth three levels arrives as three
+  # awards rather than one, and the log says so line by line.
+  Scenario: One award is worth at most one level
+    When I say "it stops moving [[award Bramble 300 the mud creature]]"
+    And I say "and the nest behind it [[award Bramble 300 the nest]]"
+    Then "Bramble" should be level 2
+    And "Bramble" should have 600 experience
 
   # The guard on decision 1. A model having a strange turn should not be able
   # to take a character from 1 to 9 in a sentence; what it can do is advance
@@ -141,13 +163,13 @@ Feature: Advancement
     And the level should record what was gained
 
   Scenario: What a level is worth is the class's hit die
-    Given "Gus" the fighter is in the party
+    Given I add "Gus" the fighter
     When I say "the belfry is quiet [[award Bramble,Gus 300 the mud creature]]"
     Then what "Gus" gained should come off a fighter's hit die
     And what "Bramble" gained should come off a rogue's hit die
 
-  Scenario: Current hit points are not raised by levelling
-    Given "Bramble" has taken 5 damage
+  Scenario: A level raises the maximum and what you are on together
+    Given "Bramble" takes 5 damage
     When I say "it stops moving [[award Bramble 300 the mud creature]]"
     Then "Bramble" should still be 5 below their maximum
 
@@ -156,7 +178,7 @@ Feature: Advancement
   # Half an award applied is worse than none: it says two of them were there
   # for something all four survived.
   Scenario: A name nobody at the table has refuses the whole award
-    Given "Sara" the cleric is in the party
+    Given I add "Sara" the cleric
     When I say "well done [[award Bramble,Nobody 300 the mud creature]]"
     Then the tool should be refused
     And "Bramble" should have no experience
@@ -179,8 +201,8 @@ Feature: Advancement
     Then "Bramble" should still be level 2
 
   Scenario: A character made partway up starts where that level starts
-    Given "Vale" the wizard was made at level 3
-    Then "Vale" should have the experience level 3 costs
+    Given I add "Vale" the wizard at level 3
+    Then "Vale" should have 900 experience
     When I say "well fought [[award Vale 1 a rat]]"
     Then "Vale" should be level 3
 
