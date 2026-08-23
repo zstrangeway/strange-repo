@@ -37,6 +37,10 @@ class Pathfinder2e(FourDegrees):
     )
     # And hit points are ancestry plus class plus constitution, for the same
     # missing reason, so a stated default stands in.
+    # A flat thousand a level, all the way up: second edition prices an
+    # encounter by how far above or below the party it is, so the cost of a
+    # level does not have to climb the way a fixed-value edition's does.
+    experience_table = tuple(level * 1000 for level in range(0, 20))
     modules = (
         Module(
             slug="salt-and-cinder",

@@ -29,6 +29,14 @@ class DnD5e(TwoDegrees):
     # before anything else is applied.
     point_costs = {8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9}
     point_budget = 27
+    # The Player's Handbook's advancement table. Typed out rather than
+    # computed because it follows no formula — the early levels are meant to
+    # go quickly and the curve is chosen, not derived.
+    experience_table = (
+        0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000,
+        85000, 100000, 120000, 140000, 165000, 195000, 225000, 265000,
+        305000, 355000,
+    )
     hit_dice = {
         "barbarian": 12,
         "fighter": 10, "paladin": 10, "ranger": 10,

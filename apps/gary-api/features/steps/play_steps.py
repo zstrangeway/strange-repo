@@ -1477,6 +1477,8 @@ def step_refusal_says(context, what):
         "you cannot hit yourself": "cannot attack themselves",
         "there is nobody to fight it": "nobody here to fight",
         "they are already down": "already down",
+        "the award is larger than this system allows": "more experience than",
+        "first edition prices a level per class": "per class",
     }[what]
     assert wanted in context.refusal["detail"], context.refusal
 

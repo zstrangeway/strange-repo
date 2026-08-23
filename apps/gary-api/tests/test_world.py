@@ -15,11 +15,14 @@ from gary_api import world
 class Sheet:
     """A character as far as the projection is concerned."""
 
-    def __init__(self, name="Bramble", max_hp=8, played_by="gary"):
+    def __init__(
+        self, name="Bramble", max_hp=8, played_by="gary", level=1, experience=0
+    ):
         self.id = uuid.uuid4()
         self.name = name
         self.character_class = "rogue"
-        self.level = 1
+        self.level = level
+        self.experience = experience
         self.max_hp = max_hp
         self.played_by = played_by
 
@@ -28,6 +31,40 @@ class Event:
     def __init__(self, kind, payload):
         self.kind = kind
         self.payload = payload
+
+
+class AdvancementTests(unittest.TestCase):
+    """The two halves of advancement, where the specs cannot reach them."""
+
+    def test_a_level_below_one_is_refused(self):
+        # Zero gets past the "whole number of at least 0" check every other
+        # count uses, and a level 0 character is not a thing.
+        with self.assertRaises(world.WorldError):
+            world.clean(
+                world.LEVELLED,
+                {
+                    "character_id": str(uuid.uuid4()),
+                    "level": 0,
+                    "hit_points": 3,
+                },
+            )
+
+    def test_advancement_for_somebody_who_has_gone_is_skipped(self):
+        # An append-only log keeps what happened to a character who is no
+        # longer here. Folding it has to step over them rather than fail.
+        gone = str(uuid.uuid4())
+        world_now = world.project(
+            [Sheet()],
+            [
+                Event(world.EARNED, {"character_id": gone, "amount": 300, "reason": "x"}),
+                Event(
+                    world.LEVELLED,
+                    {"character_id": gone, "level": 2, "hit_points": 4},
+                ),
+            ],
+        )
+        self.assertEqual(world_now.party[0].experience, 0)
+        self.assertEqual(world_now.party[0].level, 1)
 
 
 class CleanTests(unittest.TestCase):

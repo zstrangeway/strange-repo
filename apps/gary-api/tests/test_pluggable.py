@@ -95,6 +95,56 @@ class SystemsStayPluggable(unittest.TestCase):
                 for degree in ruleset.degrees:
                     self.assertIn(degree.value, ruleset.briefing())
 
+    def test_no_tool_hands_out_a_level(self):
+        """A level is the engine's answer to an award, never gary's to give.
+
+        Everything else the engines own is protected by a refusal somebody can
+        reach. This one is protected by there being nothing to call: if a tool
+        ever appears that names a level, the guarantee is gone and no scenario
+        would notice, because the way you would notice is by a model using it.
+        """
+        from gary_api import narration
+
+        for name, fields in narration.TOOLS.items():
+            with self.subTest(name):
+                self.assertNotIn("level", name)
+                self.assertNotIn("level", fields)
+
+    def test_every_registered_system_advances_or_says_why(self):
+        """Either it prices a level, or it refuses and says what is missing.
+
+        Silence is the thing to catch. A system that answered 0 for every
+        level would make every award instantly worth twenty levels, and one
+        that raised a bare error would tell a player nothing.
+        """
+        for ruleset in systems.rulesets():
+            with self.subTest(ruleset.slug):
+                try:
+                    costs = [
+                        ruleset.experience_for(level)
+                        for level in range(1, ruleset.max_level + 1)
+                    ]
+                except systems.SystemError as refused:
+                    self.assertTrue(
+                        str(refused).strip(),
+                        "refused advancement without saying why",
+                    )
+                    continue
+                self.assertEqual(costs[0], 0, "level 1 costs something")
+                self.assertEqual(
+                    costs, sorted(costs), "a level got cheaper further up"
+                )
+                self.assertEqual(
+                    len(set(costs)), len(costs), "two levels cost the same"
+                )
+                for level in range(1, ruleset.max_level + 1):
+                    self.assertEqual(
+                        ruleset.level_at(ruleset.experience_for(level)),
+                        level,
+                        "the table does not read back the way it reads in",
+                    )
+                    self.assertGreater(ruleset.most_per_award(level), 0)
+
     def test_every_registered_system_makes_a_character(self):
         # Whatever it offers, it has to answer the two questions creating a
         # character asks — otherwise a new system is registered and then

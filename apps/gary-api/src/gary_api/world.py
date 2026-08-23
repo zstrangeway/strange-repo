@@ -54,9 +54,18 @@ FOUGHT = "fight-began"
 TURNED = "turn-ended"
 PEACE = "fight-ended"
 
+# Advancement, as two things rather than one. EARNED is what gary proposed —
+# a number it named, for something it says was overcome. LEVELLED is what the
+# engine did about it, and carries hit points the engine rolled. Folding them
+# together would put dice inside gary's event, and a fold that rolls dice
+# answers differently every time the log is replayed, which is the one
+# property this whole table exists to have.
+EARNED = "experience-gained"
+LEVELLED = "level-gained"
+
 KINDS = (
     MOVED, REMEMBERED, FORGOTTEN, DAMAGED, HEALED, AFFLICTED, RELIEVED,
-    ELAPSED, SCENED, FOUGHT, TURNED, PEACE,
+    ELAPSED, SCENED, FOUGHT, TURNED, PEACE, EARNED, LEVELLED,
 )
 
 
@@ -87,6 +96,11 @@ class Member(Fighter):
 
     character_class: str = ""
     level: int = 1
+    # Where they are between levels. Off the sheet like max_hp, then added to
+    # by the log — a character made at level 3 is created holding whatever
+    # level 3 costs, so "made at 3" and "earned their way to 3" are the same
+    # character afterwards.
+    experience: int = 0
     # Who speaks for them. Part of the world rather than beside it, because
     # it is a fact about the table that gary needs on every turn — and the
     # world is what gary is told on every turn.
@@ -215,6 +229,28 @@ def clean(kind: str, payload: dict | None) -> dict:
             **_who(payload),
             "condition": _text(payload, "condition").lower(),
         }
+    if kind == EARNED:
+        # A character, never `_who`: an adversary earning experience is not a
+        # thing, and letting the key decide would make it expressible.
+        amount = _count(payload, "amount")
+        if amount == 0:
+            raise WorldError("an award of nothing is not an award")
+        return {
+            "character_id": _id(payload, "character_id"),
+            "amount": amount,
+            # What it was for, so "why is Bramble level 4" answers with a list
+            # of things that happened rather than a number.
+            "reason": _text(payload, "reason"),
+        }
+    if kind == LEVELLED:
+        level = _count(payload, "level")
+        if level < 1:
+            raise WorldError("level must be at least 1")
+        return {
+            "character_id": _id(payload, "character_id"),
+            "level": level,
+            "hit_points": _count(payload, "hit_points"),
+        }
     if kind == FOUGHT:
         return {"order": _order(payload)}
     if kind in (TURNED, PEACE):
@@ -340,6 +376,7 @@ def project(
                 name=character.name,
                 character_class=character.character_class,
                 level=character.level,
+                experience=character.experience,
                 max_hp=character.max_hp,
                 hp=character.max_hp,
                 played_by=character.played_by,
@@ -385,6 +422,22 @@ def project(
             _advance(world)
         elif kind == PEACE:
             world.fight = None
+        elif kind in (EARNED, LEVELLED):
+            # Party only, so this reads `member` rather than `anyone`. Skipped
+            # when they are gone, for the same reason everything else here is:
+            # a character can be removed and what happened to them stays.
+            member = world.member(payload["character_id"])
+            if member is None:
+                continue
+            if kind == EARNED:
+                member.experience += payload["amount"]
+            else:
+                member.level = payload["level"]
+                # Both, by the same amount. A level raises what you can take
+                # and gives you it — somebody five short of full before is
+                # five short of full after, rather than suddenly eleven short.
+                member.max_hp += payload["hit_points"]
+                member.hp += payload["hit_points"]
         else:
             member = world.anyone(
                 payload.get("character_id") or payload.get("adversary_id") or ""
@@ -427,7 +480,10 @@ def render(world: World) -> str:
     if world.party:
         lines.append("The party:")
         for member in world.party:
-            state = f"{member.hp}/{member.max_hp} hit points"
+            state = (
+                f"{member.hp}/{member.max_hp} hit points, "
+                f"{member.experience} experience"
+            )
             if member.down:
                 state += ", down"
             if member.conditions:

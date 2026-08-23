@@ -81,6 +81,25 @@ class ADnD1e(TwoDegrees):
         """
         return 0
 
+    # Left empty on purpose, which refuses every advancement question.
+    #
+    # First edition does not have an advancement table, it has one per class:
+    # a fighter reaches second level at 2,000 and a magic-user at 2,500, and
+    # they keep diverging all the way up. Lending them one shared curve would
+    # be quietly running third edition again — the same mistake `modifier`
+    # declines to make one method above — and typing eleven tables in from
+    # half-memory would be worse, because wrong numbers look exactly like
+    # right ones until somebody who knows the book reads them.
+    #
+    # Filling this in means widening the interface as well as the data: every
+    # question below would have to take the character's class, which no other
+    # system needs and none of them should carry for this one's sake until
+    # this one is real.
+    cannot_advance = (
+        "first edition prices a level per class, and those tables are not "
+        "typed in yet"
+    )
+
     def initiative(self, modifier: int) -> Roll:
         """Not yet, and refused rather than approximated.
 

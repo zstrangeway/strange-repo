@@ -116,6 +116,15 @@ class ToolTests(unittest.TestCase):
                 summary, _ = self.call(name, {"character": "Bramble"})
                 self.assertNotIn("gary has no", summary)
 
+    def test_an_award_past_the_bound_is_refused_here_too(self):
+        # The bound is the one thing about an award worth watching a real
+        # model for, so this harness has to apply it rather than accept
+        # anything and report a turn that the router would have refused.
+        summary, _ = self.call(
+            "award_experience", {"awarded": ["Bramble"], "experience": 999999}
+        )
+        self.assertIn("refused", summary)
+
 
 class PlayTests(unittest.TestCase):
     def test_reports_a_turn_that_used_no_tools(self):

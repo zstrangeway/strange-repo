@@ -187,6 +187,34 @@ class Ruleset(Protocol):
         """What a character adds to hit, from their own sheet."""
         ...
 
+    def experience_for(self, level: int) -> int:
+        """What reaching that level costs. Raises SystemError if it cannot say.
+
+        A rule, and one editions genuinely disagree about, which is the same
+        argument as four degrees of success and per-system ability modifiers
+        one more time.
+        """
+        ...
+
+    def level_at(self, experience: int) -> int:
+        """What that much experience is worth, capped at where this system stops."""
+        ...
+
+    def most_per_award(self, level: int) -> int:
+        """The largest single award allowed to somebody of that level.
+
+        Damage is bounded by a fight and experience is bounded by nothing, so
+        without this a model having a strange turn could hand out ten thousand
+        and jump four levels in a sentence. One award advances at most one
+        level; a dungeon worth three arrives as three awards, and the log says
+        so.
+        """
+        ...
+
+    def gains(self, character_class: str, abilities: dict[str, int]) -> int:
+        """Hit points for one level, rolled. Never below one, as at creation."""
+        ...
+
     def briefing(self) -> str:
         """What the model is told about running this system.
 
@@ -327,6 +355,77 @@ class D20Ruleset:
         if die is None:
             return self.default_hp
         return max(1, die + self.modifier(self.score(abilities, self.hit_point_ability)))
+
+    # What each level costs to reach, level 1 first and therefore always 0.
+    # Empty means this system does not publish one here, and every question
+    # below refuses — the way add-1e refuses fights rather than approximating
+    # a shape it does not have.
+    experience_table: tuple[int, ...] = ()
+    # Why, when it is empty. Read by the refusal, so a player is told what is
+    # missing rather than that something went wrong.
+    cannot_advance: str = ""
+
+    def _levels(self) -> tuple[int, ...]:
+        if not self.experience_table:
+            raise SystemError(
+                self.cannot_advance
+                or f"{self.name} does not say what a level costs"
+            )
+        return self.experience_table
+
+    @property
+    def max_level(self) -> int:
+        """Where this system stops. The table's length says it."""
+        return len(self._levels())
+
+    def experience_for(self, level: int) -> int:
+        levels = self._levels()
+        if level < 1 or level > len(levels):
+            raise SystemError(f"{self.name} has no level {level}")
+        return levels[level - 1]
+
+    def level_at(self, experience: int) -> int:
+        levels = self._levels()
+        reached = 1
+        for at, needed in enumerate(levels, start=1):
+            if experience >= needed:
+                reached = at
+        return reached
+
+    def most_per_award(self, level: int) -> int:
+        """One level's worth, measured from where they are.
+
+        At the top there is no next level to measure against, so the last
+        span stands in — experience still accrues past the cap, it just buys
+        nothing, and refusing every award up there would read as a bug.
+        """
+        levels = self._levels()
+        at = min(max(level, 1), len(levels))
+        if at >= len(levels):
+            return levels[-1] - levels[-2]
+        return levels[at] - levels[at - 1]
+
+    def gains(self, character_class: str, abilities: dict[str, int]) -> int:
+        """One hit die, plus the constitution modifier, floored the same way.
+
+        Rolled rather than averaged because it is a die, and dice are the
+        engine's. Floored at one for the reason creation is: a constitution
+        penalty can be worse than a hit die is big, and a level that made
+        somebody frailer is nobody's idea of a rule.
+        """
+        # Refuse before rolling, so a system that cannot advance cannot be
+        # made to hand out hit points by asking a different way.
+        self._levels()
+        die = self.hit_dice.get(character_class, self.default_hp)
+        thrown = roll(
+            f"1d{die}", f"hit points for a {character_class or 'character'}"
+        )
+        return max(
+            1,
+            thrown.total + self.modifier(
+                self.score(abilities, self.hit_point_ability)
+            ),
+        )
 
     def attack_bonus(self, abilities: dict[str, int]) -> int:
         return self.modifier(self.score(abilities, self.attack_ability))

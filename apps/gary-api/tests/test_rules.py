@@ -105,6 +105,38 @@ class _Fights:
         pass
 
 
+class AdvancementTests(unittest.TestCase):
+    def test_a_level_the_system_does_not_have(self):
+        ruleset = systems.ruleset("dnd-5e")
+        for level in (0, ruleset.max_level + 1):
+            with self.subTest(level):
+                with self.assertRaises(systems.SystemError):
+                    ruleset.experience_for(level)
+
+    def test_at_the_top_an_award_is_still_allowed(self):
+        # Experience still accrues past the cap, it just buys nothing.
+        # Refusing every award up there would read as a bug.
+        ruleset = systems.ruleset("dnd-5e")
+        self.assertGreater(ruleset.most_per_award(ruleset.max_level), 0)
+        self.assertEqual(
+            ruleset.level_at(ruleset.experience_for(ruleset.max_level) * 10),
+            ruleset.max_level,
+        )
+
+    def test_a_system_that_cannot_advance_refuses_every_part_of_it(self):
+        ruleset = systems.ruleset("add-1e")
+        for asking in (
+            lambda: ruleset.experience_for(2),
+            lambda: ruleset.level_at(5000),
+            lambda: ruleset.most_per_award(1),
+            lambda: ruleset.max_level,
+            lambda: ruleset.gains("fighter", {}),
+        ):
+            with self.subTest(asking):
+                with self.assertRaises(systems.SystemError):
+                    asking()
+
+
 class RefusedCallTests(unittest.TestCase):
     def run_call(self, name, arguments):
         who = Stub()
@@ -156,6 +188,27 @@ class RefusedCallTests(unittest.TestCase):
         )
         self.assertTrue(result.failed)
         self.assertIn("Nobody", result.summary)
+
+    def test_an_award_with_nobody_in_it(self):
+        result, _ = self.run_call("award_experience", {"awarded": [], "experience": 1})
+        self.assertTrue(result.failed)
+        self.assertIn("somebody", result.summary)
+
+    def test_one_name_rather_than_a_list_is_taken_as_one_name_awarding_too(self):
+        # Same allowance as a check, for the same reason: a model that sends a
+        # bare name instead of a list of one should not cost anybody a turn.
+        result, _ = self.run_call(
+            "award_experience", {"awarded": "Nobody", "experience": 1}
+        )
+        self.assertTrue(result.failed)
+        self.assertIn("Nobody", result.summary)
+
+    def test_experience_that_is_not_a_number(self):
+        result, _ = self.run_call(
+            "award_experience", {"awarded": ["Bramble"], "experience": "loads"}
+        )
+        self.assertTrue(result.failed)
+        self.assertIn("experience", result.summary)
 
     def test_a_tool_that_does_not_exist(self):
         # A model can ask for anything. What it gets back is a refusal it can

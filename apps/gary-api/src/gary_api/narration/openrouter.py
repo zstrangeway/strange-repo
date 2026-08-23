@@ -83,8 +83,8 @@ WRAP_UP = (
 # What every tool takes, in the shape OpenAI-compatible APIs want. Built from
 # narration.TOOLS so a tool that exists in the contract cannot be missing from
 # what the model is offered.
-NUMBERS = {"dc", "amount", "minutes"}
-LISTS = {"characters"}
+NUMBERS = {"dc", "amount", "minutes", "experience"}
+LISTS = {"characters", "awarded"}
 
 # The one argument that is a list of objects rather than of names. Gary
 # authors what you fight — there is no bestiary to look one up in, and
@@ -108,7 +108,7 @@ FOE = {
 
 DESCRIBED = {
     "notation": "Dice to roll, as NdM+K — for example 1d20+3.",
-    "reason": "What the roll or check is for, in a word or two.",
+    "reason": "What the roll, check or award is for, in a word or two.",
     "character": (
         "Whose roll this is, by name. Leave it out for a roll about the "
         "world rather than about a person. A roll that names somebody takes "
@@ -133,6 +133,11 @@ DESCRIBED = {
     "adversaries": "Everything the party is now fighting.",
     "attacker": "Who is swinging, by name — a character or an adversary.",
     "target": "Who they are swinging at, by name.",
+    "awarded": (
+        "Everyone this covers, by name. One call covers all of them, and "
+        "each of them gets the full amount."
+    ),
+    "experience": "How much experience, for each of them.",
 }
 
 # Fields a call may leave out. Not the same as fields that do not matter: a
@@ -199,6 +204,12 @@ def schema(offered: tuple[str, ...] | None = None) -> list[dict]:
             "theirs to take."
         ),
         "end_combat": "Call the fight off, when it is over or nobody wants it.",
+        "award_experience": (
+            "Award experience for something the party overcame. You never "
+            "say what level anybody is — the rules work that out from the "
+            "total and tell you. One award is worth at most one level, so "
+            "something worth more than that is several awards."
+        ),
     }
 
     built = []

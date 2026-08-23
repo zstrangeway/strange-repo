@@ -31,6 +31,12 @@ class DnD35e(TwoDegrees):
         14: 6, 15: 8, 16: 10, 17: 13, 18: 16,
     }
     point_budget = 25
+    # The medium advancement track: reaching level n costs n(n-1)/2 thousand.
+    # A formula rather than a chosen curve, unlike fifth edition's, and spelled
+    # out anyway so it can be read against the book.
+    experience_table = tuple(
+        (level * (level - 1) // 2) * 1000 for level in range(1, 21)
+    )
     hit_dice = {
         "barbarian": 12,
         "fighter": 10, "paladin": 10, "ranger": 10,
