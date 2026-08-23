@@ -17,9 +17,14 @@ tasks:
       - pnpm exec next start
 
   lint:
-    desc: Lint the app
+    desc: Lint the app, and fail on a warning
     cmds:
-      - pnpm exec eslint
+      # --max-warnings 0, or this reports and passes. Every rule here is a
+      # warning rather than an error, so without it the whole run is advisory
+      # and a warning sits in the tree until somebody happens to look. One
+      # did: a useEffect flagged for months while `pnpm test` stayed green,
+      # because nothing ran this.
+      - pnpm exec eslint --max-warnings 0
 
   unit:
     desc: Unit-test src/lib and enforce its coverage gate
@@ -27,8 +32,12 @@ tasks:
       - pnpm exec vitest run --coverage
 
   test:
-    desc: Unit tests, then the Gherkin specs against a real browser
+    desc: Lint, unit tests, then the Gherkin specs against a real browser
     cmds:
+      # First, and part of `test` rather than a job of its own, so it runs
+      # wherever the specs run — CI included. It was in neither before, which
+      # is how a warning survived.
+      - task: lint
       - task: unit
       - pnpm exec cucumber-js
 

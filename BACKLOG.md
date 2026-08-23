@@ -12,8 +12,9 @@ decided. Moving them here would make two places to look and one of them wrong.
 An item says how it was found, so it can be re-checked rather than argued about.
 When one is done, delete it — the commit is the record.
 
-*Last swept 2026-08-22 against `d29fcde`, by running all three tiers and reading
-the deployed apps. Every tier was green; nothing below is a failing test.*
+*Last swept 2026-08-23 against `c8f5bd2`, by running all three tiers, a real
+model, and reading the deployed apps. Every tier was green; nothing below is a
+failing test.*
 
 ## Worth real work
 
@@ -47,10 +48,24 @@ invocations the README documented did not work. The `smoke` script is
 valid model ID` — which reads like a bad model rather than a bad command line.
 Fixed in the same commit as this note.
 
-**What that run does not cover, and what is therefore still unproven:** a fight
-(`begin_combat`, `attack`, `end_turn`, `end_combat`), the scene close pass, and
-the opening. One turn on one free model is the core loop only. The next runs
-worth doing are `--opening`, and a turn that starts a fight.
+**Run again 2026-08-23, same model, after advancement landed.** The turn still
+works with a fifteenth tool offered. It also caught something in this script
+rather than in gary: the model asked for a check against `investigation` — a
+fifth edition *skill*, not an ability — and `run_tool` graded it and printed
+"degree from the rules (valid)". The router refuses that outright, so the run
+reported a model going through the engines when production would have sent it
+back. It was taking a `modifier` from the model too, which the router never
+does. Both fixed, both now unit-tested. **A harness looser than the thing it
+stands in for reports the wrong answer confidently**, and that is worth
+re-checking whenever the router gains a refusal.
+
+**What no run has covered, and what is therefore still unproven:** a fight
+(`begin_combat`, `attack`, `end_turn`, `end_combat`), the scene close pass, the
+opening, and now `award_experience` — whose bound is the one thing about an
+award worth watching a real model for. The last needs a scenario this script
+does not have: its two are a search and an opening, and neither has overcome
+anything. Adding a third means turning the `opening` flag into a named scene,
+which `tests/test_smoke.py` is coupled to in about a dozen places.
 
 ### 2. `play.py` is a quarter of the API in one file
 
@@ -64,18 +79,21 @@ where a change will be hardest to make confidently. The seams are already
 visible in the file: the schemas, the read endpoints, and everything after the
 `# ---- playing` divider at line 933 barely reference each other.
 
-### 3. eslint runs nowhere
+### 3. `packages/ui` is linted by nothing
 
-Not in any CI job, and not in any `test` task — `gary-web:test` is `unit` then
-`cucumber-js`, and the root `test` is the three apps' test tasks. So `pnpm lint`
-is something a person has to remember, which means it is something nobody does.
+gary-web's lint is now a gate: `--max-warnings 0`, run first inside its `test`
+task, so it fires wherever the specs do — CI included. That leaves one hole.
 
-One warning is outstanding as of this sweep: `src/app/(app)/campaigns/[id]/page.tsx:271`,
-a `useEffect` with no dependency array. It is guarded by the `opening` ref so it
-cannot open twice, but it re-evaluates on every render.
+Nothing lints `packages/ui`. eslint run from `apps/gary-web` refuses those
+files by name because they sit outside its config's base path, so the twenty
+four components in there have never been linted at all. Its `lint` script used
+to name a task that did not exist, which is how nobody noticed; the task now
+exists and says out loud that it lints nothing.
 
-A lint gate that is green from the day it is added is worth more than the one
-warning it is currently hiding.
+Closing it means either an eslint of its own in that package — a dependency,
+so worth agreeing before adding — or moving gary-web's config up to the
+workspace root so its base path covers both. The second is cheaper and changes
+what every existing rule applies to, which is the part to look at first.
 
 ### 4. The tier that exists to catch drift does not reach the newest work
 
@@ -108,20 +126,23 @@ to look within the retention window.
 
 ## Cheap, and stale things get believed
 
-### 6. Three documents describe an app that changed underneath them
+### 6. Nothing catches a document going stale
 
-- `apps/gary-api/README.md`, **Who plays whom**: "⚠️ There is no combat, so 'the
-  player controls them in a fight' is not a thing yet. There is no initiative and
-  no turn order." The **Fights** section thirty lines above documents initiative,
-  turn order and four combat tools. One of the two is wrong and it is this one.
-- `apps/gary-api/fly.toml:30`: "gary-web reaches this app over Flycast." It does
-  not, and has not since the browser started calling gary-api directly. The
-  conclusion — safe to scale to zero — still holds, via the public proxy; the
-  reason given for it does not, so anyone reasoning from it will reason wrongly.
-- `apps/gary-web/README.md:8`: "There is no server rendering and no server of its
-  own." `next.config.ts` is `output: "standalone"` and the image runs a Next
-  server. Every route is static and every gary-api call is made from the page, so
-  the point being made is true and the sentence making it is not.
+The three that had drifted are fixed: gary-api's README no longer says there is
+no combat thirty lines below the section describing combat, `fly.toml` no longer
+explains a scale-to-zero by a Flycast route the browser stopped using, and
+gary-web's README now says what its server actually does rather than that it has
+none.
+
+What has not changed is that all three were found by reading, months late, and
+nothing would have caught any of them. Two of the three were wrong the moment a
+commit landed, and both commits were green.
+
+There is no cheap general answer here — prose cannot be type-checked — but the
+specific shapes are catchable. A README that names a tool, an endpoint or an
+event kind that no longer exists is a grep. `tests/test_pluggable.py` already
+does exactly this for system names in source; the same crude scan over the
+markdown would have caught "there is no combat" the day `begin_combat` landed.
 
 ### 7. Dependency drift, and nothing to drive it
 

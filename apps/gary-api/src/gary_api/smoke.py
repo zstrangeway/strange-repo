@@ -105,9 +105,27 @@ def run_tool(call, ruleset, state, log):
             made = dice.roll(arguments.get("notation", ""), arguments.get("reason", ""))
             return f"{made.notation} came up {made.total}", made
         if call.name == "check":
+            # Refused the way the router refuses it, and for the reason this
+            # whole script exists. A real run asked for a check against
+            # "investigation" — a fifth edition *skill*, not an ability — and
+            # an earlier version of this graded it happily and printed
+            # "degree from the rules (valid)". The router would have refused,
+            # so the run reported a model going through the engines when
+            # production would have sent it back. A harness looser than the
+            # thing it stands in for reports the wrong answer confidently.
+            ability = (arguments.get("ability") or "").strip().lower() or None
+            if ability and ability not in ruleset.abilities:
+                return (
+                    f"refused: {ability!r} is not an ability in this system"
+                ), None
+
+            # Never the model's number, again as the router has it: what a
+            # score is worth is a rule, and the score is on a sheet gary does
+            # not own. Zero here because this harness's party is a sheet of
+            # tens, which every system in it makes worth nothing.
             outcome = ruleset.resolve(
                 dc=int(arguments.get("dc", DIFFICULTY)),
-                modifier=int(arguments.get("modifier") or 0),
+                modifier=0,
                 reason=arguments.get("reason", "check"),
             )
             return (

@@ -284,6 +284,15 @@ export default function CampaignPage({
   //
   // Safe to fire on sight: gary-api refuses a second opening outright, so a
   // reload or another tab cannot produce two or spend twice.
+  //
+  // No dependency array, deliberately. What decides whether this fires is the
+  // `opening` ref below, not a list of values — the effect is a guard that
+  // has to re-evaluate whenever anything changes, and it costs four
+  // comparisons to do so. The array the rule suggests would satisfy it
+  // without changing behaviour at all, because `run` is redeclared every
+  // render and would put the effect straight back to running every render —
+  // while reading as though something gated it.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (opening.current || !campaign || campaign.begun) {
       return;
