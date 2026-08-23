@@ -382,9 +382,9 @@ with.
 Looking at that gap is a manual step, and never an automatic one:
 
 ```sh
-pnpm --filter gary-api smoke                                        # one REAL turn
-pnpm --filter gary-api smoke -- --opening                          # the opening instead
-pnpm --filter gary-api smoke -- nvidia/nemotron-3-super-120b-a12b:free
+pnpm --filter gary-api smoke                                    # one REAL turn
+pnpm --filter gary-api smoke --opening                          # the opening instead
+pnpm --filter gary-api smoke nvidia/nemotron-3-super-120b-a12b:free
 ```
 
 It plays one turn against the live API and prints the narration, **which tools
@@ -392,6 +392,12 @@ were called and with what**, the token counts and the cost. What it is looking
 for is whether the model went *through* the engines rather than narrating
 around them — a model that asserts a degree or moves the party in prose alone
 produces a game that reads fine and is being adjudicated by nothing.
+
+No `--` before the arguments. The `smoke` script is `task smoke --`, and pnpm
+passes a second `--` through literally rather than eating it, so
+`smoke -- <model>` arrives as `task smoke -- -- <model>` and `--` is taken as
+the model name. It fails with `'--' is not a valid model ID`, which reads like
+a bad model rather than a bad command line.
 
 It needs `OPENROUTER_API_KEY` and it spends tokens, so it is opt-in and
 nothing calls it for you. **OpenRouter's `:free` models cost nothing and are
