@@ -5,9 +5,15 @@ the game is played: signing in lands on your campaigns, starting one picks a
 system, a module and a model, and a campaign page is the table — the party as
 the world currently has them, the transcript, and a composer.
 
-It runs entirely in the browser. There is no server rendering and no server
-of its own: every route is static, every call to gary-api is made from the
-page, and the session is a gary-api token in `localStorage`.
+It runs entirely in the browser: every route is rendered at build time, every
+call to gary-api is made from the page, and the session is a gary-api token in
+`localStorage`. Nothing here is rendered per request and nothing here holds
+state.
+
+There *is* a server — `next.config.ts` is `output: "standalone"` and the image
+runs it — but it only hands the built pages over. It never talks to gary-api,
+never sees a session, and has nothing to log, which is why gary-web's own log
+lines are in the browser console and nobody collects them.
 
 That is a trade, not a free win. The token is readable by any script on the
 page, so an XSS bug is a stolen session rather than a defaced one — the price

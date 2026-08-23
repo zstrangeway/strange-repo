@@ -240,10 +240,12 @@ sentence is true of nobody is one gary would narrate straight through. Better
 refused before the money is spent than answered by a game master playing
 everyone including you.
 
-⚠️ **There is no combat, so "the player controls them in a fight" is not a
-thing yet.** There is no initiative and no turn order; a companion is gary's
-to voice and the player's to direct, at any point, in prose. When initiative
-lands, this is the field it will hang off.
+**In a fight, this is the field the order hangs off.** Gary is told the
+initiative order, the round and whose turn it is, and told to stop when the
+order reaches the character `played_by` says is the player's — so a companion
+is gary's to move and the player's to direct, and the one character that is
+yours is never taken for you. Outside a fight it is the same arrangement in
+prose rather than in turns.
 
 ### Scenes
 

@@ -116,6 +116,25 @@ class ToolTests(unittest.TestCase):
                 summary, _ = self.call(name, {"character": "Bramble"})
                 self.assertNotIn("gary has no", summary)
 
+    def test_an_ability_this_system_does_not_have_is_refused_here_too(self):
+        # Found by a real run: a model asked for a check against a skill
+        # rather than an ability, and this script graded it. The router
+        # refuses, so a smoke run that did not was reporting a turn that
+        # production would have sent back.
+        summary, _ = self.call(
+            "check", {"characters": ["Bramble"], "ability": "investigation", "dc": 15}
+        )
+        self.assertIn("refused", summary)
+        self.assertIn("investigation", summary)
+
+    def test_a_modifier_from_the_model_is_ignored(self):
+        # The router never takes one. A harness that did would let a model
+        # quietly decide what a check was worth and still look clean.
+        generous, _ = self.call(
+            "check", {"characters": ["Bramble"], "dc": 15, "modifier": 100}
+        )
+        self.assertNotIn("refused", generous)
+
     def test_an_award_past_the_bound_is_refused_here_too(self):
         # The bound is the one thing about an award worth watching a real
         # model for, so this harness has to apply it rather than accept

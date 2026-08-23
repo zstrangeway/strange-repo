@@ -1,6 +1,21 @@
 version: '3'
 
 tasks:
+  lint:
+    desc: Say that these components are not linted, and why
+    cmds:
+      # Nothing lints this package. gary-web's eslint cannot reach it — the
+      # files sit outside its config's base path and it refuses them by name
+      # — and giving this package a config of its own means an eslint of its
+      # own, which is a dependency to discuss rather than one to add quietly.
+      #
+      # Said out loud rather than left as a missing script. A lint task that
+      # exits 0 having linted nothing is indistinguishable from one that
+      # passed. Before this the script was worse than either: it named a task
+      # that did not exist, so it failed on sight and nobody had run it.
+      - 'echo "@gary/ui: NOT LINTED. No eslint here, and gary-web cannot lint outside its own base path. See BACKLOG.md."'
+
+
   typecheck:
     desc: Type-check the components
     cmds:

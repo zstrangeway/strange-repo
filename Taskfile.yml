@@ -17,4 +17,8 @@ tasks:
     cmds:
       - task: gary-api:test
       - task: ui:test
+      # Lints first, inside this one. gary-web's `test` starts with its own
+      # lint task rather than this file listing it, so the gate is the same
+      # whether somebody runs `pnpm test` here or `pnpm --filter gary-web
+      # test` there.
       - task: gary-web:test
