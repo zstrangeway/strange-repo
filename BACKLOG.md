@@ -33,9 +33,24 @@ runs disagreed with each other**.
 
 What is missing is not a feature, it is a habit and a record: run it before any
 deploy that touches `narration/`, and write down the date, the model, and
-whether the model went *through* the engines or narrated around them. There is
-nowhere in the repo that answers "when did this last work against a real model",
-which is why nobody can tell whether it does.
+whether the model went *through* the engines or narrated around them.
+
+**Run 2026-08-22, `nvidia/nemotron-3-super-120b-a12b:free`, an ordinary turn.**
+Called `check` (int, dc 14) and took the degree from the rules, then `remember`
+and `move_party`. Went through the engines on all three — nothing asserted in
+prose. 91 words in 27 pieces, so the streaming path holds. $0.00000.
+
+Part of why it had only been run twice is now known: two of the three
+invocations the README documented did not work. The `smoke` script is
+`task smoke --` and pnpm passes a second `--` through literally, so
+`smoke -- <model>` made `--` the model name and failed with `'--' is not a
+valid model ID` — which reads like a bad model rather than a bad command line.
+Fixed in the same commit as this note.
+
+**What that run does not cover, and what is therefore still unproven:** a fight
+(`begin_combat`, `attack`, `end_turn`, `end_combat`), the scene close pass, and
+the opening. One turn on one free model is the core loop only. The next runs
+worth doing are `--opening`, and a turn that starts a fight.
 
 ### 2. `play.py` is a quarter of the API in one file
 
