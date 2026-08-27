@@ -33,18 +33,49 @@ async function choose(label) {
 }
 
 /** Type into the composer and send it. The turn stays open afterwards — the
- *  stub holds it — so this does not wait for the answer to finish. */
+ *  stub holds it — so this does not wait for the answer to finish.
+ *
+ *  The send is confirmed rather than assumed. The page adds the player's own
+ *  entry synchronously, before the request is even made, so if the message is
+ *  not on screen shortly after the click then the click did not take — and
+ *  waiting the full fifteen seconds for it to appear anyway turns a lost
+ *  click into a timeout that points at the wrong thing. That is what the
+ *  browser tier had been failing as, in a different scenario each run.
+ *
+ *  A second click rather than a longer wait, because the failure is not
+ *  slowness: `settle` has already waited out the opening, and the entry
+ *  arrives in the same tick as the submit or not at all. */
 export async function say(message) {
   world.said = message;
-  await composer().fill(message);
-  await world.page.getByTestId("say").click();
-  // The player's turn is on screen before gary has said anything, which is
-  // what makes it safe to assert on it while gary is still writing.
-  await world.page.waitForFunction(
-    (want) => document.body.innerText.includes(want),
-    message,
-    { timeout: 15_000 },
-  );
+
+  const onScreen = () =>
+    world.page
+      .waitForFunction(
+        (want) => document.body.innerText.includes(want),
+        message,
+        { timeout: 5_000 },
+      )
+      .then(
+        () => true,
+        () => false,
+      );
+
+  for (const attempt of [0, 1]) {
+    // Enabled, not merely present: filling a composer gary still has would
+    // put the message somewhere the submit will never read it.
+    await composer().and(world.page.locator(":not([disabled])")).waitFor({
+      state: "visible",
+      timeout: 15_000,
+    });
+    await composer().fill(message);
+    await world.page.getByTestId("say").click();
+    if (await onScreen()) return;
+    if (attempt === 1) {
+      throw new Error(
+        `said ${JSON.stringify(message)} twice and neither reached the screen`,
+      );
+    }
+  }
 }
 
 Given("I already have a campaign called {string}", async function (name) {

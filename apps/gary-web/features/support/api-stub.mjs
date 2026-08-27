@@ -44,6 +44,10 @@ let plan = null;
 // a scenario can assert on a turn that is still being written — which is the
 // half of streaming a browser can actually see.
 let release = null;
+// Set when a scenario says gary finishes before the turn has reached the gate
+// below. Without it that call lands on nothing and the turn then waits on a
+// gate nobody will ever open again — see garyFinishes.
+let releasedEarly = false;
 
 const DEFAULT_HP = 8;
 
@@ -227,6 +231,41 @@ export function reset() {
   // Let go of anything still held, or the scenario that held it leaves a
   // socket open and the next one waits on it.
   garyFinishes();
+  // ...and then forget having done so. garyFinishes remembers a release that
+  // landed before any turn was waiting, which is exactly what this call is
+  // when the scenario held nothing — carrying it into the next scenario would
+  // let that one's first turn through its gate unasked.
+  releasedEarly = false;
+}
+
+/** Let go of a turn that is waiting, and arm nothing if none is.
+ *
+ *  What the response cleanup calls. A socket closing means the turn it
+ *  belonged to is over, which says nothing about the next one — arming the
+ *  latch here would let the following turn through a gate the scenario still
+ *  needs shut, and the specs that watch a turn mid-flight would find it
+ *  already finished. */
+function letGo() {
+  const held = release;
+  release = null;
+  held?.();
+}
+
+/** Wait here until a scenario says gary finishes — unless it already has.
+ *
+ *  The two halves of one latch, and they can arrive in either order: `say`
+ *  returns as soon as the player's own message is on screen, which the page
+ *  puts there before the POST is answered, so "gary finishes" often runs
+ *  while this turn is still writing frames. A plain promise would lose that
+ *  release and park the turn forever. */
+export async function heldUntilGaryFinishes() {
+  if (releasedEarly) {
+    releasedEarly = false;
+    return;
+  }
+  await new Promise((resolve) => {
+    release = resolve;
+  });
 }
 
 /** What gary will do with the next thing said to it. */
@@ -259,7 +298,24 @@ export function fightUnderway(at = 0, round = 1) {
 export function garyFinishes() {
   const held = release;
   release = null;
-  held?.();
+  if (held) {
+    held();
+    return;
+  }
+  // Nothing is waiting yet. `say` returns as soon as the player's own message
+  // is on screen, and the page puts that there optimistically before the POST
+  // is even answered — so a scenario can reach "gary finishes" before the
+  // stub has finished writing its frames and reached the gate.
+  //
+  // Dropping the call here is what made the browser tier flaky: the turn then
+  // parked on a gate whose only opener had already been spent, the composer
+  // never came back, and the step failed fifteen seconds later pointing at a
+  // timeout rather than at this. Remembered instead, so the gate is already
+  // open when the turn arrives at it.
+  //
+  // Only a scenario saying so arms this. A socket closing must not — see
+  // letGo, which is what the response cleanup calls.
+  releasedEarly = true;
 }
 
 export function addCampaign(userId, { name, system, module, model }) {
@@ -1046,7 +1102,7 @@ async function stream(request, response, body, campaign, opening = false) {
 
   // The reader walking away — a scenario ending, a page closing — has to end
   // the turn too, or the writer waits on a gate nobody will open.
-  response.on("close", garyFinishes);
+  response.on("close", letGo);
 
   const write = (event, data) =>
     new Promise((resolve) => {
@@ -1158,9 +1214,7 @@ async function stream(request, response, body, campaign, opening = false) {
   // moment the page loads, and every step after that waiting on a turn
   // gary was never going to finish.
   if (!opening) {
-    await new Promise((resolve) => {
-      release = resolve;
-    });
+    await heldUntilGaryFinishes();
   }
 
   // Gary asking for a break: acted on once the turn is over, as gary-api
