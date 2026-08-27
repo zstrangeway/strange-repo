@@ -28,6 +28,7 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gary_api import logs, narration, world
@@ -68,21 +69,49 @@ async def all_of(database: AsyncSession, campaign_id: uuid.UUID) -> list[Scene]:
     )
 
 
+async def _playing(database: AsyncSession, campaign_id: uuid.UUID) -> Scene | None:
+    return await database.scalar(
+        select(Scene)
+        .where(Scene.campaign_id == campaign_id, Scene.closed_at.is_(None))
+        .order_by(Scene.number.desc())
+    )
+
+
 async def current(database: AsyncSession, campaign_id: uuid.UUID) -> Scene:
     """The scene being played, opening the first one if there is none.
 
     Opened lazily rather than when the campaign is created, so a campaign that
     predates scenes reads exactly like one that does not.
+
+    **Lazily means concurrently.** Three endpoints call this — reading the
+    scenes, taking a turn, and the opening — and a campaign page asks for
+    several of them at once, so on a campaign with no scene yet two requests
+    can both read nothing and both try to open number 1. One of them then
+    loses to ``uq_scenes_campaign_number`` and, before this, took a 500 with
+    it: the turn never happened and the page sat there.
+
+    So the insert is attempted inside a savepoint and a collision is read
+    rather than raised. Losing that race is not an error — it means somebody
+    else opened the scene this was going to open, which is the answer either
+    way. The constraint stays the arbiter, because a check-then-insert cannot
+    be made safe by looking harder first.
     """
-    found = await database.scalar(
-        select(Scene)
-        .where(Scene.campaign_id == campaign_id, Scene.closed_at.is_(None))
-        .order_by(Scene.number.desc())
-    )
+    found = await _playing(database, campaign_id)
     if found is not None:
         return found
 
-    return await _open(database, campaign_id, "")
+    try:
+        # Nested, so a collision rolls back this insert rather than the
+        # request that contained it — a turn has already written things by
+        # the time it asks for its scene.
+        async with database.begin_nested():
+            return await _open(database, campaign_id, "")
+    except IntegrityError:
+        opened = await _playing(database, campaign_id)
+        if opened is None:
+            # Some other integrity problem, which is not ours to swallow.
+            raise
+        return opened
 
 
 async def _open(
