@@ -25,6 +25,8 @@ import os
 import sys
 
 import httpx
+from collections.abc import Callable
+from dataclasses import dataclass
 
 from gary_api import dice, narration, systems, world
 from gary_api import play as play_module
@@ -55,44 +57,99 @@ def spend() -> float | None:
         return None
 
 
-def a_world(opening: bool = False) -> world.World:
-    """The world as gary would have it — mid-scene, or at the very start.
+def _bramble(hp: int = 6, experience: int = 0) -> world.Member:
+    return world.Member(
+        id="00000000-0000-0000-0000-000000000001",
+        name="Bramble",
+        character_class="rogue",
+        level=1,
+        experience=experience,
+        max_hp=8,
+        hp=hp,
+    )
 
-    An opening gets the second. A campaign that has not begun has one event
-    in its log, the module's own starting place, and nothing else; opening
-    against a world that is already 25 minutes into a fight would report on a
-    prompt gary never sends.
-    """
-    if opening:
-        return world.World(
-            place=systems.rulesets()[0].modules[0].opening,
-            party=[
-                world.Member(
-                    id="00000000-0000-0000-0000-000000000001",
-                    name="Bramble",
-                    character_class="rogue",
-                    level=1,
-                    max_hp=8,
-                    hp=8,
-                )
-            ],
-        )
 
+def _mid_scene() -> world.World:
     return world.World(
         place="a stone chamber below the belfry, ankle-deep in water",
         minutes=25,
         facts={"bell-rings": "3"},
-        party=[
-            world.Member(
-                id="00000000-0000-0000-0000-000000000001",
-                name="Bramble",
-                character_class="rogue",
-                level=1,
-                max_hp=8,
-                hp=6,
-            )
-        ],
+        party=[_bramble()],
     )
+
+
+def _at_the_start() -> world.World:
+    """A campaign that has not begun.
+
+    One event in its log — the module's own starting place — and nothing
+    else. Opening against a world already 25 minutes into a scene would
+    report on a prompt gary never sends.
+    """
+    return world.World(
+        place=systems.rulesets()[0].modules[0].opening,
+        party=[_bramble(hp=8)],
+    )
+
+
+def _just_won() -> world.World:
+    """Something has been overcome, and nothing has been given for it yet.
+
+    Experience is the one tool with a bound a model can ignore, so this is
+    the scene that puts that in front of a real one. Bramble is on nothing,
+    which makes the ceiling whatever this system charges for level 2 — small
+    enough that a model reaching for a round-sounding number goes through it.
+    """
+    return world.World(
+        place="a stone chamber below the belfry, the water going still",
+        minutes=31,
+        facts={"bell-rings": "3", "mud-creature": "killed"},
+        party=[_bramble(hp=3)],
+    )
+
+
+@dataclass(frozen=True)
+class Scene:
+    """One situation to put in front of a real model.
+
+    Named rather than flagged. There were two and a boolean told them apart,
+    which was fine until there were three — and the shape of "which one" is a
+    name, not a yes or no.
+    """
+
+    says: str
+    world: Callable[[], world.World]
+    watching: str
+    # Whether a well-behaved model has anything to roll here. False for a
+    # scene whose dice are already thrown — reporting "it decided the outcome
+    # itself" about a fight that is over accuses the model of the one thing
+    # this script exists to catch, on no evidence at all.
+    rolls: bool = True
+
+
+# What each run is for. The message is chosen to make a well-behaved model
+# reach for a tool it would be wrong to answer in prose.
+SCENES: dict[str, Scene] = {
+    "turn": Scene(
+        says=SAYS,
+        world=_mid_scene,
+        watching="a check against the rules, and a change to the world",
+    ),
+    "opening": Scene(
+        says="",
+        world=_at_the_start,
+        watching="a first turn with nobody having spoken",
+    ),
+    "won": Scene(
+        says=(
+            "The mud creature stops moving. I wipe the muck off my blade and "
+            "catch my breath — we earned that one."
+        ),
+        world=_just_won,
+        watching="experience awarded, and the one-level bound respected",
+        # The fight is over. There is nothing left here to decide.
+        rolls=False,
+    ),
+}
 
 
 def run_tool(call, ruleset, state, log):
@@ -194,14 +251,16 @@ def run_tool(call, ruleset, state, log):
     return f"gary has no {call.name!r}", None
 
 
-async def play(model: str, opening: bool = False) -> int:
+async def play(model: str, scene: str = "turn") -> int:
     # Whatever is registered first, rather than a system named here — this
     # file is outside the systems package and tests/test_pluggable.py fails
     # the build if anything out here learns a system's name. It caught this
     # exact line.
     ruleset = systems.rulesets()[0]
     module = ruleset.modules[0]
-    state = a_world(opening)
+    playing = SCENES[scene]
+    opening = scene == "opening"
+    state = playing.world()
 
     prompt = narration.Prompt(
         briefing=ruleset.briefing(),
@@ -214,8 +273,8 @@ async def play(model: str, opening: bool = False) -> int:
         world=world.render(state),
         # The opening answers gary-api's instruction rather than a player, so
         # it is the one thing here where the transcript is genuinely empty.
-        message=play_module.OPENING if opening else SAYS,
-        transcript=[] if opening else [("player", SAYS)],
+        message=play_module.OPENING if opening else playing.says,
+        transcript=[] if opening else [("player", playing.says)],
     )
 
     gary = narration.narrator(model)
@@ -226,10 +285,11 @@ async def play(model: str, opening: bool = False) -> int:
     print(f"model    {model}")
     print(f"system   {ruleset.name}")
     print(f"module   {module.title}")
+    print(f"scene    {scene} — watching for {playing.watching}")
     if opening:
         print("player   (nobody has said anything — this is the opening)")
     else:
-        print(f'player   "{SAYS}"')
+        print(f'player   "{playing.says}"')
     print()
     print("narration " + "-" * 60)
 
@@ -278,10 +338,16 @@ async def play(model: str, opening: bool = False) -> int:
     print()
     print("did it go through the engines?")
     asked_for_a_number = any(name in ("roll", "check") for name, _ in called)
-    print(
-        f"  asked for a roll or check   {'yes' if asked_for_a_number else 'NO'}"
-        f"{'' if asked_for_a_number else '   <- it decided the outcome itself'}"
-    )
+    if playing.rolls:
+        print(
+            f"  asked for a roll or check   {'yes' if asked_for_a_number else 'NO'}"
+            f"{'' if asked_for_a_number else '   <- it decided the outcome itself'}"
+        )
+    else:
+        print(
+            "  asked for a roll or check   "
+            f"{'yes' if asked_for_a_number else 'nothing to roll in this scene'}"
+        )
     if graded:
         allowed = [degree.value for degree in ruleset.degrees]
         for outcome in graded:
@@ -292,6 +358,22 @@ async def play(model: str, opening: bool = False) -> int:
             )
     changed = [name for name, _ in called if name not in ("roll", "check")]
     print(f"  recorded a world change     {', '.join(changed) if changed else 'no'}")
+
+    # The bound is the one thing about an award worth watching a real model
+    # for, so say plainly whether it was respected rather than leaving it in
+    # the arguments for somebody to check by eye.
+    for name, arguments in called:
+        if name != "award_experience":
+            continue
+        amount = arguments.get("experience")
+        # Not guarded: this script runs whatever system is registered first,
+        # and a system that reaches here at all is one that prices a level.
+        most = ruleset.most_per_award(1)
+        within = isinstance(amount, int) and 0 < amount <= most
+        print(
+            f"  award within the bound      {amount} of at most {most} "
+            f"({'yes' if within else 'NO — the router would refuse this'})"
+        )
 
     prose = "".join(said)
     print(f"\nwrote {len(prose.split())} words in {len(said)} pieces")
@@ -315,12 +397,21 @@ def main() -> int:
         )
         return 2
 
-    wanted = [one for one in sys.argv[1:] if one != "--opening"]
-    opening = "--opening" in sys.argv[1:]
+    # `--turn`, `--opening`, `--won`. A flag rather than a positional so it
+    # cannot be mistaken for a model name, which is what would happen to a
+    # bare word sitting where a model goes.
+    flags = {f"--{name}" for name in SCENES}
+    asked = [one for one in sys.argv[1:] if one in flags]
+    if len(asked) > 1:
+        print(f"pick one scene, not {len(asked)}: {' '.join(asked)}", file=sys.stderr)
+        return 2
+    scene = asked[0][2:] if asked else "turn"
+
+    wanted = [one for one in sys.argv[1:] if one not in flags]
     model = wanted[0] if wanted else models.default()
 
     before = spend()
-    code = asyncio.run(play(model, opening))
+    code = asyncio.run(play(model, scene))
     after = spend()
 
     if before is not None and after is not None:

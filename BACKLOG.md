@@ -12,9 +12,9 @@ decided. Moving them here would make two places to look and one of them wrong.
 An item says how it was found, so it can be re-checked rather than argued about.
 When one is done, delete it — the commit is the record.
 
-*Last swept 2026-08-23 against `c8f5bd2`, by running all three tiers, a real
-model, and reading the deployed apps. Every tier was green; nothing below is a
-failing test.*
+*Last swept 2026-08-27 against `040e12c`, by running all three tiers, three
+real-model turns, and reading the deployed apps. Every tier was green; nothing
+below is a failing test.*
 
 ## Worth real work
 
@@ -59,13 +59,29 @@ does. Both fixed, both now unit-tested. **A harness looser than the thing it
 stands in for reports the wrong answer confidently**, and that is worth
 re-checking whenever the router gains a refusal.
 
+**Run 2026-08-27, same model, on a new `--won` scene** — something overcome,
+nothing given for it yet. It found that gary was **never told to award**. The
+tool had a description; the system prompt's rules covered dice, world changes,
+contradictions and refusals and said nothing about experience, so the model
+narrated the aftermath of a kill and called nothing at all. One line in the
+prompt fixed it, and the same model on the same scene then awarded 25, and 50
+on a third run — both well inside the 300 the bound allows.
+
+Worth generalising: **a tool most models will reach for when the fiction calls
+for it does not need a prompt rule; a tool nothing in a turn asks for does.**
+Nothing says "and now hand out experience" the way a locked door says "roll for
+it". `tests/test_openrouter.py` now pins that gary is told.
+
+The same run also caught this script accusing the model wrongly — it printed
+"asked for a roll or check NO ← it decided the outcome itself" about a scene
+whose fight was already over. A scene now says whether it has anything to roll,
+and the report says whether an award was inside the bound rather than leaving
+it in the arguments to be checked by eye.
+
 **What no run has covered, and what is therefore still unproven:** a fight
-(`begin_combat`, `attack`, `end_turn`, `end_combat`), the scene close pass, the
-opening, and now `award_experience` — whose bound is the one thing about an
-award worth watching a real model for. The last needs a scenario this script
-does not have: its two are a search and an opening, and neither has overcome
-anything. Adding a third means turning the `opening` flag into a named scene,
-which `tests/test_smoke.py` is coupled to in about a dozen places.
+(`begin_combat`, `attack`, `end_turn`, `end_combat`) and the scene close pass.
+Both want a scene of their own, which is now a table entry rather than a
+refactor — `SCENES` in `smoke.py`.
 
 ### 2. `play.py` is a quarter of the API in one file
 
@@ -158,14 +174,20 @@ accept that this is manual.
 
 ### 8. The browser suite waits a fixed fifteen seconds, twenty-five times
 
-`features/rolls.feature:21` ("A roll says whose it is") failed once during this
-sweep on a `waitForFunction` timeout at `play.steps.mjs:43`, and passed on a
-full re-run — 68 of 68, with CI green on the same commit. A flake, not a defect.
+**Two causes behind these timeouts are now found and fixed**, and both were
+real bugs rather than slowness — which is the lesson worth keeping: every one
+of these failures reported a timeout and none of them was about time.
 
-But it is not one step: there are 25 `timeout: 15_000` waits across
-`auth.steps.mjs`, `play.steps.mjs` and `fullstack.steps.mjs`, and each is an
-independent chance for a loaded machine to fail a run that is not testing
-latency. The one that flaked waits for the player's own message to appear after
-clicking send, which is the shortest real wait in the suite and so the first to
-go. Worth raising the timeout, or waiting on the element rather than on
-`document.body.innerText`, before it costs somebody an afternoon.
+- The stub's turn gate dropped a release that arrived before the turn reached
+  it, so the turn parked forever and the composer never came back. Deadlock,
+  not latency.
+- `scenes.current` raced itself into an unhandled 500, so the turn never
+  happened at all and the browser waited out the clock on a page that was
+  never going to change.
+
+What is left is genuinely unexplained: `say` could click and have nothing
+reach the screen. It now confirms the send and clicks once more before giving
+up, which converts a lost click into a retry and a real message — but it does
+not say *why* the click was lost, and the textarea being uncontrolled rules out
+the obvious answer. The 25 fixed waits are still 25 independent chances for a
+loaded machine to fail a run that is not testing latency.

@@ -36,10 +36,10 @@ class Stub:
                 self.answered.append(results)
 
 
-def run(script=None, explode=None, opening=False):
+def run(script=None, explode=None, scene="turn"):
     stub = Stub(script or [narration.Said("A door.")], explode)
     with patch.object(narration, "narrator", lambda model=None: stub):
-        code = __import__("asyncio").run(smoke.play("a/model", opening))
+        code = __import__("asyncio").run(smoke.play("a/model", scene))
     return code, stub
 
 
@@ -60,7 +60,7 @@ class GuardTests(unittest.TestCase):
 class ToolTests(unittest.TestCase):
     def setUp(self):
         self.rules = systems.rulesets()[0]
-        self.state = smoke.a_world()
+        self.state = smoke.SCENES["turn"].world()
         self.log = []
 
     def call(self, name, arguments):
@@ -182,7 +182,54 @@ class PlayTests(unittest.TestCase):
         # The one turn with an empty transcript. What it sends is the router's
         # own instruction rather than a copy, so a smoke run cannot report on
         # a prompt gary does not use.
-        code, stub = run([narration.Said("The causeway.")], opening=True)
+        code, stub = run([narration.Said("The causeway.")], scene="opening")
+        self.assertEqual(code, 0)
+
+    def test_an_award_is_reported_against_the_bound(self):
+        # The bound is the one thing about an award worth watching a real
+        # model for, so the run says whether it was respected rather than
+        # leaving it in the arguments to be checked by eye.
+        code, _ = run(
+            [
+                narration.Calls(
+                    [
+                        narration.Call(
+                            "award_experience",
+                            {
+                                "awarded": ["Bramble"],
+                                "experience": 25,
+                                "reason": "the mud creature",
+                            },
+                        )
+                    ]
+                ),
+                narration.Said("You have earned it."),
+            ],
+            scene="won",
+        )
+        self.assertEqual(code, 0)
+
+    def test_an_award_past_the_bound_is_reported_as_such(self):
+        code, _ = run(
+            [
+                narration.Calls(
+                    [
+                        narration.Call(
+                            "award_experience",
+                            {
+                                "awarded": ["Bramble"],
+                                "experience": 999999,
+                                "reason": "the prophecy",
+                            },
+                        )
+                    ]
+                ),
+                narration.Said("You ascend."),
+            ],
+            scene="won",
+        )
+        # Reported, not failed: the run's job is to show what the model did,
+        # and the router refusing this is the point being demonstrated.
         self.assertEqual(code, 0)
 
     def test_being_unreachable_is_a_failure(self):
@@ -216,9 +263,9 @@ class MainTests(unittest.TestCase):
     def test_takes_the_model_from_the_command_line(self):
         seen = {}
 
-        async def fake_play(model, opening=False):
+        async def fake_play(model, scene="turn"):
             seen["model"] = model
-            seen["opening"] = opening
+            seen["scene"] = scene
             return 0
 
         with patch.dict("os.environ", {"OPENROUTER_API_KEY": "sk-or-test"}, clear=True):
@@ -227,12 +274,12 @@ class MainTests(unittest.TestCase):
                     with patch.object(smoke.sys, "argv", ["smoke", "a/named-model"]):
                         self.assertEqual(smoke.main(), 0)
         self.assertEqual(seen["model"], "a/named-model")
-        self.assertFalse(seen["opening"])
+        self.assertEqual(seen["scene"], "turn")
 
     def test_falls_back_to_the_default_model(self):
         seen = {}
 
-        async def fake_play(model, opening=False):
+        async def fake_play(model, scene="turn"):
             seen["model"] = model
             return 0
 
@@ -243,14 +290,47 @@ class MainTests(unittest.TestCase):
                         self.assertEqual(smoke.main(), 0)
         self.assertEqual(seen["model"], narration.models.default())
 
+    def test_a_scene_can_be_asked_for_by_name(self):
+        seen = {}
+
+        async def fake_play(model, scene="turn"):
+            seen["model"] = model
+            seen["scene"] = scene
+            return 0
+
+        with patch.dict("os.environ", {"OPENROUTER_API_KEY": "sk-or-test"}, clear=True):
+            with patch.object(smoke, "play", fake_play):
+                with patch.object(smoke, "spend", lambda: None):
+                    with patch.object(
+                        smoke.sys, "argv", ["smoke", "--won", "a/named-model"]
+                    ):
+                        self.assertEqual(smoke.main(), 0)
+        self.assertEqual(seen["scene"], "won")
+        self.assertEqual(seen["model"], "a/named-model")
+
+    def test_two_scenes_at_once_is_refused(self):
+        # Silently taking the first would run something other than what was
+        # asked for, and print a name that agreed with itself.
+        with patch.dict("os.environ", {"OPENROUTER_API_KEY": "sk-or-test"}, clear=True):
+            with patch.object(smoke.sys, "argv", ["smoke", "--won", "--opening"]):
+                self.assertEqual(smoke.main(), 2)
+
+    def test_every_scene_can_actually_be_played(self):
+        # A scene in the table that `play` cannot build is one nobody finds
+        # until they ask for it, in front of a model, having paid for it.
+        for name in smoke.SCENES:
+            with self.subTest(name):
+                code, _ = run([narration.Said("Something happens.")], scene=name)
+                self.assertEqual(code, 0)
+
     def test_the_opening_flag_is_not_mistaken_for_a_model(self):
         # `smoke --opening` names no model, and reading the flag as one would
         # ask OpenRouter for a model called "--opening".
         seen = {}
 
-        async def fake_play(model, opening=False):
+        async def fake_play(model, scene="turn"):
             seen["model"] = model
-            seen["opening"] = opening
+            seen["scene"] = scene
             return 0
 
         with patch.dict("os.environ", {"OPENROUTER_API_KEY": "sk-or-test"}, clear=True):
@@ -259,7 +339,7 @@ class MainTests(unittest.TestCase):
                     with patch.object(smoke.sys, "argv", ["smoke", "--opening"]):
                         self.assertEqual(smoke.main(), 0)
         self.assertEqual(seen["model"], narration.models.default())
-        self.assertTrue(seen["opening"])
+        self.assertEqual(seen["scene"], "opening")
 
 
 if __name__ == "__main__":
