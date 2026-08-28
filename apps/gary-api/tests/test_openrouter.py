@@ -792,6 +792,27 @@ class ClosingTests(unittest.TestCase):
         self.assertEqual(told[-1].text, "")
 
 
+class WhatGaryIsToldToDoTests(unittest.TestCase):
+    """Awarding needs a rule in the prompt, not just a tool description.
+
+    Found by a real smoke run: handed a scene where a monster had just been
+    killed, the model narrated the aftermath, called nothing at all, and
+    `award_experience` went untouched. Most tools are self-evident from what
+    they do — `attack`, `heal`, `end_combat` — and a model reaches for them
+    when the fiction calls for one. Awarding is not: nothing in a turn says
+    "and now hand out experience" unless gary has been told that overcoming
+    something is when you do it.
+    """
+
+    def test_gary_is_told_to_award_experience(self):
+        text = openrouter.system_prompt(a_prompt())
+        self.assertIn("award experience", text)
+
+    def test_gary_is_told_the_level_is_not_its_to_give(self):
+        text = openrouter.system_prompt(a_prompt())
+        self.assertIn("never say what level", text)
+
+
 class LongMemoryTests(unittest.TestCase):
     def test_says_plainly_when_there_is_nothing_before_this_scene(self):
         text = openrouter.system_prompt(a_prompt())

@@ -273,7 +273,12 @@ def system_prompt(prompt: Prompt) -> str:
                 "makes your own story wrong on the next turn, because the "
                 "world is what you will be told then and your prose is not.\n"
                 "- If a tool refuses, that refusal is what happened. Narrate "
-                "around it rather than pretending it worked."
+                "around it rather than pretending it worked.\n"
+                "- When the party overcomes something — a fight won, a hazard "
+                "survived, a problem solved without one — award experience "
+                "for it. You never say what level anybody is or that they "
+                "levelled; the rules work that out from the total and tell "
+                "you, and you narrate what they say."
             ),
             (
                 "What is yours and what is theirs. The world is yours: what "

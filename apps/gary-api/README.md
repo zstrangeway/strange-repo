@@ -434,8 +434,15 @@ Looking at that gap is a manual step, and never an automatic one:
 ```sh
 pnpm --filter gary-api smoke                                    # one REAL turn
 pnpm --filter gary-api smoke --opening                          # the opening instead
+pnpm --filter gary-api smoke --won                              # something overcome
 pnpm --filter gary-api smoke nvidia/nemotron-3-super-120b-a12b:free
 ```
+
+Which scene it plays is `SCENES` in `smoke.py`, named rather than flagged
+because there are three of them now: an ordinary turn, the opening, and one
+where something has just been overcome. That last exists for `award_experience`
+— the one tool with a bound a model can ignore, and the only way to see whether
+a real one respects it is to give it something worth rewarding and watch.
 
 It plays one turn against the live API and prints the narration, **which tools
 were called and with what**, the token counts and the cost. What it is looking
