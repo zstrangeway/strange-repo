@@ -156,7 +156,26 @@ CI still pins `actions/checkout@v4`, `actions/setup-node@v4` and
 Dependabot for the paths that exist now, or bump the three actions by hand and
 accept that this is manual.
 
-### 8. The browser suite waits a fixed fifteen seconds, twenty-five times
+### 8. scout's grounding check has never seen a real model's draft
+
+`apps/scout/grounding.py` is the whole reason that app exists: it refuses a
+tailored resume that names an employer or claims a skill the master does not.
+**Every draft it has ever checked was written by hand**, in a spec or a unit
+test, to exercise a branch of the check.
+
+That is the same shape of gap as item 1, and it cuts both ways. A real model
+asked to reorder a resume might invent something the check does not model — a
+qualification, a date range, a team size stated as a fact — and it might also
+phrase a legitimate rewrite in a way the check refuses, which is worse for
+somebody trying to use the thing.
+
+`pnpm --filter scout smoke` is the only thing that looks, and it has **never
+been run** — there was no Anthropic key in the session that built the app. It
+needs running against a real key before anybody trusts a tailored resume, and
+the result written down here: the model, the date, and whether the check fired
+and whether it was right to.
+
+### 9. The browser suite waits a fixed fifteen seconds, twenty-five times
 
 `features/rolls.feature:21` ("A roll says whose it is") failed once during this
 sweep on a `waitForFunction` timeout at `play.steps.mjs:43`, and passed on a
