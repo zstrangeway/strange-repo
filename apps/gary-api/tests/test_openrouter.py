@@ -59,8 +59,18 @@ class Chunk:
 
 
 class Stream:
+    """What `chat.completions.create(stream=True)` answers with.
+
+    `closed` is recorded rather than ignored: openai's real `AsyncStream` has
+    an awaitable `close()`, and this double did not — so the code could leak
+    the response body and every test still passed. That is the third time a
+    double here has been looser than the thing it stands for, and this one
+    hid a connection leak for as long as it existed.
+    """
+
     def __init__(self, chunks):
         self.chunks = chunks
+        self.closed = False
 
     def __aiter__(self):
         async def go():
@@ -69,24 +79,38 @@ class Stream:
 
         return go()
 
+    async def close(self):
+        self.closed = True
+
 
 def client_serving(*rounds):
     """A stubbed OpenAI client that answers each round in turn."""
     sent = []
     remaining = list(rounds)
 
+    # Kept, so a test can ask whether the response was given back rather than
+    # only whether the right chunks came out of it.
+    streams = []
+
     class Completions:
         async def create(self, **kwargs):
             sent.append(kwargs)
             if not remaining:
                 raise AssertionError("asked for more rounds than were staged")
-            return Stream(remaining.pop(0))
+            made = Stream(remaining.pop(0))
+            streams.append(made)
+            return made
 
     class Chat:
         completions = Completions()
 
     class Client:
         chat = Chat()
+
+    # Attached after the class rather than inside it: a class body does not
+    # see the enclosing function's names the way a method would, so
+    # `streams = streams` in there is a name defining itself.
+    Client.streams = streams
 
     return Client(), sent
 
@@ -213,6 +237,80 @@ class StreamingTests(unittest.TestCase):
         )
         told = drive(narrator_with(client), a_prompt())
         self.assertTrue([e for e in told if isinstance(e, narration.Said)])
+
+
+class ClosingTheStreamTests(unittest.TestCase):
+    """The response body is ours to close, and we were not closing it.
+
+    `play.py` calls `aclose()` on the narrator's generator the moment a turn
+    ends, which abandons the `async for` over the stream with the HTTP
+    response still open. openai 2.x tolerated it; 3.x raises a RuntimeError
+    out of httpcore while collecting the abandoned iterator, which is how a
+    real smoke run found it. It was a leaked connection on both.
+    """
+
+    def test_a_narrated_turn_closes_its_stream(self):
+        client, _ = client_serving(
+            [Chunk([Choice(Delta(content="A door."), finish_reason="stop")])]
+        )
+        drive(narrator_with(client), a_prompt())
+        self.assertTrue(client.streams[-1].closed, "the stream was left open")
+
+    def test_a_closing_pass_closes_its_stream(self):
+        client, _ = client_serving(
+            [Chunk([Choice(Delta(content="They left."), finish_reason="stop")])]
+        )
+        close_with(narrator_with(client), a_prompt())
+        self.assertTrue(client.streams[-1].closed, "the stream was left open")
+
+    def test_the_stream_is_closed_even_when_the_model_fails(self):
+        # The path that matters most: something went wrong mid-stream, and the
+        # response still has to be given back rather than left to the
+        # collector.
+        client, _ = client_serving(
+            [Chunk([Choice(Delta(content="Half a s"))], error={"message": "gone"})]
+        )
+        with self.assertRaises(narration.NarrationError):
+            drive(narrator_with(client), a_prompt())
+        self.assertTrue(client.streams[-1].closed, "the stream was left open")
+
+
+def client_that_cannot_connect():
+    """One that fails before there is any stream to give back."""
+
+    class Refusing:
+        async def create(self, **kwargs):
+            raise RuntimeError("no route to host")
+
+    class Chat:
+        completions = Refusing()
+
+    class Client:
+        chat = Chat()
+
+    return Client()
+
+
+class NothingToCloseTests(unittest.TestCase):
+    """`create` failing leaves no stream, and the `finally` has to cope.
+
+    Otherwise the cleanup raises a second error on top of the first, and the
+    one the caller sees is about a missing attribute rather than about not
+    reaching the model.
+    """
+
+    def test_a_narrated_turn_that_never_opened_a_stream(self):
+        with self.assertRaises(narration.NarrationError) as caught:
+            drive(narrator_with(client_that_cannot_connect()), a_prompt())
+        self.assertIn("no route to host", str(caught.exception))
+
+    def test_a_closing_pass_that_never_opened_a_stream(self):
+        # The close pass swallows this at the caller — a scene closes without
+        # its recap rather than refusing to close — so the error has to be the
+        # real one for the log to be worth reading.
+        with self.assertRaises(narration.NarrationError) as caught:
+            close_with(narrator_with(client_that_cannot_connect()), a_prompt())
+        self.assertIn("no route to host", str(caught.exception))
 
 
 class FragmentTests(unittest.TestCase):
