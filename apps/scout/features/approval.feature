@@ -69,7 +69,7 @@ Feature: Approving what is about to be sent
     And I have added an answer to that package
     When I read that package
     Then the resume should be marked as checked against the master resume
-    And the answer should be marked as not checked
+    And the answer should be marked as scanned rather than checked
 
   # The honesty rule, as its own scenario because it is the one thing here that
   # cannot be allowed to drift. A package that reads as a clean bill of health
@@ -97,6 +97,56 @@ Feature: Approving what is about to be sent
     And I assemble a package for that posting
     Then scout should refuse it
     And scout should say there is no tailored resume for that posting yet
+
+  # ------------------------------------------------- scanning what it cannot check
+
+  # The check and the scan are different instruments and the package must not
+  # pretend otherwise. A tailored resume is a projection of the master, so a
+  # name that is not in the master is invention and tailoring refuses it. An
+  # answer is composition — "why do you want to work here" is not a projection
+  # of anything — so the same finding is a question rather than a verdict, and
+  # refusing it would be wrong.
+  #
+  # So answers are scanned and never refused, and what the scan finds is put in
+  # front of somebody rather than acted on.
+
+  Scenario: An answer that claims what the posting asked for
+    Given I have assembled a package for that posting
+    When I add an answer claiming "Kubernetes", which the posting asks for
+    Then the answer should be flagged for 1 thing to check
+    And the package should say the posting asks for "Kubernetes"
+    And the package should say the master resume does not mention it
+
+  # The riskiest shape there is, and the reason the posting is scanned too: a
+  # claim that appears in the posting and not in the resume is the exact thing
+  # somebody writes because a company asked for it.
+  Scenario: A name in neither is worth less attention
+    Given I have assembled a package for that posting
+    When I add an answer mentioning "Fortran", which nobody asked for
+    Then the answer should be flagged for 1 thing to check
+    And the package should not say the posting asks for "Fortran"
+
+  Scenario: An answer drawn from what I have actually done
+    Given I have assembled a package for that posting
+    When I add an answer mentioning only "Postgres" and "Terraform"
+    Then the answer should have nothing flagged
+
+  # Never refused. An answer that mentions something new is usually a person
+  # writing a sentence, and a tool that refuses those is one nobody uses.
+  Scenario: A flagged answer is still in the package
+    Given I have assembled a package for that posting
+    When I add an answer claiming "Kubernetes", which the posting asks for
+    Then the answer should still be in the package
+    And scout should not have refused it
+
+  # The distinction, in the artifact itself. "Scanned" is not "checked", and a
+  # package that blurs them is the failure this whole feature exists to avoid.
+  Scenario: The package says scanning is not checking
+    Given I have assembled a package for that posting
+    And I have added an answer to that package
+    When I read that package
+    Then the package should say answers are scanned rather than checked
+    And the package should say what the scan can and cannot find
 
   # ---------------------------------------------------------------- approving
 

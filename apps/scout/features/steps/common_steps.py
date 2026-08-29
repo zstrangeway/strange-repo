@@ -59,8 +59,10 @@ def step_saved_posting(context, title, company):
     body = (
         f"{title} at {company}. We are looking for somebody to own the "
         "platform, working in Python against Postgres, with Terraform "
-        "describing the infrastructure underneath it."
+        "describing the infrastructure underneath it. Kubernetes experience "
+        "is a plus."
     )
+    context.posting_body = body
     run(context, "save", "--text", body, "--title", title, "--company", company)
     assert context.exit_code == 0, context.output
     context.ref = context.stdout.splitlines()[0].removeprefix("Saved ").strip()

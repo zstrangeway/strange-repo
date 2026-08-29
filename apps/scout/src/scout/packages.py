@@ -34,15 +34,20 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from . import postings
+from . import grounding, postings, resumes
 from .errors import ScoutError
 
-# What the deterministic check cannot speak to, said in the artifact itself
+# The difference between the two instruments, said in the artifact itself
 # rather than only in a README nobody reads at approval time.
-UNCHECKED_MEANS = (
-    "Text scout did not write is not checked against the master resume: "
-    "an answer about why you want the job is composition, not a projection "
-    "of anything, and there is nothing to check it against. Read it."
+SCANNED_MEANS = (
+    "Answers are SCANNED, not checked. A tailored resume is a projection of "
+    "your master resume, so anything new in it is invention and tailoring "
+    "refuses it outright. An answer is composition — there is nothing to "
+    "project it from — so scout only points at names in it that your master "
+    "resume does not have, and never refuses one.\n"
+    'The scan finds names. It cannot tell "I would like to learn this" from '
+    '"I am an expert in this", and it cannot see a claim made without '
+    "naming anything. Read the answers."
 )
 
 
@@ -63,10 +68,24 @@ class Item:
     checked: bool
     note: str | None = None
     detail: str | None = None
+    # Advisory, and only ever on an answer: what the scan noticed. Never a
+    # reason to refuse anything — see SCANNED_MEANS.
+    flagged: tuple[grounding.Finding, ...] = ()
 
     @property
     def heading(self) -> str:
         return f"{self.label}, {self.detail}" if self.detail else self.label
+
+    @property
+    def verdict(self) -> str:
+        """What scout is willing to say about this item, and no more."""
+        if self.checked:
+            return "checked"
+        if not self.flagged:
+            # Not "checked". Nothing was flagged, which is a weaker claim and
+            # has to read like one.
+            return "scanned, nothing flagged"
+        return f"scanned, {len(self.flagged)} to check"
 
     def fingerprint(self) -> list[str]:
         return [self.kind, self.label, self.body]
@@ -111,8 +130,15 @@ class Package:
     def render(self) -> str:
         lines = [f"Package for {self.posting.ref}", ""]
         for item in self.items:
-            mark = "checked" if item.checked else "NOT CHECKED"
-            lines.append(f"--- {item.heading}  [{mark}]")
+            lines.append(f"--- {item.heading}  [{item.verdict}]")
+            for finding in item.flagged:
+                if finding.from_posting:
+                    lines.append(
+                        f'    "{finding.term}" — the posting asks for this, and '
+                        "your master resume does not mention it"
+                    )
+                else:
+                    lines.append(f'    "{finding.term}" — not in your master resume')
             if item.note:
                 lines.append(item.note)
             lines.append("")
@@ -129,16 +155,16 @@ class Package:
             # Said plainly, every time. A package that reads as a clean bill of
             # health for text nothing examined converts somebody's caution into
             # confidence, and is wrong to.
-            unchecked = [item.heading for item in self.items if not item.checked]
+            scanned = [item.heading for item in self.items if not item.checked]
             lines.append(
                 "NOT everything in this package was checked. Checked against "
                 "the master resume: "
                 + ", ".join(item.heading for item in self.items if item.checked)
-                + ". Not checked: "
-                + ", ".join(unchecked)
+                + ". Scanned only: "
+                + ", ".join(scanned)
                 + "."
             )
-            lines.append(UNCHECKED_MEANS)
+            lines.append(SCANNED_MEANS)
 
         lines.append("")
         if self.approved:
@@ -204,6 +230,13 @@ def read(connection: sqlite3.Connection, ref: str) -> Package:
         )
 
     items: list[Item] = []
+    # Read once for every answer below. A missing master is not an error here:
+    # the package still shows what is about to be sent, and says it could not
+    # scan it — which is more use than refusing to render at all.
+    try:
+        master = resumes.read_master()
+    except ScoutError:
+        master = ""
     resume = _latest_resume(connection, posting.id)
     items.append(
         Item(
@@ -228,6 +261,7 @@ def read(connection: sqlite3.Connection, ref: str) -> Package:
                 label=answer["question"],
                 body=answer["body"],
                 checked=False,
+                flagged=tuple(grounding.scan(master, answer["body"], posting.body)),
             )
         )
 

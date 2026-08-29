@@ -71,14 +71,15 @@ def step_resume_checked(context):
     assert "[checked]" in line, line
 
 
-@then("the answer should be marked as not checked")
-def step_answer_unchecked(context):
+@then("the answer should be marked as scanned rather than checked")
+def step_answer_scanned(context):
     line = next(
         line
         for line in context.output.splitlines()
         if line.startswith("--- ") and "Resume" not in line
     )
-    assert "[NOT CHECKED]" in line, line
+    assert "scanned" in line, line
+    assert "[checked]" not in line, line
 
 
 @then("the package should say in words that not everything in it was checked")
@@ -90,7 +91,114 @@ def step_says_not_everything(context):
 
 @then("the package should say what the check does not cover")
 def step_says_what_is_not_covered(context):
-    assert "is not checked against the master resume" in context.output, context.output
+    assert "Answers are SCANNED, not checked" in context.output, context.output
+
+
+# ------------------------------------------------------------------ scanning
+
+
+@when('I add an answer claiming "{term}", which the posting asks for')
+def step_answer_claiming(context, term):
+    assert term.lower() in context.posting_body.lower(), (
+        f"{term} is not in the posting this scenario claims it is in"
+    )
+    run(
+        context,
+        "answer",
+        context.ref,
+        "Why do you want to work here?",
+        f"I have deep experience with {term} and would bring it here.",
+    )
+    context.answered = "Why do you want to work here?"
+
+
+@when('I add an answer mentioning "{term}", which nobody asked for')
+def step_answer_mentioning(context, term):
+    assert term.lower() not in context.posting_body.lower(), (
+        f"{term} is in the posting, so this scenario is not testing what it says"
+    )
+    run(
+        context,
+        "answer",
+        context.ref,
+        "Anything else?",
+        f"I once wrote a great deal of {term} and remember it fondly.",
+    )
+    context.answered = "Anything else?"
+
+
+@when('I add an answer mentioning only "{one}" and "{two}"')
+def step_answer_from_master(context, one, two):
+    run(
+        context,
+        "answer",
+        context.ref,
+        "Why do you want to work here?",
+        f"The work I keep choosing is {one} and {two}, which is what this is.",
+    )
+    context.answered = "Why do you want to work here?"
+
+
+@then("the answer should be flagged for {count:d} thing to check")
+def step_flagged(context, count):
+    _package(context)
+    line = next(
+        line
+        for line in context.output.splitlines()
+        if line.startswith("--- ") and "Resume" not in line
+    )
+    assert f"scanned, {count} to check" in line, line
+
+
+@then("the answer should have nothing flagged")
+def step_nothing_flagged(context):
+    _package(context)
+    line = next(
+        line
+        for line in context.output.splitlines()
+        if line.startswith("--- ") and "Resume" not in line
+    )
+    assert "nothing flagged" in line, line
+
+
+@then('the package should say the posting asks for "{term}"')
+def step_says_posting_asks(context, term):
+    _package(context)
+    assert f'"{term}" — the posting asks for this' in context.output, context.output
+
+
+@then('the package should not say the posting asks for "{term}"')
+def step_says_posting_does_not_ask(context, term):
+    _package(context)
+    assert f'"{term}" — the posting asks for this' not in context.output, context.output
+    assert f'"{term}" — not in your master resume' in context.output, context.output
+
+
+@then("the package should say the master resume does not mention it")
+def step_says_master_lacks_it(context):
+    assert "your master resume does not mention it" in context.output, context.output
+
+
+@then("the answer should still be in the package")
+def step_answer_still_there(context):
+    _package(context)
+    assert context.answered in context.output, context.output
+
+
+@then("scout should not have refused it")
+def step_not_refused(context):
+    assert context.exit_code == 0, context.output
+
+
+@then("the package should say answers are scanned rather than checked")
+def step_says_scanned(context):
+    assert "Answers are SCANNED, not checked" in context.output, context.output
+
+
+@then("the package should say what the scan can and cannot find")
+def step_says_scan_limits(context):
+    assert "The scan finds names" in context.output, context.output
+    assert "cannot tell" in context.output, context.output
 
 
 @then("the package should say the whole of it was checked")

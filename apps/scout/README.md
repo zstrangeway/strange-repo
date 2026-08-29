@@ -129,13 +129,31 @@ scout approve orrery-staff-engineer
 
 Two rules make this worth having rather than a rubber stamp.
 
-**A package shows everything; the check covers what it honestly can.** The
-tailored resume is checked against your master. A cover letter is not, and
-cannot be — "why do you want to work here" is composition, not a projection of
-your resume, and there is nothing to check it against. So every item is marked
-`[checked]` or `[NOT CHECKED]`, and a package containing anything unchecked
-says so in words. The failure this exists to prevent is not unchecked text; it
-is unchecked text presented as though something had verified it.
+**Two instruments, and the package never confuses them.** A tailored resume is
+*checked*: it is a projection of your master, so anything new in it is
+invention and tailoring refuses the draft outright. An answer is *scanned*:
+"why do you want to work here" is composition, there is nothing to project it
+from, so scout points at names your master does not have and **never refuses
+one**. Refusing "I'd like to learn Kubernetes" would be wrong.
+
+```
+--- Resume, version 1  [checked]
+--- Why do you want to work here?  [scanned, 2 to check]
+    "Kubernetes" — the posting asks for this, and your master resume does not mention it
+    "Fortran" — not in your master resume
+```
+
+What the posting asks for comes first, because that is the risky shape: a
+claim that is in the advert and not in your resume is the one people make
+*because* they were asked for it.
+
+An answer with nothing flagged reads `scanned, nothing flagged` — deliberately
+not `checked`. It is a weaker claim and has to look like one. The scan finds
+names; it cannot tell "I'd like to learn this" from "I'm an expert in this",
+and it cannot see a claim made without naming anything. The package says so.
+
+The failure all of this exists to prevent is not unchecked text. It is
+unchecked text presented as though something had verified it.
 
 **Approval is of those exact words, not of that posting.** Re-tailoring the
 resume, or changing or adding an answer, withdraws it — and the package then

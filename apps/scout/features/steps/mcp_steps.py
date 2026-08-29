@@ -221,7 +221,7 @@ def step_reply_every_item(context):
 @then("the reply should say which of them were checked")
 def step_reply_checked(context):
     assert "[checked]" in context.reply_text, context.reply_text
-    assert "[NOT CHECKED]" in context.reply_text, context.reply_text
+    assert "scanned" in context.reply_text, context.reply_text
 
 
 @then("the reply should say what changed in the resume")

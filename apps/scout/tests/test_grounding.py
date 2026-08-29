@@ -146,3 +146,37 @@ Python
         # are not checked against that employer's.
         draft = self.MASTER + "\n## Education\n\n2014–2017\n"
         self.assertEqual(grounding.check(self.MASTER, draft), [])
+
+
+class Scanning(unittest.TestCase):
+    """The advisory sibling of `check`, for text that is not a projection."""
+
+    POSTING = "We want deep Kubernetes experience and strong Postgres skills."
+
+    def test_it_refuses_nothing_and_returns_what_it_noticed(self):
+        found = grounding.scan(MASTER, "I am an expert in Kubernetes.", self.POSTING)
+        self.assertEqual([f.term for f in found], ["Kubernetes"])
+
+    def test_a_name_the_posting_asks_for_is_marked_as_such(self):
+        # The riskiest shape: in the advert, not in the resume, which is what
+        # somebody writes because they were asked for it.
+        found = grounding.scan(MASTER, "I am an expert in Kubernetes.", self.POSTING)
+        self.assertTrue(found[0].from_posting)
+
+    def test_a_name_in_neither_is_not(self):
+        found = grounding.scan(MASTER, "I once wrote Fortran.", self.POSTING)
+        self.assertEqual([f.term for f in found], ["Fortran"])
+        self.assertFalse(found[0].from_posting)
+
+    def test_what_the_posting_asks_for_comes_first(self):
+        found = grounding.scan(
+            MASTER, "I know Fortran and Kubernetes well.", self.POSTING
+        )
+        self.assertEqual([f.term for f in found], ["Kubernetes", "Fortran"])
+
+    def test_words_from_the_master_are_not_flagged(self):
+        self.assertEqual(grounding.scan(MASTER, "I ran the Postgres upgrade."), [])
+
+    def test_it_works_with_no_posting_to_compare_against(self):
+        found = grounding.scan(MASTER, "I am an expert in Kubernetes.")
+        self.assertFalse(found[0].from_posting)

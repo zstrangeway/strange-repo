@@ -83,6 +83,10 @@ class Finding:
     # Only dates carry one: a year is not wrong on its own, only wrong under
     # a particular employer.
     employer: str | None = None
+    # Set by `scan` only. A name the posting asks for and the master does not
+    # have is the riskiest shape there is — it is what somebody writes because
+    # a company asked for it — so it is worth saying which findings are that.
+    from_posting: bool = False
 
     def __str__(self) -> str:
         if self.employer is not None:
@@ -222,6 +226,32 @@ def _prose_findings(master: Master, draft: str) -> list[Finding]:
                 findings.append(Finding("term", token.strip(".,;:")))
             starts_sentence = token.endswith((".", "!", "?", ":"))
     return findings
+
+
+def scan(master_markdown: str, text: str, posting: str = "") -> list[Finding]:
+    """Names in prose that the master resume does not support.
+
+    The advisory sibling of ``check``. A tailored resume is a projection of
+    the master, so a name that is not in it is invention and tailoring refuses
+    the draft. An answer to "why do you want to work here" is composition, and
+    the same finding is a question for a person rather than a verdict — so
+    this returns what it noticed and refuses nothing.
+
+    Findings the posting also mentions come first, because that is the risky
+    shape: a claim that is in the job advert and not in the resume is the one
+    somebody makes because they were asked for it.
+    """
+    master = Master.parse(master_markdown)
+    asked_for = _words(posting)
+    findings = [
+        Finding(
+            finding.kind,
+            finding.term,
+            from_posting=normalise(finding.term) in asked_for,
+        )
+        for finding in _prose_findings(master, text)
+    ]
+    return sorted(findings, key=lambda finding: not finding.from_posting)
 
 
 def check(master_markdown: str, draft: str) -> list[Finding]:

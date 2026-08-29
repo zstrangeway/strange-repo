@@ -137,7 +137,7 @@ class Rendering(InAScratchHome):
             packages.add_answer(connection, self.ref, "Why us?", "Because.")
             rendered = packages.read(connection, self.ref).render()
         self.assertIn("NOT everything in this package was checked", rendered)
-        self.assertIn(packages.UNCHECKED_MEANS, rendered)
+        self.assertIn(packages.SCANNED_MEANS, rendered)
 
     def test_a_withdrawn_approval_says_what_moved(self):
         with db.connect() as connection:
@@ -206,3 +206,46 @@ class Postings(InAScratchHome):
             connection.execute("DELETE FROM postings WHERE id = ?", (posting.id,))
             left = connection.execute("SELECT COUNT(*) AS n FROM answers").fetchone()
         self.assertEqual(left["n"], 0)
+
+
+class Scanning(InAScratchHome):
+    """What the package says about text it can only scan."""
+
+    def setUp(self):
+        super().setUp()
+        (self.home / "resumes").mkdir(parents=True, exist_ok=True)
+        (self.home / "resumes" / "master.md").write_text(MASTER, encoding="utf-8")
+        self.ref = self.save()
+        with db.connect() as connection:
+            tailoring.tailor(connection, self.ref, FakeProvider())
+
+    def _render(self, answer):
+        with db.connect() as connection:
+            packages.add_answer(connection, self.ref, "Why us?", answer)
+            return packages.read(connection, self.ref).render()
+
+    def test_an_answer_with_nothing_flagged_is_not_called_checked(self):
+        # The weaker claim has to read like one. "Nothing flagged" is not
+        # "verified", and a package that blurs them is the failure this whole
+        # feature exists to avoid.
+        rendered = self._render("I ran the Postgres upgrade and liked it.")
+        self.assertIn("scanned, nothing flagged", rendered)
+        self.assertNotIn("Why us?  [checked]", rendered)
+
+    def test_a_flagged_answer_counts_what_it_found(self):
+        rendered = self._render("I am an expert in Kubernetes and in Fortran.")
+        self.assertIn("scanned, 2 to check", rendered)
+
+    def test_the_resume_keeps_its_stronger_verdict(self):
+        rendered = self._render("I am an expert in Kubernetes.")
+        self.assertIn("Resume, version 1  [checked]", rendered)
+
+    def test_a_package_with_no_master_resume_still_renders(self):
+        # It cannot scan without one, but showing what is about to be sent is
+        # more use than refusing to render at all.
+        with db.connect() as connection:
+            packages.add_answer(connection, self.ref, "Why us?", "Anything.")
+        (self.home / "resumes" / "master.md").unlink()
+        with db.connect() as connection:
+            rendered = packages.read(connection, self.ref).render()
+        self.assertIn("Why us?", rendered)
