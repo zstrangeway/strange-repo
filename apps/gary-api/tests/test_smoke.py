@@ -125,8 +125,22 @@ class ToolTests(unittest.TestCase):
         self.assertEqual(self.state.minutes, before + 15)
 
     def test_hit_points_and_conditions_are_acknowledged(self):
-        self.assertIn("damage", self.call("damage", {"character": "Bramble"})[0])
+        # The standing number, not only the delta — the router answers this
+        # way now, and a harness that said "noted as damaged" would be back
+        # to letting a model keep its own books.
+        hurt, _ = self.call("damage", {"character": "Bramble", "amount": 2})
+        self.assertIn("Bramble took 2", hurt)
+        self.assertIn("now on 4 of 8", hurt)
         self.assertIn("condition", self.call("add_condition", {})[0])
+
+    def test_healing_gives_them_back_and_says_where_that_leaves_them(self):
+        back, _ = self.call("heal", {"character": "Bramble", "amount": 1})
+        self.assertIn("Bramble recovered 1", back)
+        self.assertIn("now on 7 of 8", back)
+
+    def test_hurting_somebody_who_is_not_here_still_answers(self):
+        summary, _ = self.call("damage", {"character": "a ghost", "amount": 2})
+        self.assertIn("a ghost took 2", summary)
 
     def test_a_tool_gary_does_not_have(self):
         summary, _ = self.call("summon_dragon", {})

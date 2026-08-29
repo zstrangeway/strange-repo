@@ -320,7 +320,20 @@ def run_tool(call, ruleset, state, log, closing=False):
             state.minutes += int(arguments.get("minutes") or 0)
             return f"{arguments.get('minutes')} minutes passed", None
         if call.name in ("damage", "heal"):
-            return f"{arguments.get('character')} is noted as {call.name}d", None
+            # The standing number, as the router now answers it. This used to
+            # say "noted as damaged" and nothing else, which is the same
+            # delta-only answer that let a model keep its own books.
+            hurt = _fighter(state, arguments.get("character", ""))
+            verb = "took" if call.name == "damage" else "recovered"
+            amount = int(arguments.get("amount") or 0)
+            if hurt is None:
+                return f"{arguments.get('character')} {verb} {amount}", None
+            moves = -1 if call.name == "damage" else 1
+            hurt.hp = min(hurt.max_hp, max(0, hurt.hp + moves * amount))
+            return (
+                f"{hurt.name} {verb} {amount} — {hurt.name} is now on "
+                f"{hurt.hp} of {hurt.max_hp}"
+            ), None
         if call.name in ("add_condition", "remove_condition"):
             return f"condition {call.name.split('_')[0]}ed", None
         if call.name == "award_experience":
@@ -421,7 +434,10 @@ def run_tool(call, ruleset, state, log, closing=False):
                     f"{attacker.name} hits {target.name}",
                 )
                 target.hp = max(0, target.hp - hurt.total)
-                said = f"{attacker.name} hit {target.name} for {hurt.total}"
+                said = (
+                    f"{attacker.name} hit {target.name} for {hurt.total} — "
+                    f"{target.name} is now on {target.hp} of {target.max_hp}"
+                )
             _advance(state)
             return (
                 f"{said} ({swing.roll.total} against {guard}). Their turn is over."

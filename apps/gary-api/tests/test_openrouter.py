@@ -812,16 +812,31 @@ class WhatGaryIsToldToDoTests(unittest.TestCase):
         text = openrouter.system_prompt(a_prompt())
         self.assertIn("never say what level", text)
 
-    def test_gary_is_told_an_attack_already_took_the_hit_points_off(self):
-        # Found by a real smoke run, once the harness started answering
-        # `attack` the way the router does. Told "hit Bramble for 7", the
-        # model narrated the blow and then called `damage` for 7 as well, so
-        # one swing cost fourteen. It was obeying the rule directly above —
-        # never state that the world changed without recording it — which is
-        # exactly why this one has to be said. Pinning that gary is told is
-        # all this can do: the next run said it anyway. See BACKLOG item 9.
+    def test_the_attack_tool_says_it_already_took_the_hit_points_off(self):
+        # Found by a real smoke run. Told "hit Bramble for 7", the model
+        # narrated the blow and then called `damage` for 7 as well, so one
+        # swing cost fourteen — and it was right to, on what it had been
+        # told. `attack` said only that the rules "say" what a swing costs,
+        # which is about who authors the number; `damage` said "take hit
+        # points off a character", which is exactly the job the model
+        # believed was still outstanding. The schema is what a model reads at
+        # the moment it picks a tool, so this is where it has to be true.
+        described = {one["function"]["name"]: one for one in openrouter.schema()}
+        attack = str(described["attack"])
+        self.assertIn("take the hit points off", attack)
+        self.assertIn("Do not call `damage` as well", attack)
+
+    def test_the_damage_tool_says_it_is_not_for_a_swing(self):
+        described = {one["function"]["name"]: one for one in openrouter.schema()}
+        self.assertIn("is not a swing", str(described["damage"]))
+
+    def test_gary_is_told_recording_twice_is_not_recording(self):
+        # The prose half. The schema above is read when picking a tool; this
+        # is read when deciding whether the turn is finished, and the rule it
+        # qualifies — never state that the world changed without recording it
+        # — is the one the model was following when it double-wrote.
         text = openrouter.system_prompt(a_prompt())
-        self.assertIn("do not also call `damage` for the same blow", text)
+        self.assertIn("does not mean recording something twice", text)
 
 
 class LongMemoryTests(unittest.TestCase):

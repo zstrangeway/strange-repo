@@ -123,10 +123,36 @@ the fact that was already there rather than adding a second one beside it. It
 stayed inside the closing tool set and came back with a 61-word recap. The
 close pass had never been run against a real model before this.
 
-**What no run has covered, and what is therefore still unproven:** nothing in
-the tool set now, but every scene has been run against one free model only,
-and the first two runs ever recorded disagreed with each other. A second model
-on the same five scenes is the cheapest thing left here.
+**Runs 2026-08-29, `--fight`, three models, after the contract fix in item 9.**
+Four runs, and the double-write did not recur once — against two out of two
+before the fix, on the same small model.
+
+| model | tools called | double-wrote |
+| --- | --- | --- |
+| nemotron-3-super-120b:free | `begin_combat`, then asked the player | no |
+| nemotron-3-super-120b:free | `begin_combat`, 5× `attack`, `end_combat`, `award_experience` 25 | no |
+| nemotron-3-ultra-550b:free | `begin_combat`, `attack`, stopped at the player's turn | no |
+| minimax-m3:free | `begin_combat`, `attack` | no |
+
+**So the answer to "is the model smart enough" is yes, and it was never the
+question.** The same free 120B that double-wrote twice out of two now runs a
+whole fight: five swings through the engine, four graded degrees it narrated
+accurately, the fight ended, and 25 experience awarded inside the 300 bound.
+The 550B and minimax added nothing the 120B could not do — they were simply
+also correct. What changed between the two sets of runs was the tool schema,
+not the model.
+
+Two smaller things from these runs. The 550B and minimax both correctly
+stopped at "Your turn." rather than taking the player's action, which is the
+rule `world.render` states in its own line and the one most worth not losing.
+And the 550B's first attempt came back "Upstream error from Nvidia: Service
+temporarily overloaded" — the run reported `UNREACHABLE` and exited 1 rather
+than reporting an empty turn, which is the failure path working.
+
+**What no run has covered, and what is therefore still unproven:** the
+`--opening`, `--won` and `--close` scenes have each been run against one free
+model only. `--fight` now has four runs across three, which is the shape the
+others want.
 
 ### 2. `play.py` is a quarter of the API in one file
 
@@ -211,34 +237,52 @@ lines are in the browser console and nobody collects them. Between the two, the
 only durable record of a bad turn is gary-api's log, and only if somebody thinks
 to look within the retention window.
 
-### 9. A model can take the same hit points off twice in a fight
+### 9. Tool results were deltas, and two tool descriptions disagreed
 
-Found by the `--fight` smoke run above, and **still open**. `attack` resolves
-the swing, rolls the damage, writes the `DAMAGED` event and moves the order
-on. Nothing stops gary then calling `damage` for the same blow, and a real
-model did exactly that on two runs out of two.
+Found by the `--fight` smoke run, and worth keeping because **the first
+diagnosis was wrong**. A real model, told "Bramble hit Drowned Corpse for 2",
+then called `damage` for 2 as well, so one swing wounded twice. It looked like
+a model ignoring its instructions. It was not.
 
-The second run is the one worth reading. `attack` answered "Bramble hit
-Drowned Corpse for 2", the world went 22 → 20, gary called `damage` 2 on top
-so the world went to 18 — and then narrated "it's still 20 hit points
-strong". Gary's own prose and gary's own world disagreed by one application of
-the damage, which is the exact failure the record-what-you-narrate rule exists
-to prevent, arrived at by obeying it.
+Read what the model was actually given at the moment it chose:
 
-**A prompt rule was tried and did not work.** `openrouter.py` now says plainly
-that `attack` is the whole of a swing and not to call `damage` for the same
-blow, pinned by
-`test_gary_is_told_an_attack_already_took_the_hit_points_off`. The free model
-above still did it on the very next run. The rule is kept because it costs
-nothing and may hold on a stronger model, but it should not be believed: it
-has been tried once and failed once, and no run has yet shown it working.
+    "attack": "Have whoever is up swing at somebody. Whether it lands and
+               what it costs are the rules' to say, not yours."
+    "damage": "Take hit points off a character."
 
-The real fix is an engine-level refusal — `damage` naming a fighter that an
-`attack` in the same turn already hurt is a second application of one blow,
-and the router could say so the way it refuses everything else it will not do.
-That is a change to what combat permits, though, and there may be a legitimate
-case for two lots of damage in one turn (a trap and a swing), so it wants
-agreeing before it is built rather than after.
+`attack` said the rules *say* what a swing costs — which is about who authors
+the number, not about whether it has been applied — and never said the hit
+points come off. `damage` described exactly the job the model believed was
+still outstanding. **The model read the contract correctly and the contract
+was wrong.** A prompt rule was tried first and the very next run ignored it,
+which is the clue that should have been followed sooner: prose at the end of a
+rules list is not where a model decides which tool to call, and the schema is.
+
+The second half was that every result reported a delta and never a standing
+number. `attack` answered "hit for 2"; `damage` answered "took 2". Neither said
+what the target was now on. So within a turn gary kept its own books against a
+world snapshot taken before the turn began, nothing ever contradicted a wrong
+write, and on one run gary narrated a corpse at 20 while the world had it at
+18 — its arithmetic right, its second write invisible to it.
+
+Both are fixed. `attack` now says it takes the hit points off and moves the
+turn on and not to call `damage` as well; `damage` says it is for hurt that is
+not a swing. `attack`, `damage` and `heal` all answer with the standing number
+— "Bramble took 2 — Bramble is now on 4 of 8" — so gary can never be more than
+one result behind the world, and the smoke harness answers the same way so it
+cannot drift from the router again.
+
+**Two things are still open, and both need a real model rather than an
+argument.** Whether the fix holds across models, and whether the engine should
+refuse a `damage` naming somebody an `attack` already hurt this turn. That
+refusal is a backstop rather than the fix now, and it would forbid a trap and
+a swing landing on the same person in one turn, so it wants agreeing before it
+is built. The runs so far are recorded in item 1.
+
+The generalisation is the valuable part: **when a model does the wrong thing,
+read the contract before blaming the model.** Of the findings in this file,
+three were this harness or this schema being wrong and one — the award — was a
+genuine gap in what gary was told. The ratio is not in the model's favour.
 
 ## Cheap, and stale things get believed
 

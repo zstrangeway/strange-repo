@@ -181,7 +181,12 @@ def schema(offered: tuple[str, ...] | None = None) -> list[dict]:
         ),
         "move_party": "Record that the party has moved somewhere new.",
         "remember": "Record a fact about the world so it is still true later.",
-        "damage": "Take hit points off a character.",
+        "damage": (
+            "Take hit points off somebody for something that is not a swing "
+            "in a fight — a trap, a fall, poison, the room itself. A swing "
+            "is `attack`, which takes them off for you; calling this as well "
+            "would take them off twice."
+        ),
         "heal": "Give hit points back to a character.",
         "add_condition": "Record that a character is under a condition.",
         "remove_condition": "Record that a condition has ended.",
@@ -195,8 +200,10 @@ def schema(offered: tuple[str, ...] | None = None) -> list[dict]:
             "the order are rolled for you and you never decide them."
         ),
         "attack": (
-            "Have whoever is up swing at somebody. Whether it lands and what "
-            "it costs are the rules' to say, not yours."
+            "Have whoever is up swing at somebody. This is the whole of a "
+            "swing: the rules roll it, decide whether it lands, take the hit "
+            "points off, move the turn on and tell you what happened. Do not "
+            "call `damage` as well — that is a second wound for one blow."
         ),
         "end_turn": (
             "Finish the current combatant's turn and move to the next. Never "
@@ -279,12 +286,11 @@ def system_prompt(prompt: Prompt) -> str:
                 "for it. You never say what level anybody is or that they "
                 "levelled; the rules work that out from the total and tell "
                 "you, and you narrate what they say.\n"
-                "- `attack` is the whole of a swing. The rules roll it, "
-                "decide whether it landed, take the hit points off and move "
-                "the turn on, and tell you what happened. Narrate that — and "
-                "do not also call `damage` for the same blow. The rule above "
-                "about recording what you narrate is what makes that "
-                "tempting, and doing it takes the hit points off twice."
+                "- The rule above is about things you narrate that no tool "
+                "has recorded. It does not mean recording something twice: "
+                "`attack` has already taken the hit points off before it "
+                "answers you, so calling `damage` for the same blow wounds "
+                "somebody twice for one swing."
             ),
             (
                 "What is yours and what is theirs. The world is yours: what "

@@ -1230,7 +1230,17 @@ async def _fighting(
             "",
         )
         frames.extend(changed)
-        said = f"{attacker.name} hit {target.name} for {hurt.total}"
+        # What they are now at, not only what came off. Every result here used
+        # to report a delta and leave gary to do the arithmetic against a
+        # world snapshot taken before the turn began — so a wrong write was
+        # invisible until the next turn, and a real model narrated a monster
+        # at 20 while the world had it at 18. Saying the standing number means
+        # gary can never be more than one result behind the truth.
+        left = max(0, target.hp - hurt.total)
+        said = (
+            f"{attacker.name} hit {target.name} for {hurt.total} — "
+            f"{target.name} is now on {left} of {target.max_hp}"
+        )
 
     # Swinging is what taking a turn *is* here — a turn holds one action and
     # nothing else is modelled — so the order moves on by itself. Which is
@@ -1446,10 +1456,27 @@ async def _run(
             amount = arguments.get("amount")
             kind = world.DAMAGED if call.name == "damage" else world.HEALED
             verb = "took" if call.name == "damage" else "recovered"
+            # Folded for the same reason the attack result is: a delta alone
+            # leaves gary keeping its own books, and its books and the world's
+            # then disagree without either side noticing. The row holds the
+            # sheet as it was created, so the standing number has to come from
+            # the log.
+            # Not guarded: _either_side found this either in the party or in
+            # the campaign's adversaries, and world.of folds every one of
+            # both, so whoever it found is in the world it just built. A
+            # fallback here would be a branch nothing can reach.
+            standing = (await world.of(database, campaign.id)).anyone(
+                str(character.id)
+            )
+            moves = -1 if call.name == "damage" else 1
+            now = min(
+                standing.max_hp, max(0, standing.hp + moves * int(amount or 0))
+            )
             return await moved(
                 kind,
                 {whose: str(character.id), "amount": amount},
-                f"{character.name} {verb} {amount}",
+                f"{character.name} {verb} {amount} — {character.name} is now "
+                f"on {now} of {standing.max_hp}",
             )
 
         if call.name in ("add_condition", "remove_condition"):
