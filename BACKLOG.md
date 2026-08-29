@@ -184,7 +184,7 @@ others want.
 `_run`) and the turn runner. It has absorbed every feature since campaigns —
 scenes, the opening, combat, character creation, advancement — and each one
 added to the same module rather than beside it. It was 1679 when this entry was
-written and the number was left stale for a fortnight, which is item 5 happening
+written and the number was left stale for a fortnight, which is item 4 happening
 to this file.
 
 Nothing is wrong with it today. It is simply where the next bug will be, and
@@ -192,23 +192,7 @@ where a change will be hardest to make confidently. The seams are already
 visible in the file: the schemas, the read endpoints, and everything after the
 `# ---- playing` divider at line 933 barely reference each other.
 
-### 3. `packages/ui` is linted by nothing
-
-gary-web's lint is now a gate: `--max-warnings 0`, run first inside its `test`
-task, so it fires wherever the specs do — CI included. That leaves one hole.
-
-Nothing lints `packages/ui`. eslint run from `apps/gary-web` refuses those
-files by name because they sit outside its config's base path, so the twenty
-four components in there have never been linted at all. Its `lint` script used
-to name a task that did not exist, which is how nobody noticed; the task now
-exists and says out loud that it lints nothing.
-
-Closing it means either an eslint of its own in that package — a dependency,
-so worth agreeing before adding — or moving gary-web's config up to the
-workspace root so its base path covers both. The second is cheaper and changes
-what every existing rule applies to, which is the part to look at first.
-
-### 4. gary-api has no error tracking
+### 3. gary-api has no error tracking
 
 Sentry is wired properly on gary-web: a real DSN in `fly.toml`, source maps
 uploaded at build with the release pinned to the commit SHA, events tunnelled
@@ -249,7 +233,7 @@ to look within the retention window.
 
 ## Cheap, and stale things get believed
 
-### 5. Nothing catches a document going stale
+### 4. Nothing catches a document going stale
 
 The three that had drifted are fixed: gary-api's README no longer says there is
 no combat thirty lines below the section describing combat, `fly.toml` no longer
@@ -267,7 +251,7 @@ event kind that no longer exists is a grep. `tests/test_pluggable.py` already
 does exactly this for system names in source; the same crude scan over the
 markdown would have caught "there is no combat" the day `begin_combat` landed.
 
-### 6. Dependency drift, and nothing to drive it
+### 5. Dependency drift, and nothing to drive it
 
 There is no `.github/dependabot.yml`. Ten Dependabot pull requests were opened
 and all ten were closed unmerged — several of them against `apps/example-web`
@@ -279,7 +263,7 @@ CI still pins `actions/checkout@v4`, `actions/setup-node@v4` and
 Dependabot for the paths that exist now, or bump the three actions by hand and
 accept that this is manual.
 
-### 7. The browser suite waits a fixed fifteen seconds, twenty-five times
+### 6. The browser suite waits a fixed fifteen seconds, twenty-five times
 
 **Two causes behind these timeouts are now found and fixed**, and both were
 real bugs rather than slowness — which is the lesson worth keeping: every one
