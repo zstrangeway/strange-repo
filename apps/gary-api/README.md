@@ -15,9 +15,16 @@ database is not enough to impersonate anyone. Two providers naming the same
 address are two accounts, deliberately: gary cannot verify an address, so
 treating a match as proof would be a way into someone else's account.
 
-`GET /health` reports its own state and the database's, always at 200 — the app
-answering is the signal that it is up, and the body carries what it depends on.
-It exists for Fly's health check, which is what `fly.toml` calls.
+`GET /health` reports its own state, the database's, and which build answered,
+always at 200 — the app answering is the signal that it is up, and the body
+carries what it depends on. It exists for Fly's health check, which is what
+`fly.toml` calls.
+
+`version` is the commit the image was built from, passed in as the `RELEASE`
+build arg by the deploy workflow — the image has no `.git` to read one from,
+and Fly's release number counts deploys rather than commits. A build without
+it reports `"unknown"`, which is what every local build says. It is there so
+a deploy that silently did not take can be told from one that did.
 
 ## The game
 
