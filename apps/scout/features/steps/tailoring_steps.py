@@ -115,6 +115,26 @@ def step_already_tailored(context):
     context.version_one = tailored(context, context.ref, 1).read_text(encoding="utf-8")
 
 
+@given("I have tailored my resume for that posting")
+def step_have_tailored(context):
+    set_draft(context, _swap_experience(context.master))
+    run(context, "tailor", context.ref, "--provider", context.provider)
+    assert context.exit_code == 0, context.output
+
+
+@when("I tailor my resume for that posting again")
+def step_tailor_again(context):
+    """A different draft, so the words actually change.
+
+    Re-tailoring to the same words would leave the fingerprint identical and
+    the approval standing, which is correct but tests nothing.
+    """
+    draft = _swap_experience(context.master)
+    set_draft(context, draft.replace("- Ran the release process every week\n", ""))
+    run(context, "tailor", context.ref, "--provider", context.provider)
+    assert context.exit_code == 0, context.output
+
+
 @when("I tailor my resume for a posting that does not exist")
 def step_tailor_missing(context):
     run(context, "tailor", "no-such-posting", "--provider", context.provider)
@@ -171,7 +191,7 @@ def step_shows_draft(context):
 
 
 @then("scout should tell me I can tailor again")
-def step_tailor_again(context):
+def step_says_tailor_again(context):
     assert "tailor again" in context.output, context.output
 
 

@@ -20,27 +20,6 @@ folder of things nobody is going to build reads like a roadmap.
 
 ## Waiting
 
-**scout's approval step** — [`scout-approval.feature`](scout-approval.feature).
-
-scout was built as a tool somebody drives. The flow it is actually wanted for
-is a conversation: an agent finds a posting, tailors a resume, presents it, and
-submits it once a person says yes. The tailoring holds up in that world — it is
-the only part an agent cannot safely do on its own, which is why scout exists —
-but the *presenting* has nothing behind it, and that is the step the whole
-thing turns on.
-
-Two ideas in there worth arguing with before anything is built:
-
-- **Approval scope and check scope are different.** A package shows everything
-  about to be submitted; the check covers only the part it can honestly speak
-  to; the package says which part that was. That is what makes cover letters
-  and form answers safe to include without solving how to verify them.
-- **Approval binds to the words, not to the posting.** Re-tailoring withdraws
-  it. Without that, something regenerates the resume after approval and what
-  gets sent is not what anybody said yes to.
-
-scout still does not submit anything — the browser belongs to whatever agent is
-driving, and it has the user's own logged-in sessions.
-
-Advancement and scout's first four features came through here and have moved
-into their apps with their steps.
+Nothing at the moment. Approval was the most recent thing through here and has
+moved into `apps/scout/features/` with its steps. Advancement and scout's first
+four features came the same way.

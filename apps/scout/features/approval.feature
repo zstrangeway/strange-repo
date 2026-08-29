@@ -118,7 +118,8 @@ Feature: Approving what is about to be sent
     And scout should say the resume changed after it was approved
 
   Scenario: Changing an answer withdraws approval too
-    Given I have approved a package for that posting
+    Given I have added an answer to that package
+    And I have approved a package for that posting
     When I change an answer in that package
     Then that package should no longer be approved
     And scout should say what changed after it was approved
@@ -130,7 +131,8 @@ Feature: Approving what is about to be sent
 
   # Approving again after a change is how somebody says yes to the new version.
   Scenario: Approving again after a change
-    Given I have approved a package for that posting
+    Given I have added an answer to that package
+    And I have approved a package for that posting
     And I have changed an answer in that package
     When I approve that package
     Then the package should be approved
@@ -146,7 +148,8 @@ Feature: Approving what is about to be sent
   # the answer has to be the words, not a reference to a file that has since
   # been tailored four more times.
   Scenario: Reading back what I approved
-    Given I have approved a package for that posting
+    Given I have added an answer to that package
+    And I have approved a package for that posting
     When I read that package
     Then it should show the resume exactly as it was approved
     And it should show every answer exactly as it was approved

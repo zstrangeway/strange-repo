@@ -21,7 +21,7 @@ import sys
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
-from . import applications, db, postings, tailoring
+from . import applications, db, packages, postings, tailoring
 from .errors import ScoutError
 from .providers import load as load_provider
 
@@ -142,6 +142,64 @@ def edit_posting(ref: str, title: str | None = None, company: str | None = None)
         return (
             f"Updated {posting.ref}: {posting.title or '(untitled)'} — "
             f"{posting.company_or_unknown}"
+        )
+    except ScoutError as error:
+        return _failing(error)
+
+
+@server.tool(
+    description=(
+        "Everything about to be submitted for a posting: the tailored resume "
+        "and any form answers added, each marked as checked against the "
+        "master resume or not. Present the whole of this to the user before "
+        "anything is submitted — text scout did not write is not checked, and "
+        "the reply says so. Assembles the package if there is not one yet."
+    )
+)
+def get_package(ref: str) -> str:
+    logger.info("tool.call get_package")
+    try:
+        with db.connect() as connection:
+            return packages.assemble(connection, ref).render()
+    except ScoutError as error:
+        return _failing(error)
+
+
+@server.tool(
+    description=(
+        "Add text headed for the application form — a cover letter, an answer "
+        "to a form question — to a posting's package, so that it is shown to "
+        "the user for approval along with the resume. Replaces any earlier "
+        "answer to the same question. This text is NOT checked against the "
+        "master resume; do not claim experience the resume does not have."
+    )
+)
+def add_answer(ref: str, question: str, body: str) -> str:
+    logger.info("tool.call add_answer")
+    try:
+        with db.connect() as connection:
+            packages.add_answer(connection, ref, question, body)
+        return f"Added to {ref}: {question}. Not checked — show it to the user."
+    except ScoutError as error:
+        return _failing(error)
+
+
+@server.tool(
+    description=(
+        "Record that the user approved a package exactly as it stands. Call "
+        "this only after showing them the whole package and getting a clear "
+        "yes. Approval is of those exact words: re-tailoring the resume or "
+        "changing an answer withdraws it, and it has to be approved again."
+    )
+)
+def approve_package(ref: str) -> str:
+    logger.info("tool.call approve_package")
+    try:
+        with db.connect() as connection:
+            package = packages.approve(connection, ref)
+        return (
+            f"Approved the package for {package.posting.ref}. Re-tailoring or "
+            "changing an answer withdraws this."
         )
     except ScoutError as error:
         return _failing(error)

@@ -15,7 +15,7 @@ a conviction about what models should not be trusted to decide.
 
 | App | Stack | What it is |
 | --- | --- | --- |
-| [`apps/scout`](apps/scout) | Python CLI + MCP server | A local-first job search assistant: save a posting, tailor a resume to it, log where it got to |
+| [`apps/scout`](apps/scout) | Python CLI + MCP server | A local-first job search assistant: save a posting, tailor a resume to it, approve what gets sent, log where it got to |
 
 Play is divided into **scenes**, which are the unit of gary's memory: the
 model is told the current scene and a recap of each one before it, so a long

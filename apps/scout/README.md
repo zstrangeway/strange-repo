@@ -114,6 +114,35 @@ Two rules, both in the comment at the top of the generated example:
 That structure is what lets the check say *"Initech is not in the master
 resume"* rather than something vaguer.
 
+## Approving what gets sent
+
+scout does not submit anything, and is not going to — the browser belongs to
+whatever agent is driving, and it has your logged-in sessions. What scout
+owns is the step before: **a package**, which is everything about to be
+submitted for one posting, and a record of whether you said yes to it.
+
+```sh
+scout package orrery-staff-engineer                   # everything, in full
+scout answer orrery-staff-engineer "Why us?" "$(pbpaste)"
+scout approve orrery-staff-engineer
+```
+
+Two rules make this worth having rather than a rubber stamp.
+
+**A package shows everything; the check covers what it honestly can.** The
+tailored resume is checked against your master. A cover letter is not, and
+cannot be — "why do you want to work here" is composition, not a projection of
+your resume, and there is nothing to check it against. So every item is marked
+`[checked]` or `[NOT CHECKED]`, and a package containing anything unchecked
+says so in words. The failure this exists to prevent is not unchecked text; it
+is unchecked text presented as though something had verified it.
+
+**Approval is of those exact words, not of that posting.** Re-tailoring the
+resume, or changing or adding an answer, withdraws it — and the package then
+says what changed and when it had been approved. Without that, "approved"
+would be a flag that stayed true while something regenerated the resume
+underneath it, and what got sent would not be what anybody agreed to.
+
 ## Statuses
 
 ```
@@ -153,11 +182,16 @@ Add this to `.mcp.json` in your project, or to `~/.claude.json`:
 }
 ```
 
-That exposes five tools: `save_posting`, `tailor_resume`, `log_status`,
-`list_postings` and `edit_posting`. The first three are the capabilities. The
-other two are there because a session that can save and tailor but cannot see
-what it saved, or cannot fill in a company scout would not guess, sends you
-back to a terminal in the middle of the flow.
+That exposes eight tools. `save_posting`, `tailor_resume` and `log_status` are
+the capabilities. `list_postings` and `edit_posting` are there because a
+session that cannot see what it saved, or fill in a company scout would not
+guess, sends you back to a terminal mid-flow. `get_package`, `add_answer` and
+`approve_package` are the approval step — the one that makes "show it to me
+before you send it" mean something.
+
+The intended shape is that the agent finds the posting and drives the browser,
+and scout supplies the constraint: a resume that cannot claim what you have
+not done, and a package you actually saw before it went.
 
 A refusal comes back as a failed tool result carrying the reason, not as an
 exception — so when a draft invents an employer, the model reads *why* and can
@@ -177,6 +211,9 @@ tell you, rather than the turn dying.
 | `scout show REF` | One posting, its history and its text |
 | `scout edit REF --company X` | Fill in what scout would not guess |
 | `scout tailor REF` | Tailor your resume for it, as a new version |
+| `scout package REF` | Everything about to be submitted, and what was checked |
+| `scout answer REF Q A` | Add form text to the package (`A` may be `-` for stdin) |
+| `scout approve REF` | Say yes to the package exactly as it stands |
 | `scout log REF STATUS [--note N]` | Move an application along |
 | `scout note REF NOTE` | Add a note without changing the status |
 | `scout mcp` | Run the MCP server on stdio |

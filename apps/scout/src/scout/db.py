@@ -38,6 +38,30 @@ CREATE TABLE IF NOT EXISTS events (
     created_at  TEXT    NOT NULL
 );
 
+-- What is about to be submitted for one posting, and whether somebody said
+-- yes to it. The approval is stored as a snapshot of the exact words rather
+-- than as a flag, because a flag would still read "approved" after something
+-- regenerated the resume underneath it.
+CREATE TABLE IF NOT EXISTS packages (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    posting_id        INTEGER NOT NULL UNIQUE REFERENCES postings(id) ON DELETE CASCADE,
+    approved_at       TEXT,
+    approved_snapshot TEXT,
+    created_at        TEXT    NOT NULL
+);
+
+-- Free text headed for the application form. scout did not write it and has
+-- no opinion about it; it is here because it is going to be sent, which is
+-- the only test for inclusion.
+CREATE TABLE IF NOT EXISTS answers (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    package_id  INTEGER NOT NULL REFERENCES packages(id) ON DELETE CASCADE,
+    question    TEXT    NOT NULL,
+    body        TEXT    NOT NULL,
+    created_at  TEXT    NOT NULL,
+    UNIQUE (package_id, question)
+);
+
 CREATE TABLE IF NOT EXISTS resumes (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     posting_id  INTEGER NOT NULL REFERENCES postings(id) ON DELETE CASCADE,

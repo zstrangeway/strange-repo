@@ -207,6 +207,41 @@ def step_in_database(context):
     assert context.exit_code == 0, context.output
 
 
+@when("I call the package tool for that posting")
+def step_call_package(context):
+    _call(context, "get_package", {"ref": context.ref})
+
+
+@then("the reply should include every item in the package")
+def step_reply_every_item(context):
+    assert "Resume, version" in context.reply_text, context.reply_text
+    assert context.answered in context.reply_text, context.reply_text
+
+
+@then("the reply should say which of them were checked")
+def step_reply_checked(context):
+    assert "[checked]" in context.reply_text, context.reply_text
+    assert "[NOT CHECKED]" in context.reply_text, context.reply_text
+
+
+@then("the reply should say what changed in the resume")
+def step_reply_resume_changes(context):
+    assert "moved up" in context.reply_text or "rewritten" in context.reply_text, (
+        context.reply_text
+    )
+
+
+@when("I call the approve tool for that posting")
+def step_call_approve(context):
+    _call(context, "approve_package", {"ref": context.ref})
+
+
+@then("that package should be approved")
+def step_package_approved_via_server(context):
+    run(context, "package", context.ref)
+    assert "Approved 2" in context.stdout, context.stdout
+
+
 @then("the server should still be running")
 def step_still_running(context):
     assert context.mcp.list_tools(), "the server stopped answering"

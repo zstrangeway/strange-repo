@@ -9,7 +9,7 @@ them rather than a second implementation of them.
 import argparse
 import sys
 
-from . import applications, db, example, paths, postings, tailoring
+from . import applications, db, example, packages, paths, postings, tailoring
 from .errors import ScoutError
 from .providers import load as load_provider
 
@@ -115,6 +115,28 @@ def _tailor(args: argparse.Namespace) -> int:
     return 0
 
 
+def _package(args: argparse.Namespace) -> int:
+    with db.connect() as connection:
+        package = packages.assemble(connection, args.ref)
+    print(package.render())
+    return 0
+
+
+def _answer(args: argparse.Namespace) -> int:
+    with db.connect() as connection:
+        packages.add_answer(connection, args.ref, args.question, _read_text(args.body))
+    print(f"Added to {args.ref}: {args.question}")
+    return 0
+
+
+def _approve(args: argparse.Namespace) -> int:
+    with db.connect() as connection:
+        package = packages.approve(connection, args.ref)
+    print(f"Approved the package for {package.posting.ref}.")
+    print("Approving is of these exact words — re-tailoring withdraws it.")
+    return 0
+
+
 def _log(args: argparse.Namespace) -> int:
     with db.connect() as connection:
         posting = postings.read(connection, args.ref)
@@ -189,6 +211,26 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     tailor.set_defaults(handler=_tailor)
+
+    package = subcommands.add_parser(
+        "package", help="Show everything about to be submitted for a posting"
+    )
+    package.add_argument("ref")
+    package.set_defaults(handler=_package)
+
+    answer = subcommands.add_parser(
+        "answer", help="Add form text to a posting's package"
+    )
+    answer.add_argument("ref")
+    answer.add_argument("question")
+    answer.add_argument("body", help="The answer, or - to read it from stdin")
+    answer.set_defaults(handler=_answer)
+
+    approve = subcommands.add_parser(
+        "approve", help="Say yes to a package, exactly as it stands"
+    )
+    approve.add_argument("ref")
+    approve.set_defaults(handler=_approve)
 
     log = subcommands.add_parser("log", help="Log where an application got to")
     log.add_argument("ref")
