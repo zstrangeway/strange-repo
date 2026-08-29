@@ -16,7 +16,18 @@ Feature: Tailoring a resume to a posting
   #
   # That check is deterministic and lives in scout, not in the prompt. A
   # prompt is a request. This is the part that holds when the model ignores it,
-  # which is the only reason to have it at all.
+  # which is the only reason to have it at all. It is also the only kind of
+  # check this repo can gate on: a check that is itself a model call cannot be
+  # tested without calling a model, and no tier here ever does.
+  #
+  # ⚠️ It catches invention, not inflation. A name that is not in the master
+  # is caught every time. "Led a team of 3" becoming "led a team of 12", or
+  # "familiar with Terraform" becoming "expert in Terraform", is not caught by
+  # anything cheap and is not caught here. That is why the summary of what
+  # changed is not a nicety: the check is a floor that fails closed, and the
+  # summary is where a person catches the rest. The README says so in those
+  # words, because a tool that implies it has made lying impossible is worse
+  # than one that admits where it stops.
   #
   # No spec here calls a real model. The provider is stubbed, exactly as
   # gary-api stubs its narrator, and `task scout:smoke` is the opt-in command
@@ -94,6 +105,33 @@ Feature: Tailoring a resume to a posting
     When I tailor my resume for that posting
     Then scout should show me the draft it refused
     And scout should tell me I can tailor again
+
+  # Matching ignores case and punctuation, because "Postgres" and "postgres."
+  # at the end of a sentence are the same claim, and a check that refuses that
+  # trains somebody to stop reading its refusals.
+  Scenario: The same skill, punctuated differently
+    Given the model will return a draft ending a sentence with "Postgres."
+    When I tailor my resume for that posting
+    Then the draft should be accepted
+
+  # ------------------------------------------------- what the check does not do
+
+  # Kept as a spec rather than left unsaid, because the next person to read
+  # this will otherwise assume the check is doing more than it is — and might
+  # ship the summary as optional on that assumption.
+  Scenario: An exaggerated claim passes the check
+    Given the master resume says I led a team of 3
+    And the model will return a draft saying I led a team of 12
+    When I tailor my resume for that posting
+    Then the draft should be accepted
+    And the summary should show the claim it rewrote
+
+  # Which is what makes this one load-bearing. Without it, the only defence
+  # against inflation is diffing four pages by eye.
+  Scenario: The summary is never empty
+    Given the model will return a draft drawn only from the master
+    When I tailor my resume for that posting
+    Then the summary should say what changed for every section it touched
 
   # ------------------------------------------------------- when it can't go
 
