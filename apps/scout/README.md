@@ -52,10 +52,10 @@ Kubernetes is a lie told in your name, and you will not find out about it
 until somebody asks you about it out loud.
 
 So the model's draft is not trusted. Before anything is written, scout checks
-every employer, job title and skill in the draft against your master resume.
-A draft that introduces one is refused whole — nothing partial reaches the
-disk — and scout tells you which word it caught and shows you the draft it
-threw away.
+every employer, job title and skill in the draft against your master resume,
+and every date against the employer it sits under. A draft that introduces one
+is refused whole — nothing partial reaches the disk — and scout tells you which
+word it caught and shows you the draft it threw away.
 
 That check is in scout, not in the prompt. The prompt asks; this is the part
 that holds when the model ignores it.
@@ -68,7 +68,19 @@ It catches **invention**, not **inflation**.
 | --- | --- |
 | An employer you never worked for | "led a team of 3" becoming "led a team of 12" |
 | A skill you never claimed | "familiar with Terraform" becoming "expert in Terraform" |
-| A job title you never held | A date quietly stretched by a year |
+| A job title you never held | "ran the upgrade" becoming "applied deep expertise to" |
+| A year the master never gives that employer | |
+
+The date row was not thought of — it was found. The first real smoke run
+handed the second employer the first one's dates, and every year in the draft
+appeared somewhere in the master, so nothing else caught it. That is four
+years somewhere nobody worked.
+
+The third row on the right was found the same way, on the same run: the
+posting asked for "deep Postgres experience", and a bullet reading "ran the
+Postgres upgrade" came back as "applied deep Postgres expertise to". No new
+name, so the check passed it — and the summary showed it, which is the whole
+argument for the summary.
 
 Nothing cheap catches the right-hand column, and scout does not pretend to.
 That is why every tailoring prints **what changed** — sections moved, lines
@@ -156,20 +168,34 @@ the field you read back weeks later to remember who you wrote to.
 
 ## Model and cost
 
-Anthropic, with your key from `ANTHROPIC_API_KEY`. The default model is
-`claude-sonnet-5`; `SCOUT_MODEL` overrides it. One tailoring is one call — a
-resume and a posting in, a resume out — which is a few cents.
+Two providers, one method wide each, both sending the same instruction from
+`providers/prompt.py` — shared rather than copied, because two versions of it
+drifting apart is the failure nobody notices.
 
-The provider interface is one method wide (`providers/__init__.py`) so that a
-second provider is an afternoon's work. None is implemented, and there is no
-half-finished one pretending otherwise.
+| Provider | Key | Default model |
+| --- | --- | --- |
+| `anthropic` (default) | `ANTHROPIC_API_KEY` | `claude-sonnet-5` |
+| `openrouter` | `OPENROUTER_API_KEY` | `anthropic/claude-sonnet-5` |
+
+`SCOUT_MODEL` overrides the model, in whichever provider's namespace is
+selected. OpenRouter uses the `openai` client even though a Claude is usually
+on the other end: it serves an OpenAI-compatible API and no Anthropic one.
+
+One tailoring is one call — a resume and a posting in, a resume out — which on
+a paid model is a few cents.
 
 ```sh
 task scout:smoke -- orrery-staff-engineer   # one REAL call, run by hand
 ```
 
-`smoke` is the only thing here that talks to a model. It is never part of
-`task test`, because it spends somebody's money.
+`smoke` is the only thing here that talks to a model, and it is never part of
+`task test`. **It costs nothing by default**: it names a `:free` OpenRouter
+model, which exercises this exact path for no money. A paid model is opted
+into with `--provider`/`--model`, and the command says what it expects to
+spend before it spends it.
+
+It has already earned its place. Both of the findings in the ⚠️ table above
+came out of its first run, and neither was in any spec beforehand.
 
 ## Tests
 

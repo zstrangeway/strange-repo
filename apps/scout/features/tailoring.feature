@@ -20,8 +20,9 @@ Feature: Tailoring a resume to a posting
   # check this repo can gate on: a check that is itself a model call cannot be
   # tested without calling a model, and no tier here ever does.
   #
-  # ⚠️ It catches invention, not inflation. A name that is not in the master
-  # is caught every time. "Led a team of 3" becoming "led a team of 12", or
+  # ⚠️ It catches invention, not inflation. A name that is not in the master,
+  # or a date under an employer the master does not give it, is caught every
+  # time. "Led a team of 3" becoming "led a team of 12", or
   # "familiar with Terraform" becoming "expert in Terraform", is not caught by
   # anything cheap and is not caught here. That is why the summary of what
   # changed is not a nicety: the check is a floor that fails closed, and the
@@ -82,6 +83,18 @@ Feature: Tailoring a resume to a posting
     When I tailor my resume for that posting
     Then scout should refuse the draft
     And scout should say "Kubernetes" is not in the master resume
+    And no resume file should have been written
+
+  # Found by the first real smoke run, not by anybody thinking of it: a model
+  # gave the second employer the first one's dates. Every year in the draft
+  # appeared in the master, so nothing above catches it — what was wrong was
+  # which employer they sat under. Four years somewhere nobody worked is
+  # invented experience however narrowly the word is read.
+  Scenario: A draft that gives one employer another's dates
+    Given the model will return a draft moving "Wilding Labs" dates onto "Thornfield Systems"
+    When I tailor my resume for that posting
+    Then scout should refuse the draft
+    And scout should say the dates are not what the master gives that employer
     And no resume file should have been written
 
   # The complement, and just as necessary: a check that rejects everything is

@@ -51,6 +51,8 @@ class Summary:
     dropped: list[str]
     added: list[str]
     rewritten: list[tuple[str, str]]
+    cut: list[str]
+    fresh: list[str]
 
     def render(self) -> str:
         lines: list[str] = []
@@ -65,6 +67,10 @@ class Summary:
         for before, after in self.rewritten:
             lines.append(f"  rewritten     {before}")
             lines.append(f"             -> {after}")
+        for line in self.cut:
+            lines.append(f"  cut           {line}")
+        for line in self.fresh:
+            lines.append(f"  new line      {line}")
         if not lines:
             # Never empty. A blank summary reads like the summary failed
             # rather than like the draft came back unchanged.
@@ -102,25 +108,75 @@ def compute(master: str, draft: str, *, rewrites: int = 12) -> Summary:
     dropped = [s.heading for s in before if s.key not in after_order and s.heading]
     added = [s.heading for s in after if s.key not in before_order and s.heading]
 
-    rewritten = _rewritten(master, draft, limit=rewrites)
-    return Summary(moved_up, moved_down, dropped, added, rewritten)
+    rewritten, cut, fresh = _line_changes(master, draft, limit=rewrites)
+    return Summary(moved_up, moved_down, dropped, added, rewritten, cut, fresh)
 
 
-def _rewritten(master: str, draft: str, *, limit: int) -> list[tuple[str, str]]:
-    """Lines that survived in changed words, paired before and after.
+# Below this, two lines are different things rather than one edited into the
+# other. Tuned by hand against real drafts: "led a team of 3" against "led a
+# team of 12" sits near 0.95, and two unrelated bullets from the same resume
+# land around 0.3.
+SAME_LINE = 0.6
 
-    Only replacements — a line that moved is reported as its section moving,
-    and listing it again here would bury the rewrites that matter.
+
+def _body_lines(markdown: str) -> list[str]:
+    """Every line that is resume content.
+
+    Headings are left out because a heading that moved is reported as its
+    section moving, and reporting it twice buries the lines that matter.
+
+    So are HTML comments. `scout init` writes the format rules into the master
+    resume as one, a model quite reasonably drops it, and the first real smoke
+    run then reported seven lines of scout's own instructions as content the
+    draft had cut.
     """
-    old = [line for line in master.splitlines() if line.strip()]
-    new = [line for line in draft.splitlines() if line.strip()]
-    pairs: list[tuple[str, str]] = []
-    matcher = difflib.SequenceMatcher(a=old, b=new, autojunk=False)
-    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
-        if tag != "replace":
+    lines, in_comment = [], False
+    for line in markdown.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("<!--"):
+            in_comment = True
+        if in_comment:
+            in_comment = "-->" not in stripped
             continue
-        for before, after in zip(old[i1:i2], new[j1:j2], strict=False):
-            pairs.append((before.strip(), after.strip()))
-            if len(pairs) == limit:
-                return pairs
-    return pairs
+        if stripped and not HEADING.match(line):
+            lines.append(stripped)
+    return lines
+
+
+def _line_changes(
+    master: str, draft: str, *, limit: int
+) -> tuple[list[tuple[str, str]], list[str], list[str]]:
+    """What happened to the prose: rewritten, cut, and newly written.
+
+    Deliberately not `difflib.get_opcodes` over the two documents. That
+    aligns by position, so a bullet the model deleted and an unrelated one it
+    promoted to the same spot come back as a `replace` — and get reported as
+    a rewrite of one into the other. A real draft did exactly that on the
+    first run against a real model, and the summary said a line had been
+    reworded when it had actually been thrown away. Since this summary is the
+    only thing standing between somebody and a claim the grounding check
+    cannot catch, it has to describe what happened rather than what lines up.
+
+    So: a line is gone only if it is nowhere in the draft, new only if it is
+    nowhere in the master, and a rewrite only when a gone line and a new line
+    genuinely resemble each other.
+    """
+    before, after = _body_lines(master), _body_lines(draft)
+    gone = [line for line in before if line not in after]
+    fresh = [line for line in after if line not in before]
+
+    rewritten: list[tuple[str, str]] = []
+    for old in list(gone):
+        match = max(
+            fresh,
+            key=lambda new: difflib.SequenceMatcher(a=old, b=new).ratio(),
+            default=None,
+        )
+        if match is None:
+            break
+        if difflib.SequenceMatcher(a=old, b=match).ratio() >= SAME_LINE:
+            rewritten.append((old, match))
+            gone.remove(old)
+            fresh.remove(match)
+
+    return rewritten[:limit], gone[:limit], fresh[:limit]

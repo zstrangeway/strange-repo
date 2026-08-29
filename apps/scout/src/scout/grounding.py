@@ -19,7 +19,12 @@ Three things are compared, in descending order of confidence:
 1. **Employers and job titles**, from `###` headings. Exact, because the
    master's own structure says what they are.
 2. **Skills**, from the `## Skills` section of each document.
-3. **Proper nouns in prose** — a capitalised word mid-sentence, or anything in
+3. **Dates, against the employer they sit under.** A year the master does not
+   give that employer is refused. This one was added after the first real
+   smoke run, where a model handed the second employer the first one's dates
+   — a resume claiming four years somewhere nobody worked, which is invented
+   experience however narrowly you read the word.
+4. **Proper nouns in prose** — a capitalised word mid-sentence, or anything in
    `KNOWN_TECHNOLOGIES` at any case, that the master never mentions.
 """
 
@@ -54,6 +59,11 @@ HEADING_SPLIT = re.compile(r"\s+[—–-]\s+")
 # A bullet or list marker at the head of a line.
 BULLET = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s+")
 
+# Any four-digit year. Compared as a set per employer rather than as a string,
+# so an en dash against a hyphen, or "2021-2025" against "2021 – 2025", is the
+# same claim — which it is.
+YEAR = re.compile(r"\b(?:19|20)\d{2}\b")
+
 # Kept because a resume writes them and they are never a claim about anybody.
 MONTHS = frozenset(
     """
@@ -68,10 +78,18 @@ MONTHS = frozenset(
 class Finding:
     """Something in the draft that the master resume does not support."""
 
-    kind: str  # employer | title | skill | term
+    kind: str  # employer | title | skill | term | date
     term: str
+    # Only dates carry one: a year is not wrong on its own, only wrong under
+    # a particular employer.
+    employer: str | None = None
 
     def __str__(self) -> str:
+        if self.employer is not None:
+            return (
+                f'"{self.term}" is not a date the master resume gives for '
+                f'"{self.employer}"'
+            )
         return f'"{self.term}" is not in the master resume'
 
 
@@ -117,6 +135,26 @@ def skills(markdown: str) -> list[str]:
             section.append(line)
     entries = re.split(r"[,\n•|]|^\s*[-*]\s+", "\n".join(section), flags=re.MULTILINE)
     return [entry.strip() for entry in entries if entry.strip()]
+
+
+def years_by_employer(markdown: str) -> dict[str, set[str]]:
+    """Every year that appears under each `###` employer heading.
+
+    Sectioned by heading rather than read as a whole document, because the
+    mistake being caught is a date under the *wrong* employer — and every year
+    in it is a year the master mentions somewhere.
+    """
+    found: dict[str, set[str]] = {}
+    current: str | None = None
+    for line in markdown.splitlines():
+        if line.startswith("### "):
+            current = normalise(HEADING_SPLIT.split(line[4:].strip(), maxsplit=1)[0])
+            found.setdefault(current, set())
+        elif line.startswith("## "):
+            current = None
+        elif current is not None:
+            found[current].update(YEAR.findall(line))
+    return found
 
 
 @dataclass(frozen=True)
@@ -203,6 +241,20 @@ def check(master_markdown: str, draft: str) -> list[Finding]:
     for skill in skills(draft):
         if not master.mentions(skill):
             findings.append(Finding("skill", skill))
+
+    theirs = years_by_employer(master_markdown)
+    # Headings are matched normalised and reported as written, so the refusal
+    # names the employer the way the resume does.
+    as_written = {normalise(employer): employer for employer, _ in headings(draft)}
+    for employer, years in years_by_employer(draft).items():
+        # An employer that is not in the master at all is already reported
+        # above; saying its dates are wrong too is noise on top of that.
+        if employer not in theirs:
+            continue
+        for year in sorted(years - theirs[employer]):
+            findings.append(
+                Finding("date", year, employer=as_written.get(employer, employer))
+            )
 
     known = {finding.term.lower() for finding in findings}
     findings.extend(

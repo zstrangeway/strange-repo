@@ -14,7 +14,8 @@ When one is done, delete it — the commit is the record.
 
 *Last swept 2026-08-23 against `c8f5bd2`, by running all three tiers, a real
 model, and reading the deployed apps. Every tier was green; nothing below is a
-failing test.*
+failing test. Item 8 was added on 2026-08-29 when scout landed, and rewritten
+the same day once its smoke check had actually been run.*
 
 ## Worth real work
 
@@ -156,24 +157,50 @@ CI still pins `actions/checkout@v4`, `actions/setup-node@v4` and
 Dependabot for the paths that exist now, or bump the three actions by hand and
 accept that this is manual.
 
-### 8. scout's grounding check has never seen a real model's draft
+### 8. scout's grounding check has been run against one model, once
 
-`apps/scout/grounding.py` is the whole reason that app exists: it refuses a
-tailored resume that names an employer or claims a skill the master does not.
-**Every draft it has ever checked was written by hand**, in a spec or a unit
-test, to exercise a branch of the check.
+It has now seen real drafts — three runs on 2026-08-29, all
+`nvidia/nemotron-3-super-120b-a12b:free` through OpenRouter, against the
+example master resume and one saved posting. `pnpm --filter scout smoke`
+costs nothing by default, so this is cheap to repeat and should be repeated
+before anything that touches `grounding.py` or `providers/prompt.py`.
 
-That is the same shape of gap as item 1, and it cuts both ways. A real model
-asked to reorder a resume might invent something the check does not model — a
-qualification, a date range, a team size stated as a fact — and it might also
-phrase a legitimate rewrite in a way the check refuses, which is worse for
-somebody trying to use the thing.
+**Run 1 found two things no spec had thought of, and both are now fixed:**
 
-`pnpm --filter scout smoke` is the only thing that looks, and it has **never
-been run** — there was no Anthropic key in the session that built the app. It
-needs running against a real key before anybody trusts a tailored resume, and
-the result written down here: the model, the date, and whether the check fired
-and whether it was right to.
+- The model gave the second employer the first one's dates — Thornfield
+  Systems shown as 2021–2025, which are Wilding Labs'. Every year in the draft
+  appeared somewhere in the master, so nothing caught it. `grounding.py` now
+  checks dates against the employer they sit under.
+- The summary reported a deleted bullet and an unrelated promoted one as a
+  *rewrite* of each other, because `difflib` aligns by position. The summary
+  is the only defence against inflation, so one that invents an edit is worse
+  than one that says less. It now compares by content.
+
+**Run 1 also showed the inflation gap doing exactly what the README says.**
+The posting asked for "deep Postgres experience"; "ran the Postgres upgrade"
+came back as "applied deep Postgres expertise to". No new employer, skill or
+title, so the check passed it — correctly, by its own definition — and the
+summary showed it. That is the design working, not a defect, and it is the
+reason the summary is not optional.
+
+**Run 3, after both fixes, was clean**: six honest rewrites, no invention, no
+date corruption, and a summary in which every reported pair was genuinely a
+rewrite of that line.
+
+What is still thin:
+
+- **One model, one posting, one resume.** The example master is the only
+  document the check has ever been run against in anger, and it is the one
+  shaped to suit it. A real resume with a different heading style is the
+  obvious next thing to try.
+- **The paid path has never run.** `anthropic` is the default provider and
+  `claude-sonnet-5` its default model, and no call has ever been made on
+  either — there was no Anthropic key on the machine. The OpenRouter provider
+  is what has been exercised.
+- **Nothing checks that a legitimate draft is not wrongly refused.** All three
+  runs were accepted. A model that phrases a fair rewrite in a way the check
+  rejects would be worse for somebody using this than a missed invention, and
+  no run has yet produced one.
 
 ### 9. The browser suite waits a fixed fifteen seconds, twenty-five times
 

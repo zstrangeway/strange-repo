@@ -83,6 +83,18 @@ def step_draft_inflated(context):
     set_draft(context, context.master.replace("Led a team of 3", "Led a team of 12"))
 
 
+@given('the model will return a draft moving "{first}" dates onto "{second}"')
+def step_draft_moved_dates(context, first, second):
+    del first  # named in the spec for what it reads like, not for a lookup
+    set_draft(
+        context,
+        context.master.replace(
+            f"### {second} — Platform Engineer\n\n2018–2021",
+            f"### {second} — Platform Engineer\n\n2021–2025",
+        ),
+    )
+
+
 @given("the model will fail")
 def step_model_fails(context):
     directory = context.home / ".scout"
@@ -210,6 +222,11 @@ def step_master_empty(context):
 @then("scout should name the variable it expects")
 def step_names_variable(context):
     assert "ANTHROPIC_API_KEY" in context.output, context.output
+
+
+@then("scout should say the dates are not what the master gives that employer")
+def step_dates_refused(context):
+    assert "is not a date the master resume gives for" in context.output, context.output
 
 
 @then("scout should say the model call failed")

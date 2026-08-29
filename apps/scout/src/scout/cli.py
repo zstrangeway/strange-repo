@@ -182,7 +182,7 @@ def build_parser() -> argparse.ArgumentParser:
     tailor.add_argument(
         "--provider",
         default="anthropic",
-        choices=("anthropic", "fake"),
+        choices=("anthropic", "openrouter", "fake"),
         help=(
             "fake reads a draft from .scout/fake-draft.md instead of calling a "
             "model — what the specs drive, and a way to try scout with no key"

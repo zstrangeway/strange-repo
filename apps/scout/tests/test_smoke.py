@@ -32,27 +32,45 @@ class Smoke(InAScratchHome):
         (self.home / "resumes").mkdir(parents=True, exist_ok=True)
         (self.home / "resumes" / "master.md").write_text(MASTER, encoding="utf-8")
 
-    def test_it_says_what_it_is_about_to_spend_before_it_spends_it(self):
+    def _provider(self, draft=None, error=None):
+        stub = unittest.mock.Mock()
+        stub.tailor.side_effect = error
+        if error is None:
+            stub.tailor.return_value = draft
+        return unittest.mock.patch("scout.smoke.load", return_value=stub), stub
+
+    def test_the_default_model_is_free_and_says_so(self):
         self._master()
         ref = self.save()
         draft = MASTER.replace(
             "- Ran the Postgres upgrade", "- Ran the upgrade on Postgres"
         )
-        with unittest.mock.patch("scout.smoke.AnthropicProvider") as provider:
-            provider.return_value.tailor.return_value = draft
-            with unittest.mock.patch("sys.stdout") as out:
-                code = smoke.main([ref])
+        patched, _ = self._provider(draft=draft)
+        with patched, unittest.mock.patch("sys.stdout") as out:
+            code = smoke.main([ref])
         self.assertEqual(code, 0)
         said = " ".join(str(call) for call in out.write.call_args_list)
-        self.assertIn("About to call", said)
+        self.assertIn("costs nothing", said)
+
+    def test_a_paid_model_says_what_it_expects_to_spend_first(self):
+        self._master()
+        ref = self.save()
+        patched, _ = self._provider(draft=MASTER)
+        with patched, unittest.mock.patch("sys.stdout") as out:
+            smoke.main([ref, "--provider", "anthropic", "--model", "claude-sonnet-5"])
+        said = " ".join(str(call) for call in out.write.call_args_list)
+        self.assertIn("few cents", said)
 
     def test_a_refusal_is_the_result_rather_than_a_crash(self):
         self._master()
         ref = self.save()
-        with unittest.mock.patch("scout.smoke.AnthropicProvider") as provider:
-            provider.return_value.tailor.side_effect = ScoutError("no key")
-            with unittest.mock.patch("sys.stdout"), unittest.mock.patch("sys.stderr"):
-                code = smoke.main([ref])
+        patched, _ = self._provider(error=ScoutError("no key"))
+        with (
+            patched,
+            unittest.mock.patch("sys.stdout"),
+            unittest.mock.patch("sys.stderr"),
+        ):
+            code = smoke.main([ref])
         # Non-zero, because the run did not produce a resume — but printed
         # rather than raised, since a caught invention is what this is for.
         self.assertEqual(code, 1)
@@ -60,8 +78,7 @@ class Smoke(InAScratchHome):
     def test_the_model_can_be_named(self):
         self._master()
         ref = self.save()
-        with unittest.mock.patch("scout.smoke.AnthropicProvider") as provider:
-            provider.return_value.tailor.return_value = MASTER
-            with unittest.mock.patch("sys.stdout"):
-                smoke.main([ref, "--model", "claude-opus-5"])
-        provider.assert_called_once_with(model="claude-opus-5")
+        patched, stub = self._provider(draft=MASTER)
+        with patched, unittest.mock.patch("sys.stdout"):
+            smoke.main([ref, "--model", "google/gemma-4-31b-it:free"])
+        self.assertEqual(stub.model, "google/gemma-4-31b-it:free")
