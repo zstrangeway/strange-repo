@@ -1,0 +1,78 @@
+[project]
+name = "scout"
+version = "0.1.0"
+description = "A local-first, bring-your-own-model job search assistant"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    # The user's own key, their own account. scout never proxies a model call
+    # through anything of ours, which is the whole point of bring-your-own.
+    "anthropic>=0.75.0",
+    # The stdio server. `mcp` is the official SDK and brings its own
+    # transport, so nothing here frames JSON-RPC by hand.
+    "mcp>=1.30.0",
+    # Fetching is ours rather than trafilatura's, because the difference
+    # between "the board said 403" and "there was no posting in the page" is
+    # the difference between two error messages somebody can act on, and
+    # trafilatura's own fetch collapses both into None.
+    "httpx>=0.28.1",
+    # Turns a job board's HTML into the posting and drops the chrome. Chosen
+    # over readability-lxml for handling boards that wrap the posting in
+    # several layers of div, which is most of them.
+    "trafilatura>=2.0.0",
+]
+
+[project.scripts]
+scout = "scout.cli:main"
+scout-mcp = "scout.mcp_server:main"
+scout-smoke = "scout.smoke:main"
+
+[build-system]
+requires = ["uv_build>=0.8.17,<0.9.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "behave>=1.3.3",
+    "coverage>=7.15.4",
+    "ruff>=0.15.0",
+]
+
+[tool.coverage.run]
+source = ["src/scout"]
+branch = true
+# The MCP specs drive a real server subprocess, which records its own data
+# file; `coverage combine` in the test task merges them.
+parallel = true
+# That subprocess is stopped by the transport rather than exiting on its own,
+# and without this its coverage is thrown away on the signal.
+sigterm = true
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 100
+exclude_also = [
+    # `if TYPE_CHECKING:` blocks never execute at runtime.
+    "if TYPE_CHECKING:",
+    # Protocol bodies. The interface exists to be implemented, and its own
+    # ellipsis is not code anybody runs.
+    "^\\s*\\.\\.\\.$",
+]
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
+ignore = [
+    # An em dash separates an employer from a job title, and an en dash joins
+    # a date range. Both are load-bearing in the resume format scout parses,
+    # so flagging them as confusable characters is noise.
+    "RUF001",
+    "RUF002",
+    "RUF003",
+    # Would rewrite the word lists in grounding.py into one 1300-character
+    # line. They are read and edited by hand; a wall of quotes and commas is
+    # not an improvement.
+    "SIM905",
+]

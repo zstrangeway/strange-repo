@@ -7,6 +7,9 @@ includes:
   gary-web:
     taskfile: ./apps/gary-web
     dir: ./apps/gary-web
+  scout:
+    taskfile: ./apps/scout
+    dir: ./apps/scout
   ui:
     taskfile: ./packages/ui
     dir: ./packages/ui
@@ -22,3 +25,6 @@ tasks:
       # whether somebody runs `pnpm test` here or `pnpm --filter gary-web
       # test` there.
       - task: gary-web:test
+      # Last, and needs nothing: no database, no browser, no key. Its own
+      # lint runs inside it, the same way gary-web's does.
+      - task: scout:test

@@ -33,9 +33,9 @@ Feature: Where an application got to
     And that entry should be stamped with when it happened
 
   Scenario: A note goes with the status
-    When I log that posting as "screening" noting "recruiter call Thursday 2pm"
-    Then its status should be "screening"
-    And that entry's note should be "recruiter call Thursday 2pm"
+    When I log that posting as "applied" noting "referral from Ada"
+    Then its status should be "applied"
+    And that entry's note should be "referral from Ada"
 
   Scenario: The whole way through
     When I log that posting as "applied"

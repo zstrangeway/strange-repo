@@ -20,19 +20,5 @@ folder of things nobody is going to build reads like a roadmap.
 
 ## Waiting
 
-**scout** — a local-first, bring-your-own-model job search assistant, proposed
-as a third app. Four files, and they want reading in this order:
-
-| | |
-| --- | --- |
-| [`scout-postings.feature`](scout-postings.feature) | Saving a posting, pasted or from a URL |
-| [`scout-tailoring.feature`](scout-tailoring.feature) | A resume aimed at one posting, and the check that it invented nothing |
-| [`scout-applications.feature`](scout-applications.feature) | Where each application got to, as an append-only log |
-| [`scout-mcp.feature`](scout-mcp.feature) | The same three capabilities as MCP tools over stdio |
-
-`scout-tailoring.feature` is the one to argue with. Everything else is
-bookkeeping; that file is where the product actually is, and the scenario
-about an employer nobody worked for is the one the whole thing is for.
-
-Advancement was the first thing through here and has moved into both apps with
-its steps.
+Nothing at the moment. scout was the second thing through here and has moved
+into `apps/scout/features/` with its steps. Advancement was the first.

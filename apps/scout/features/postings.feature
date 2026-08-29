@@ -86,7 +86,8 @@ Feature: Saving a posting
   # the second save is nearly always a mistake rather than an intent. Refusing
   # it and naming the first one is what makes it visible.
   Scenario: Saving a URL I have already saved
-    Given I have saved a posting from that URL
+    Given a job board serving a posting for "Staff Engineer" at "Wilding Labs"
+    And I have saved a posting from that URL
     When I save a posting from that URL again
     Then scout should refuse it
     And scout should name the posting I already have

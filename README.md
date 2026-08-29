@@ -1,13 +1,21 @@
 # strange-repo
 
-A pnpm + uv monorepo. It builds **gary**, an AI game master named for Gary
-Gygax: pick a system and a module, make a party, and play a tabletop campaign
-in chat.
+A pnpm + uv monorepo. It builds two unrelated things.
+
+**gary**, an AI game master named for Gary Gygax: pick a system and a module,
+make a party, and play a tabletop campaign in chat.
 
 | App | Stack | What it is |
 | --- | --- | --- |
 | [`apps/gary-api`](apps/gary-api) | FastAPI + Postgres | The game — dice, rules, world and narration — plus accounts and sessions |
 | [`apps/gary-web`](apps/gary-web) | Next.js | The table: campaigns, characters, and a turn as it is written |
+
+And **scout**, which has nothing to do with gary beyond sharing a monorepo and
+a conviction about what models should not be trusted to decide.
+
+| App | Stack | What it is |
+| --- | --- | --- |
+| [`apps/scout`](apps/scout) | Python CLI + MCP server | A local-first job search assistant: save a posting, tailor a resume to it, log where it got to |
 
 Play is divided into **scenes**, which are the unit of gary's memory: the
 model is told the current scene and a recap of each one before it, so a long
@@ -35,10 +43,18 @@ READMEs, marked ⚠️, beside the code that would change if they ever were.
 [`proposals/`](proposals) is Gherkin waiting to be agreed, held outside the
 apps' `features/` trees because both runners fail on an undefined step.
 
+scout tailors a resume to a job posting, and the thing worth reading in it is
+the check that stops it inventing experience: the model's draft is compared
+against the master resume, and a draft naming an employer or claiming a skill
+that is not in there is refused before anything is written. Deterministic, in
+the code rather than in the prompt — the same reason gary's dice are an engine
+the model asks rather than a number it asserts. See
+[`apps/scout`](apps/scout#the-one-thing-worth-understanding).
+
 ### The three tiers
 
 `pnpm test` runs the first two. They need no setup beyond a Postgres for
-gary-api.
+gary-api. scout's specs sit alongside them and need nothing at all.
 
 - **gary-api specs** — Gherkin through behave, in-process against the ASGI app
   and a real Postgres. Everything is real except the network. Alongside them,
@@ -46,6 +62,9 @@ gary-api.
 - **gary-web specs** — Gherkin through Cucumber, in a real browser against a
   real `next dev`, with gary-api replaced by an in-memory stub. Alongside them,
   Vitest over `src/lib` only, gated at 100%.
+- **scout specs** — Gherkin through behave, driving the real CLI and, for the
+  MCP tools, a real server subprocess over a real stdio pipe. Alongside them,
+  stdlib unittest for what those surfaces cannot reach. Gated at 100%.
 - **end to end** — the same browser, against a **real gary-api** on a database
   created and dropped for the run.
 
@@ -63,8 +82,9 @@ process, and its job is to catch drift, not to cover behaviour.
 **No tier ever calls a real model**, including the third — the same trade made
 for Google and Facebook, and for the same reasons. `pnpm --filter gary-api
 smoke` plays one real turn and prints what the model actually did with the
-tools, which is the only way to see that gap. It is opt-in and never runs on
-its own, because it spends somebody's tokens.
+tools, which is the only way to see that gap. `pnpm --filter scout smoke`
+does the same for one tailoring. Both are opt-in and never run on their own,
+because they spend somebody's tokens.
 
 gary-web's coverage gate covers `src/lib` and nothing else, deliberately. The
 rest of that app is React components, and [Next's own
