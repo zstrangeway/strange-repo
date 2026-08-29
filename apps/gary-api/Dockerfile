@@ -1,4 +1,4 @@
-FROM python:3.11-slim AS builder
+FROM python:3.13-slim AS builder
 
 RUN pip install --no-cache-dir uv==0.8.17
 
@@ -15,7 +15,7 @@ COPY src ./src
 RUN uv sync --locked --no-dev
 
 
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 WORKDIR /app
 

@@ -30,13 +30,13 @@ tasks:
       - pnpm -w exec eslint apps/gary-web --max-warnings 0
 
   versions:
-    desc: Check every place naming a Node major agrees
+    desc: Check every place naming a runtime version agrees
     cmds:
       # Cheap and first, because it is the one failure that type-checks
       # clean: types ahead of the runtime compile against APIs that will not
       # be there. @types/node sat at 20 against a node 22 image, then a
       # dependabot bump moved it to 26 against the same image.
-      - node scripts/check-node-alignment.mjs
+      - node scripts/check-runtime-alignment.mjs
 
   unit:
     desc: Unit-test src/lib and enforce its coverage gate

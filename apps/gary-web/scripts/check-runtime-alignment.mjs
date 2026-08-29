@@ -1,4 +1,4 @@
-// The Node major has to be the same number in every place that names it.
+// Every place that names a runtime version has to name the same one.
 //
 // This exists because it was not. The image ran node 22 while `@types/node`
 // said 20, and a dependabot bump then moved the types to 26 while the image
@@ -18,6 +18,31 @@ const REPO = path.resolve(import.meta.dirname, "../../..");
 
 const read = (relative) =>
   readFileSync(path.join(REPO, relative), "utf8");
+
+// Python, too. Moving gary-api to 3.13 turned up a `.python-version` that
+// nothing else knew about — a fourth place naming the version, found only
+// because uv refused to sync against it. That is precisely the shape this
+// exists to catch, so it is not left to Node alone.
+function pythonMajors() {
+  const found = [];
+
+  const image = read("apps/gary-api/Dockerfile").match(/^FROM python:(\d+\.\d+)/m);
+  if (image) found.push({ where: "apps/gary-api/Dockerfile", major: image[1] });
+
+  found.push({
+    where: "apps/gary-api/.python-version",
+    major: read("apps/gary-api/.python-version").trim(),
+  });
+
+  const requires = read("apps/gary-api/pyproject.toml").match(
+    /requires-python\s*=\s*"[^\d]*(\d+\.\d+)"/,
+  );
+  if (requires) {
+    found.push({ where: "apps/gary-api/pyproject.toml", major: requires[1] });
+  }
+
+  return found;
+}
 
 function majors() {
   const found = [];
@@ -53,33 +78,40 @@ function majors() {
   return found;
 }
 
-const found = majors();
-
 // A check that found nothing to compare has not passed, it has abstained —
 // and this one reads files by path, which is exactly what a directory move
 // breaks silently.
-if (found.length < 4) {
-  console.error(
-    `node alignment: only found ${found.length} places naming a Node major, ` +
-      `expected at least 4 — the scan has probably lost a file`,
-  );
-  process.exit(1);
-}
-
-const disagreeing = [...new Set(found.map((one) => one.major))];
-
-if (disagreeing.length > 1) {
-  console.error("node alignment: these do not agree on the Node major\n");
-  for (const { where, major } of found) {
-    console.error(`  ${major.padEnd(4)} ${where}`);
+function agree(runtime, found, least) {
+  if (found.length < least) {
+    console.error(
+      `${runtime}: only found ${found.length} places naming a version, ` +
+        `expected at least ${least} — the scan has probably lost a file`,
+    );
+    return false;
   }
-  console.error(
-    "\nTypes ahead of the runtime is the dangerous direction: it compiles " +
-      "and then fails where nobody is watching.",
+
+  const distinct = [...new Set(found.map((one) => one.major))];
+  if (distinct.length > 1) {
+    console.error(`${runtime}: these do not agree\n`);
+    for (const { where, major } of found) {
+      console.error(`  ${major.padEnd(6)} ${where}`);
+    }
+    console.error(
+      "\nAhead of the runtime is the dangerous direction: it builds and " +
+        "then fails where nobody is watching.",
+    );
+    return false;
+  }
+
+  console.log(
+    `${runtime}: ${found.length} places all say ${distinct[0]}`,
   );
-  process.exit(1);
+  return true;
 }
 
-console.log(
-  `node alignment: ${found.length} places all say node ${disagreeing[0]}`,
-);
+const ok = [
+  agree("node", majors(), 4),
+  agree("python", pythonMajors(), 3),
+].every(Boolean);
+
+process.exit(ok ? 0 : 1);
