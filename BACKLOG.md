@@ -12,7 +12,7 @@ decided. Moving them here would make two places to look and one of them wrong.
 An item says how it was found, so it can be re-checked rather than argued about.
 When one is done, delete it — the commit is the record.
 
-*Last swept 2026-08-29 against `977f5ae`, by running all three tiers, nine
+*Last swept 2026-08-29 against `c9bd4dd`, by running all three tiers, nine
 real-model turns across five scenes and three models, and reading the deployed
 apps. Every tier was green and nothing below is a failing test — these are
 things no test is looking for.*
@@ -184,7 +184,7 @@ others want.
 `_run`) and the turn runner. It has absorbed every feature since campaigns —
 scenes, the opening, combat, character creation, advancement — and each one
 added to the same module rather than beside it. It was 1679 when this entry was
-written and the number was left stale for a fortnight, which is item 4 happening
+written and the number was left stale for a fortnight, which is item 6 happening
 to this file.
 
 Nothing is wrong with it today. It is simply where the next bug will be, and
@@ -231,9 +231,50 @@ lines are in the browser console and nobody collects them. Between the two, the
 only durable record of a bad turn is gary-api's log, and only if somebody thinks
 to look within the retention window.
 
+### 4. The gary-api image job builds an image and never runs it
+
+`docker build -f apps/gary-api/Dockerfile` is the whole of that gate. The
+Dockerfile installs dependencies and sets a `CMD`, and nothing ever executes
+inside the image, so **an image that cannot start the application passes.**
+
+That is not hypothetical. The python 3.11 → 3.14 bump (#20) was green on all
+five checks and would have deployed an image where `from gary_api.app import
+app` raises — pydantic 2.13.4 asserts on 3.14's `ForwardRef` shape, so every
+route is unreachable. Nothing about the install warns you either: `uv sync
+--python 3.14` resolves and installs all 69 packages, compiled wheels
+included. It was caught by hand, by installing 3.14 and trying the import.
+
+The contrast is gary-web, whose Dockerfile runs `next build` inside the image.
+The node 22 → 26 bump (#22) failed that gate honestly, on `corepack: not
+found`. Same job name, very different amounts of proof.
+
+The cheap fix is one line: `RUN python -c "import gary_api.app"` after the
+final `COPY`, which is the whole of what #20 needed to fail. A better one runs
+the specs inside the image, which is more machinery and would want the
+database.
+
+### 5. `openai` has no upper bound, on the one library nothing tests
+
+`pyproject.toml` says `openai>=2.53.0`. A major therefore reaches the narrator
+through a lockfile bump with nothing in the manifest to review, and
+`narration/openrouter.py` is the module no test tier exercises — all three run
+`GM_FAKE=1`.
+
+That happened: #24 took the lock to openai 3.3.1 and passed all five checks.
+Two real-model smoke runs showed the narrator itself is fine — streaming,
+fragmented tool-call accumulation and the result round-trip all hold — but
+every stream teardown now raises `RuntimeError: generator didn't stop after
+athrow()` out of the `httpcore2` that 3.x brings in. Zero occurrences across
+five runs on 2.53.0. `play.py:1868` and `scenes.py:273` close the stream
+exactly as the smoke does, so that would be a spurious traceback per turn, in
+the log that is currently the only durable record of a bad turn.
+
+Closed unmerged. Without an upper bound it returns next month looking like a
+routine lock update, which is the argument for adding one.
+
 ## Cheap, and stale things get believed
 
-### 4. Only two shapes of document rot are caught
+### 6. Only two shapes of document rot are caught
 
 `apps/gary-api/tests/test_documents.py` now checks the two things that are
 exact: no document names a `"kind"` the world does not have, and gary-api's
@@ -265,7 +306,7 @@ What is still uncaught is every claim made in a sentence rather than a name. A
 README that describes the wrong behaviour in fluent English, with every
 identifier spelled correctly, passes all of this.
 
-### 5. Two things dependabot cannot do, now that it is configured
+### 7. Two things dependabot cannot do, now that it is configured
 
 `.github/dependabot.yml` exists: github-actions, npm at the workspace root, uv
 for gary-api, and docker for the two base images — monthly, grouped so minor
@@ -299,7 +340,7 @@ from here, and guessing a tag is how a green CI turns red for no reason.
 Dependabot will propose them with a changelog attached, which is the better
 version of the same change.
 
-### 6. The browser suite's patience is one number now, and still untested
+### 8. The browser suite's patience is one number now, and still untested
 
 **The old title was wrong and worth correcting: nothing waited fifteen
 seconds.** All twenty-seven were *ceilings* on condition waits —

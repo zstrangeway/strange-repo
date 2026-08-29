@@ -29,6 +29,15 @@ tasks:
       # gary-web test` still means this app and not the whole tree.
       - pnpm -w exec eslint apps/gary-web --max-warnings 0
 
+  versions:
+    desc: Check every place naming a runtime version agrees
+    cmds:
+      # Cheap and first, because it is the one failure that type-checks
+      # clean: types ahead of the runtime compile against APIs that will not
+      # be there. @types/node sat at 20 against a node 22 image, then a
+      # dependabot bump moved it to 26 against the same image.
+      - node scripts/check-runtime-alignment.mjs
+
   unit:
     desc: Unit-test src/lib and enforce its coverage gate
     cmds:
@@ -40,6 +49,7 @@ tasks:
       # First, and part of `test` rather than a job of its own, so it runs
       # wherever the specs run — CI included. It was in neither before, which
       # is how a warning survived.
+      - task: versions
       - task: lint
       - task: unit
       - pnpm exec cucumber-js
