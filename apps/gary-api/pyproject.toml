@@ -23,7 +23,7 @@ dependencies = [
     # other end is usually a Claude. Owning the SSE framing, the fragmented
     # tool-call arguments and the retries ourselves is the part most likely to
     # be subtly wrong.
-    "openai>=2.53.0",
+    "openai>=3.3.1",
     # Signs Apple's client secret (ES256) and verifies its id_token.
     "pyjwt[crypto]>=2.10.1",
     "sqlalchemy[asyncio]>=2.0.51",

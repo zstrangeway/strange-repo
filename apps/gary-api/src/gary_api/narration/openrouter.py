@@ -501,27 +501,42 @@ class OpenRouterNarrator:
                     extra_body={"reasoning": {"effort": EFFORT}},
                 )
 
-                async for chunk in stream:
-                    # A mid-stream failure arrives as a frame rather than a
-                    # status, because the headers went out long ago.
-                    problem = getattr(chunk, "error", None)
-                    if problem:
-                        raise NarrationError(str(problem))
+                try:
+                    async for chunk in stream:
+                        # A mid-stream failure arrives as a frame rather than a
+                        # status, because the headers went out long ago.
+                        problem = getattr(chunk, "error", None)
+                        if problem:
+                            raise NarrationError(str(problem))
 
-                    if not chunk.choices:
-                        continue
+                        if not chunk.choices:
+                            continue
 
-                    choice = chunk.choices[0]
-                    finish = choice.finish_reason or finish
-                    delta = choice.delta
-                    if delta is None:
-                        continue
+                        choice = chunk.choices[0]
+                        finish = choice.finish_reason or finish
+                        delta = choice.delta
+                        if delta is None:
+                            continue
 
-                    if delta.content:
-                        spoken.append(delta.content)
-                        yield Said(delta.content)
+                        if delta.content:
+                            spoken.append(delta.content)
+                            yield Said(delta.content)
 
-                    fragments.add(getattr(delta, "tool_calls", None))
+                        fragments.add(getattr(delta, "tool_calls", None))
+                finally:
+                    # Closed the moment the loop is done with it, however it
+                    # is done. The caller stops consuming this generator when
+                    # a turn ends and calls `aclose()`, which abandons the
+                    # response body still open — openai 2.x tolerated that,
+                    # 3.x raises out of httpcore while collecting the
+                    # abandoned iterator. It was a leaked connection on both.
+                    #
+                    # Nested inside the outer try rather than guarded with a
+                    # `stream is not None`: that guard could never be false
+                    # and fall through, because nothing reaches it without an
+                    # exception already in flight. A branch nothing can take
+                    # is a branch nobody can test.
+                    await stream.close()
 
             except NarrationError:
                 raise
@@ -608,19 +623,34 @@ class OpenRouterNarrator:
                     stream=True,
                 )
 
-                async for chunk in stream:
-                    problem = getattr(chunk, "error", None)
-                    if problem:
-                        raise NarrationError(str(problem))
-                    if not chunk.choices:
-                        continue
+                try:
+                    async for chunk in stream:
+                        problem = getattr(chunk, "error", None)
+                        if problem:
+                            raise NarrationError(str(problem))
+                        if not chunk.choices:
+                            continue
 
-                    delta = chunk.choices[0].delta
-                    if delta is None:
-                        continue
-                    if delta.content:
-                        spoken.append(delta.content)
-                    fragments.add(getattr(delta, "tool_calls", None))
+                        delta = chunk.choices[0].delta
+                        if delta is None:
+                            continue
+                        if delta.content:
+                            spoken.append(delta.content)
+                        fragments.add(getattr(delta, "tool_calls", None))
+                finally:
+                    # Closed the moment the loop is done with it, however it
+                    # is done. The caller stops consuming this generator when
+                    # a turn ends and calls `aclose()`, which abandons the
+                    # response body still open — openai 2.x tolerated that,
+                    # 3.x raises out of httpcore while collecting the
+                    # abandoned iterator. It was a leaked connection on both.
+                    #
+                    # Nested inside the outer try rather than guarded with a
+                    # `stream is not None`: that guard could never be false
+                    # and fall through, because nothing reaches it without an
+                    # exception already in flight. A branch nothing can take
+                    # is a branch nobody can test.
+                    await stream.close()
 
             except NarrationError:
                 raise
