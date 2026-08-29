@@ -259,13 +259,18 @@ and patch arrive as one pull request per ecosystem and a major arrives alone.
 That is the answer to the ten that were opened against `apps/example-web` and
 `apps/example-api` and closed against a repo shape that had already gone.
 
-**Nobody has seen it run.** A dependabot config with a bad key does not fail
-loudly; it errors in the repository's Dependency graph → Dependabot tab and
-opens nothing, which reads exactly like a month with no updates. This
-environment cannot reach the GitHub API for repositories outside this one, so
-the `uv` ecosystem name in particular is taken from the options reference
-rather than from a run. Check that tab once, and check the first month
-actually produces something.
+**The file is valid; whether it produces anything is still unseen.** Dependabot
+posted its own `.github/dependabot.yml` check on the pull request that added it
+and it passed, which settles the schema — including the `uv` ecosystem name,
+which the supported-ecosystems table still does not list and which had to be
+taken from the options reference. So the "bad key opens nothing and reads like
+a quiet month" risk is gone.
+
+What is left is narrower: nothing has watched a monthly run actually open a
+pull request, and a config that parses can still match no manifests. Worth one
+look at Dependency graph → Dependabot after the first month, and worth
+remembering that the last ten pull requests were closed rather than merged —
+this only helps if somebody reads them.
 
 **`superfly/flyctl-actions/setup-flyctl@master` is pinned to a branch.** Both
 deploy jobs use it, so the deploy path runs whatever is on that branch on the
