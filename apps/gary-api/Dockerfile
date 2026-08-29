@@ -44,6 +44,24 @@ RUN if [ -n "$RELEASE" ]; then \
       echo "Release: NO release stamp — /health will report version=unknown"; \
     fi
 
+# Start the application, not merely install it. Without this the whole of
+# this image's gate is "docker build succeeded", and an image that cannot run
+# gary-api passes it — which is not hypothetical: the python 3.14 bump was
+# green on all five checks while shipping an image where this exact import
+# raises, because pydantic asserts on 3.14's ForwardRef shape. Every route
+# would have been unreachable and Fly's health check would have been the
+# first thing to notice.
+#
+# The import is enough. It builds every Pydantic model in play.py and every
+# route on the app, which is where that class of failure lands. It needs no
+# database — the engine is created lazily and the lifespan does not run — so
+# this stays a build step rather than something needing a service.
+#
+# /health by name rather than a count of routes: a hollow app with the
+# framework's own /docs and /openapi.json on it would satisfy a count, and a
+# check that passes on nothing is the thing this file keeps being bitten by.
+RUN python -c "from gary_api.app import app; paths = {getattr(route, 'path', None) for route in app.routes}; assert '/health' in paths, f'no /health among {sorted(p for p in paths if p)}'; print(f'Starts: imported gary_api.app, {len(app.routes)} routes, /health present')"
+
 EXPOSE 8080
 
 # 0.0.0.0 is the address fly-proxy expects, and it is what Flycast routes to.
