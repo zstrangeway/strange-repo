@@ -22,10 +22,75 @@ asserting over them. That is what stops the story drifting and stops gary
 inventing the number that decides what happens. See
 [`apps/gary-api`](apps/gary-api#the-game).
 
-## Working on it
+## Why one repo
+
+gary could live on its own; the scaffolding around it is the reason it does
+not. [`packages/ui`](packages/ui) is one set of components rather than one per
+app, every app is specified in Gherkin and gated the same way so `pnpm test`
+means the same thing wherever it is run, [`CLAUDE.md`](CLAUDE.md) is one file
+rather than a set of conventions re-explained per project, and one workflow
+tests, builds and deploys everything. That is most of what starting a project
+actually costs, and it is the part an agent otherwise rebuilds — slightly
+differently each time — before it writes a line of the thing you asked for.
+Here it is already decided, so the next thing built starts at its first real
+feature.
+
+## Running it
+
+From a fresh clone to gary in a browser. You need **Node 22**, **pnpm 10**,
+[**uv**](https://docs.astral.sh/uv/) for gary-api's Python, and a **Postgres
+16** you can reach. Nothing here runs in Docker.
 
 ```sh
 pnpm install     # once, from this directory
+```
+
+Three variables matter locally. The first two are switches, standing in for the
+things this repo holds no credentials for; the third has a default worth
+knowing:
+
+| Variable | | |
+| --- | --- | --- |
+| `IDENTITY_FAKE=1` | gary-api | Stands in for Google, Facebook and Apple. Without it the sign-in page has no buttons at all — nothing here has their client secrets, and a button that cannot work is worse than no button. |
+| `GM_FAKE=1` | gary-api | Stands in for the model, so a turn costs nothing. Set `OPENROUTER_API_KEY` instead to play against a real one. |
+| `DATABASE_URL` | gary-api | Defaults to `postgresql://postgres@127.0.0.1:5432/postgres`. Set it if yours is not that. |
+
+Create the schema and the local accounts:
+
+```sh
+pnpm --filter gary-api seed
+```
+
+It migrates first, then prints a sign-in code per account. Those codes are what
+you paste into the stand-in provider's page, so keep the output.
+
+Then a terminal each:
+
+```sh
+IDENTITY_FAKE=1 GM_FAKE=1 pnpm --filter gary-api dev     # http://127.0.0.1:8000
+```
+
+```sh
+pnpm --filter gary-web dev                               # http://localhost:3000
+```
+
+Open **`http://localhost:3000`, not `127.0.0.1:3000`.** They are different
+origins to a browser, and gary-api answers only the ones named in
+`BROWSER_ORIGINS` — which defaults to `http://localhost:3000` alone. From the
+other spelling every call is made and then refused on the way back, so the page
+renders with no sign-in buttons and the reason is only in the console.
+
+Sign in with any of the three, paste one of the codes `seed` printed, and you
+land on your campaigns. Starting one picks a system, a module and a model, and
+`GM_FAKE=1` narrates it without spending anything.
+
+gary-web finds gary-api at `NEXT_PUBLIC_GARY_API_URL`, default
+`http://127.0.0.1:8000`. It is read when the app is built rather than when it
+runs, so changing it means restarting `dev`.
+
+## Working on it
+
+```sh
 pnpm test        # every app's specs
 ```
 
