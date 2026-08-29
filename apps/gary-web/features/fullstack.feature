@@ -118,3 +118,81 @@ Feature: The whole thing, for real
     And I reload the page
     Then the transcript should show what I said
     And the page shows "Bramble"
+
+  # ------------------------------------------- the three newest features
+
+  # Everything below exists because the same three features have deep
+  # coverage on both sides of the wire and none across it: combat is 22
+  # scenarios in gary-api and 2 here, advancement 24 and 6, the score methods
+  # a whole feature file each. Every one of those browser scenarios runs
+  # against `features/support/api-stub.mjs`, which was written from the same
+  # understanding as gary-api and so agrees with it by construction rather
+  # than by test. These are the same paths with the stub taken out.
+
+  # The scores come off gary-api's dice and are graded by the real ruleset —
+  # 4d6-drop-lowest is a rule, and which methods an edition offers comes from
+  # `/catalogue/{slug}` rather than from anything this page knows.
+  Scenario: Rolling a set of scores against the real rules
+    Given I am signed out
+    When I open the sign in page
+    And I sign in with google, agreeing as "1|ada@example.com|Ada"
+    And I open the new campaign page
+    And I choose the system "Dungeons & Dragons 5th Edition"
+    And I choose the module "The Drowned Belfry"
+    And I choose the model "Whatever gary is running"
+    And I name it "A Light in the Deep" and start
+    Then I should be building the party
+    And I should be able to choose how scores are decided
+    And the choices should be the system's own
+    When I choose "roll 4d6, drop the lowest"
+    And I roll for scores
+    Then I should see 6 scores to place
+    When I place them and add "Bramble" the "rogue" as mine
+    Then the page shows "Bramble"
+    And the party should show what Bramble is made of
+
+  # A fight for real: gary-api rolls initiative for both sides, sorts them and
+  # writes the order, and the page renders it. Nothing here says who goes
+  # first — that is the whole point of the tool, and the browser has only ever
+  # seen the stub's version of the answer.
+  Scenario: A fight, for real
+    Given I am signed out
+    When I open the sign in page
+    And I sign in with google, agreeing as "1|ada@example.com|Ada"
+    And I open the new campaign page
+    And I choose the system "Dungeons & Dragons 5th Edition"
+    And I choose the module "The Drowned Belfry"
+    And I choose the model "Whatever gary is running"
+    And I name it "A Light in the Deep" and start
+    Then I should be building the party
+    When I add "Bramble" the "rogue" as mine
+    And I take them in
+    And I say "something heavy comes up the stair [[fight mud-creature]]"
+    And gary finishes
+    Then the page shows "In a fight"
+    And the page shows "round 1"
+
+  # Advancement end to end, which nothing has done: the contract it added
+  # shipped on 2026-08-28 and no browser has met a real gary-api across it.
+  # 300 is what this edition charges for level 2, so this crosses exactly one
+  # threshold — the engine works that out from the total, and gary never says
+  # a level at all.
+  Scenario: Earning a level, for real
+    Given I am signed out
+    When I open the sign in page
+    And I sign in with google, agreeing as "1|ada@example.com|Ada"
+    And I open the new campaign page
+    And I choose the system "Dungeons & Dragons 5th Edition"
+    And I choose the module "The Drowned Belfry"
+    And I choose the model "Whatever gary is running"
+    And I name it "A Light in the Deep" and start
+    Then I should be building the party
+    When I add "Bramble" the "rogue" as mine
+    And I take them in
+    Then "Bramble" should show as level 1
+    And "Bramble" should show 0 of the 300 they need
+    When I say "the mud creature stops moving [[award Bramble 300 the belfry]]"
+    And gary finishes
+    Then the transcript should show an award to "Bramble"
+    And the transcript should show "Bramble" reaching level 2
+    And "Bramble" should show as level 2

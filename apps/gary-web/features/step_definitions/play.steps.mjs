@@ -567,7 +567,7 @@ Then("the choices should be the system's own", async function () {
   const answered = await world.page.evaluate(async (base) => {
     const response = await fetch(`${base}/catalogue/dnd-5e`);
     return (await response.json()).methods.map((one) => one.name);
-  }, apiStub.BASE_URL);
+  }, world.apiUrl);
 
   assert.deepEqual(offered.map((one) => one.trim()), answered);
   await world.page.keyboard.press("Escape");

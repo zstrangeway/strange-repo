@@ -123,7 +123,7 @@ the fact that was already there rather than adding a second one beside it. It
 stayed inside the closing tool set and came back with a 61-word recap. The
 close pass had never been run against a real model before this.
 
-**Runs 2026-08-29, `--fight`, three models, after the contract fix in item 9.**
+**Runs 2026-08-29, `--fight`, three models, after the tool-schema fix below.**
 Four runs, and the double-write did not recur once — against two out of two
 before the fix, on the same small model.
 
@@ -184,7 +184,7 @@ others want.
 `_run`) and the turn runner. It has absorbed every feature since campaigns —
 scenes, the opening, combat, character creation, advancement — and each one
 added to the same module rather than beside it. It was 1679 when this entry was
-written and the number was left stale for a fortnight, which is item 6 happening
+written and the number was left stale for a fortnight, which is item 5 happening
 to this file.
 
 Nothing is wrong with it today. It is simply where the next bug will be, and
@@ -208,39 +208,7 @@ so worth agreeing before adding — or moving gary-web's config up to the
 workspace root so its base path covers both. The second is cheaper and changes
 what every existing rule applies to, which is the part to look at first.
 
-### 4. The tier that exists to catch drift does not reach the newest work
-
-`test:e2e` covers sign-in, identity, profile, one campaign with one turn, and a
-reload — nine scenarios. It does not touch combat, advancement, or the score
-methods, which are the three most recent and most intricate features.
-
-| feature | gary-api | gary-web | end to end |
-| --- | --- | --- | --- |
-| combat | 22 | 2 | **0** |
-| advancement | 24 | 6 | **0** |
-| score methods | in `catalogue` | in `creation` | **0** |
-
-Every one of those gary-web numbers is against the stub in
-`features/support/api-stub.mjs`, which is a thing I wrote from the same
-understanding as the code it stands in for — so it agrees with gary-api by
-construction rather than by test. That is precisely what the README says this
-tier exists to catch, and this is the newest and most intricate third of the
-app it does not reach.
-
-The score methods are the same shape as the other two: `/catalogue/{slug}`
-publishes what an edition permits, whether gary rolls it and whether the
-results are yours to arrange, and only the stub's version of that contract is
-ever checked by a browser.
-
-Advancement is the sharpest of the three because it is the newest — it shipped
-on 2026-08-28 and the contract it added (`Turn.changes`, `Member.experience`,
-`Member.next_level`) has never been exercised by a browser against a real
-gary-api at all.
-
-Keep the tier small — that is its design. A fight, a level gained, and a rolled
-set of scores are the three contracts most worth one scenario each.
-
-### 5. gary-api has no error tracking
+### 4. gary-api has no error tracking
 
 Sentry is wired properly on gary-web: a real DSN in `fly.toml`, source maps
 uploaded at build with the release pinned to the commit SHA, events tunnelled
@@ -281,7 +249,7 @@ to look within the retention window.
 
 ## Cheap, and stale things get believed
 
-### 6. Nothing catches a document going stale
+### 5. Nothing catches a document going stale
 
 The three that had drifted are fixed: gary-api's README no longer says there is
 no combat thirty lines below the section describing combat, `fly.toml` no longer
@@ -299,7 +267,7 @@ event kind that no longer exists is a grep. `tests/test_pluggable.py` already
 does exactly this for system names in source; the same crude scan over the
 markdown would have caught "there is no combat" the day `begin_combat` landed.
 
-### 7. Dependency drift, and nothing to drive it
+### 6. Dependency drift, and nothing to drive it
 
 There is no `.github/dependabot.yml`. Ten Dependabot pull requests were opened
 and all ten were closed unmerged — several of them against `apps/example-web`
@@ -311,7 +279,7 @@ CI still pins `actions/checkout@v4`, `actions/setup-node@v4` and
 Dependabot for the paths that exist now, or bump the three actions by hand and
 accept that this is manual.
 
-### 8. The browser suite waits a fixed fifteen seconds, twenty-five times
+### 7. The browser suite waits a fixed fifteen seconds, twenty-five times
 
 **Two causes behind these timeouts are now found and fixed**, and both were
 real bugs rather than slowness — which is the lesson worth keeping: every one

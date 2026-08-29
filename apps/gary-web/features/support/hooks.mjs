@@ -35,6 +35,12 @@ export const world = {
   // The pair of log lines the logging scenarios join up.
   webCall: null,
   apiCalls: [],
+  // Whichever gary-api this run is against — the stub, or a real one on a
+  // throwaway database. Set in BeforeAll rather than read from either module
+  // by name, because a step that reaches for `apiStub.BASE_URL` works only in
+  // the tier the stub runs in, and the tier it then cannot run in is the one
+  // that exists to catch the stub being wrong.
+  apiUrl: null,
 };
 
 let webServer = null;
@@ -77,6 +83,8 @@ BeforeAll(async function () {
     await apiStub.start();
     apiUrl = apiStub.BASE_URL;
   }
+
+  world.apiUrl = apiUrl;
 
   webServer = spawn(
     "node_modules/.bin/next",
