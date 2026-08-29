@@ -55,6 +55,11 @@ def step_has_list(context):
     _tool_named(context, "list_postings")
 
 
+@then("the tools should include one for editing a posting")
+def step_has_edit(context):
+    _tool_named(context, "edit_posting")
+
+
 @then("every tool should describe what it does")
 def step_tools_described(context):
     for tool in context.tools:
@@ -94,6 +99,48 @@ def step_call_save(context, title, company):
     match = re.search(r"Saved (\S+)", context.reply_text)
     if match:
         context.ref = match.group(1).rstrip(":")
+
+
+@when("I call the save tool with a pasted posting naming no company")
+def step_call_save_anonymous(context):
+    _call(
+        context,
+        "save_posting",
+        {"text": "A job, somewhere, working in Python against Postgres."},
+    )
+    match = re.search(r"Saved (\S+)", context.reply_text)
+    context.ref = match.group(1).rstrip(":")
+
+
+@then("the reply should say the company is unknown")
+def step_reply_company_unknown(context):
+    assert "company is unknown" in context.reply_text, context.reply_text
+
+
+@then("the reply should name a tool I can call to set it")
+def step_reply_names_the_tool(context):
+    """The defect this scenario exists for.
+
+    The reply used to say "the edit command", which is a thing only the CLI
+    has. A model reading that has nowhere to go.
+    """
+    named = [
+        tool.name
+        for tool in context.mcp.list_tools()
+        if tool.name in context.reply_text
+    ]
+    assert named, f"no callable tool named in:\n{context.reply_text}"
+
+
+@when('I call the edit tool for that posting with company "{company}"')
+def step_call_edit(context, company):
+    _call(context, "edit_posting", {"ref": context.ref, "company": company})
+
+
+@then('that posting\'s company should be "{company}"')
+def step_company_through_server(context, company):
+    run(context, "show", context.ref)
+    assert f"company  {company}" in context.stdout, context.stdout
 
 
 @when("I call the tailor tool for that posting")

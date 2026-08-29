@@ -74,9 +74,13 @@ def save_posting(
             )
         lines = [f"Saved {posting.ref}: {posting.title or '(untitled)'}"]
         if posting.company is None:
+            # Names the tool, not the CLI subcommand. This line used to say
+            # "the edit command", which a model reading it has no way to run —
+            # a dead end at the moment somebody is trying to finish the flow
+            # without leaving the session.
             lines.append(
-                "The company is unknown — scout does not guess it. Set it "
-                "with the edit command, or save again with company set."
+                "The company is unknown — scout does not guess it. Set it by "
+                f"calling edit_posting with ref {posting.ref}."
             )
         return "\n".join(lines)
     except ScoutError as error:
@@ -119,6 +123,26 @@ def log_status(ref: str, status: str, note: str | None = None) -> str:
             applications.check_transition(current, status)
             applications.record(connection, posting.id, status, note)
         return f"{ref} is now {status}"
+    except ScoutError as error:
+        return _failing(error)
+
+
+@server.tool(
+    description=(
+        "Fill in a saved posting's title or company — what scout will not "
+        "guess from the page. Pass the ones you want changed; the others are "
+        "left as they are."
+    )
+)
+def edit_posting(ref: str, title: str | None = None, company: str | None = None) -> str:
+    logger.info("tool.call edit_posting")
+    try:
+        with db.connect() as connection:
+            posting = postings.edit(connection, ref, title=title, company=company)
+        return (
+            f"Updated {posting.ref}: {posting.title or '(untitled)'} — "
+            f"{posting.company_or_unknown}"
+        )
     except ScoutError as error:
         return _failing(error)
 

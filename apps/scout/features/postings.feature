@@ -69,6 +69,20 @@ Feature: Saving a posting
     And scout should say the page had no readable posting in it
     And scout should tell me to paste the text instead
 
+  # Found by pointing scout at a real Greenhouse board rather than at a
+  # fixture. A board's index page is long, extracts cleanly, and is not a job
+  # — and scout saved one as a posting without a word. Tailoring would then
+  # read a list of job titles and produce something confident from it.
+  #
+  # What separates them is prose. The real index extracted to 3.2k characters
+  # containing one sentence; the real posting under it, 31.
+  Scenario: A board's index page rather than one posting
+    Given a job board serving its whole index of jobs
+    When I save a posting from that URL
+    Then scout should refuse it
+    And scout should say it looks like a list of jobs
+    And scout should tell me to open the posting itself
+
   Scenario: A board that refuses the fetch
     Given a job board that answers 403
     When I save a posting from that URL

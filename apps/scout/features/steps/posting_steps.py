@@ -104,6 +104,11 @@ def step_board_shell(context):
     context.board = JobBoard("shell")
 
 
+@given("a job board serving its whole index of jobs")
+def step_board_index(context):
+    context.board = JobBoard("index")
+
+
 @given("a job board that answers 403")
 def step_board_403(context):
     context.board = JobBoard("refuses")
@@ -149,6 +154,16 @@ def step_no_nav(context):
 @then("scout should say the page had no readable posting in it")
 def step_no_posting(context):
     assert "no readable posting" in context.output, context.output
+
+
+@then("scout should say it looks like a list of jobs")
+def step_looks_like_index(context):
+    assert "list of jobs" in context.output, context.output
+
+
+@then("scout should tell me to open the posting itself")
+def step_open_the_posting(context):
+    assert "Open the posting itself" in context.output, context.output
 
 
 @then("scout should say the board refused the fetch")

@@ -32,6 +32,33 @@ POSTING_PAGE = """<!doctype html>
   <footer>Bilgewater Boards, all rights reserved.</footer>
 </body></html>"""
 
+# A board's index: every job it has, as links. Long enough to pass the length
+# check — the real Greenhouse one extracts to 3.2k characters — and with
+# almost no prose in it, which is what actually tells the two apart.
+INDEX_PAGE = """<!doctype html>
+<html><head><title>Jobs at Wilding Labs</title></head>
+<body>
+  <nav><a href="/">Jobs</a></nav>
+  <main>
+    <h1>Open roles</h1>
+    <p>Level up your career by having opportunities sent to your inbox.</p>
+    <ul>
+      <li><a href="/jobs/1">Staff Engineer — London, UK</a></li>
+      <li><a href="/jobs/2">Senior Platform Engineer — Remote</a></li>
+      <li><a href="/jobs/3">Platform Lead — New York, USA</a></li>
+      <li><a href="/jobs/4">Infrastructure Engineer — Berlin, Germany</a></li>
+      <li><a href="/jobs/5">Site Reliability Engineer — Remote</a></li>
+      <li><a href="/jobs/6">Data Platform Engineer — London, UK</a></li>
+      <li><a href="/jobs/7">Security Engineer — Remote</a></li>
+      <li><a href="/jobs/8">Engineering Manager, Platform — London, UK</a></li>
+      <li><a href="/jobs/9">Developer Experience Engineer — Remote</a></li>
+      <li><a href="/jobs/10">Database Reliability Engineer — Berlin, Germany</a></li>
+      <li><a href="/jobs/11">Staff Software Engineer, Billing — Remote</a></li>
+      <li><a href="/jobs/12">Principal Engineer, Infrastructure — London, UK</a></li>
+    </ul>
+  </main>
+</body></html>"""
+
 # What a board that renders in the browser serves to anything that is not a
 # browser. There is no posting in it at any length.
 SHELL_PAGE = """<!doctype html>
@@ -58,11 +85,12 @@ class JobBoard:
                     # first and the scenario sees a timeout rather than a body.
                     time.sleep(5)
                     return
-                body = (
-                    SHELL_PAGE
-                    if board.mode == "shell"
-                    else POSTING_PAGE.format(title=board.title, company=board.company)
-                )
+                if board.mode == "shell":
+                    body = SHELL_PAGE
+                elif board.mode == "index":
+                    body = INDEX_PAGE
+                else:
+                    body = POSTING_PAGE.format(title=board.title, company=board.company)
                 encoded = body.encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")

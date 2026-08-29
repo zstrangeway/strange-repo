@@ -25,12 +25,21 @@ Feature: scout as an MCP server
     And the tools should include one for tailoring a resume
     And the tools should include one for logging a status
 
-  # Proposed as a fourth, read-only: without it a session can save and tailor
-  # but cannot see what it saved, so the full flow needs the human to go and
-  # read the database. Worth arguing about — it is beyond the three.
+  # A fourth, read-only: without it a session can save and tailor but cannot
+  # see what it saved, so the full flow needs the human to go and read the
+  # database.
   Scenario: And one for seeing what I have
     When I ask the server what tools it has
     Then the tools should include one for listing postings
+
+  # And a fifth, for the reason the save tool gave it away: when the company
+  # is unknown its reply says to set it — and said so naming a command that
+  # only existed on the command line. A tool telling a model to do something
+  # it has no tool for is a dead end at the exact moment somebody is trying
+  # to finish the flow without leaving the session.
+  Scenario: And one for filling in what scout would not guess
+    When I ask the server what tools it has
+    Then the tools should include one for editing a posting
 
   Scenario: Every tool says what it needs
     When I ask the server what tools it has
@@ -65,6 +74,14 @@ Feature: scout as an MCP server
     Then the call should report a failure
     And the reply should say "Kubernetes" is not in the master resume
     And no resume file should have been written
+
+  Scenario: Setting the company through the server
+    When I call the save tool with a pasted posting naming no company
+    Then the reply should say the company is unknown
+    And the reply should name a tool I can call to set it
+    When I call the edit tool for that posting with company "Orrery"
+    Then the call should succeed
+    And that posting's company should be "Orrery"
 
   Scenario: Logging a status through the server
     Given I have saved a posting for "Staff Engineer" at "Orrery"

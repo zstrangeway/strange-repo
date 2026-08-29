@@ -32,7 +32,7 @@ second with your own resume — keeping the two rules in the comment at the top
 of it — and then:
 
 ```sh
-scout save --url https://example.com/jobs/staff-engineer
+scout save --url https://job-boards.greenhouse.io/acme/jobs/4012345
 # or, for a board that blocks fetches:
 pbpaste | scout save --text - --title "Staff Engineer" --company "Orrery"
 
@@ -43,6 +43,23 @@ scout show orrery-staff-engineer
 ```
 
 That is the whole tool.
+
+### Saving from a URL
+
+Give it the **posting's own URL**, not the board's index. scout fetches the
+page itself and keeps the readable part, dropping navigation and footers.
+
+It refuses, loudly and without saving, when the page is not a posting:
+
+| | |
+| --- | --- |
+| A board's index page | "That looks like a list of jobs rather than one posting" |
+| A shell that fills itself in with JavaScript | "There was no readable posting in …" |
+| A board that answers 403 | "The board refused the fetch" |
+
+All three tell you to paste the text instead, which always works. Verified
+against real boards: an individual Greenhouse posting saves cleanly, and both
+Greenhouse's and python.org's index pages are refused.
 
 ## The one thing worth understanding
 
@@ -136,10 +153,11 @@ Add this to `.mcp.json` in your project, or to `~/.claude.json`:
 }
 ```
 
-That exposes four tools: `save_posting`, `tailor_resume`, `log_status`, and
-`list_postings`. The first three are the capabilities; the fourth is there
-because a session that can save and tailor but cannot see what it saved makes
-you go and read the database by hand.
+That exposes five tools: `save_posting`, `tailor_resume`, `log_status`,
+`list_postings` and `edit_posting`. The first three are the capabilities. The
+other two are there because a session that can save and tailor but cannot see
+what it saved, or cannot fill in a company scout would not guess, sends you
+back to a terminal in the middle of the flow.
 
 A refusal comes back as a failed tool result carrying the reason, not as an
 exception — so when a draft invents an employer, the model reads *why* and can

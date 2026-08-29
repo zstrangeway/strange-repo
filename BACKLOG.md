@@ -187,6 +187,12 @@ reason the summary is not optional.
 date corruption, and a summary in which every reported pair was genuinely a
 rewrite of that line.
 
+Two more were found the same way — by pointing scout at real Greenhouse and
+python.org boards rather than at fixtures — and are now fixed: a board's
+**index page** saved silently as a posting, and the MCP save tool told a model
+to "use the edit command", which only existed on the command line. Both have
+scenarios now.
+
 What is still thin:
 
 - **One model, one posting, one resume.** The example master is the only
