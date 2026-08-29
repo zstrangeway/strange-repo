@@ -107,6 +107,61 @@ def _just_won() -> world.World:
     )
 
 
+def _cornered() -> world.World:
+    """Something is coming, and nothing is in the fight yet.
+
+    ``enemies`` and ``fight`` are both empty on purpose. A model that wants a
+    blow resolved here has to open the fight and author what is in it first,
+    so a run shows whether it built the thing it is swinging at or swung at
+    something only the prose knows about.
+    """
+    return world.World(
+        place="the belfry stair, something heavy coming up it",
+        minutes=28,
+        facts={"bell-rings": "3", "stair": "the only way down"},
+        party=[_bramble(hp=8)],
+    )
+
+
+# What the scene contained, as the close pass is given it. Gary narrated
+# three things here and recorded none of them: a key taken, a fourth bell,
+# and the party leaving the room. The world below still says three bells and
+# still has them in the chamber, so the gap is real rather than arranged to
+# be found.
+CLOSED = (
+    ("player", "I search the body and take anything it was carrying."),
+    (
+        "gary",
+        "Under the muck your fingers close on a cold iron key, long as your "
+        "hand and warm from nothing at all. You pocket it. Above you the "
+        "bell rings a fourth time.",
+    ),
+    ("player", "Then we go back up. I have had enough of this room."),
+    (
+        "gary",
+        "You climb. The stair is dry above the waterline, and the chamber "
+        "falls quiet behind you.",
+    ),
+)
+
+
+def _left_behind() -> world.World:
+    """The world as the scene left it, with what the prose added missing.
+
+    The close pass is the last moment a fact gary narrated but never wrote
+    down can still be written down — after this the transcript is out of
+    context and the fact is gone. So this world deliberately disagrees with
+    ``CLOSED`` in three places rather than agreeing with it, which would ask
+    a real model to reconcile nothing and report that it did.
+    """
+    return world.World(
+        place="a stone chamber below the belfry, the water going still",
+        minutes=38,
+        facts={"bell-rings": "3", "mud-creature": "killed"},
+        party=[_bramble(hp=3)],
+    )
+
+
 @dataclass(frozen=True)
 class Scene:
     """One situation to put in front of a real model.
@@ -124,6 +179,15 @@ class Scene:
     # itself" about a fight that is over accuses the model of the one thing
     # this script exists to catch, on no evidence at all.
     rolls: bool = True
+    # Which of the narrator's two passes to drive. Unlike *which* scene this
+    # genuinely is a yes or no: a Narrator offers narrate and close and
+    # nothing else, and they differ in the tools offered, the prompt sent and
+    # what comes back at the end.
+    closing: bool = False
+    # A close is given a scene rather than a message: what it is called, and
+    # the turns it contained. Empty for every scene that is a turn.
+    title: str = ""
+    transcript: tuple[tuple[str, str], ...] = ()
 
 
 # What each run is for. The message is chosen to make a well-behaved model
@@ -149,13 +213,71 @@ SCENES: dict[str, Scene] = {
         # The fight is over. There is nothing left here to decide.
         rolls=False,
     ),
+    "fight": Scene(
+        says=(
+            "I put my back to the wall and go for it the moment it comes "
+            "round the turn of the stair."
+        ),
+        world=_cornered,
+        watching=(
+            "a fight opened with an adversary authored, and a blow proposed "
+            "rather than described"
+        ),
+    ),
+    "close": Scene(
+        says="",
+        world=_left_behind,
+        watching=("a recap, and the three things the prose added being written down"),
+        closing=True,
+        title="The chamber below the belfry",
+        transcript=CLOSED,
+        # A recap looks back at dice that were already thrown. One thrown
+        # here would decide something nobody was there for, which is why the
+        # closing tool set has none — so there is nothing to roll and saying
+        # otherwise would accuse the model wrongly.
+        rolls=False,
+    ),
 }
 
 
-def run_tool(call, ruleset, state, log):
+def _by_id(state, wanted):
+    for fighter in [*state.party, *state.enemies]:
+        if fighter.id == wanted:
+            return fighter
+    return None
+
+
+def _fighter(state, named):
+    """Somebody in this fight, by name — either side, as _in_fight does it."""
+    wanted = (named or "").strip().lower()
+    for fighter in [*state.party, *state.enemies]:
+        if fighter.name.lower() == wanted:
+            return fighter
+    return None
+
+
+def _advance(state):
+    """Move the order on. Swinging is what taking a turn is."""
+    fight = state.fight
+    fight.at += 1
+    if fight.at >= len(fight.order):
+        fight.at = 0
+        fight.round += 1
+
+
+def run_tool(call, ruleset, state, log, closing=False):
     """Answer a tool the way the router would, without a database."""
     arguments = call.arguments or {}
     log.append((call.name, arguments))
+
+    if closing and call.name not in narration.CLOSING_TOOLS:
+        # Refused exactly as scenes.close_scene refuses it, and for the same
+        # reason this script refuses an ability the system does not have: a
+        # harness looser than the thing it stands in for reports the wrong
+        # answer confidently. A close that answered the whole tool set would
+        # show a model reconciling cleanly when production would have sent
+        # half of it back.
+        return f"refused: {call.name} cannot be called while closing a scene", None
 
     try:
         if call.name == "roll":
@@ -172,9 +294,7 @@ def run_tool(call, ruleset, state, log):
             # thing it stands in for reports the wrong answer confidently.
             ability = (arguments.get("ability") or "").strip().lower() or None
             if ability and ability not in ruleset.abilities:
-                return (
-                    f"refused: {ability!r} is not an ability in this system"
-                ), None
+                return (f"refused: {ability!r} is not an ability in this system"), None
 
             # Never the model's number, again as the router has it: what a
             # score is worth is a rule, and the score is on a sheet gary does
@@ -222,19 +342,107 @@ def run_tool(call, ruleset, state, log):
                 f"{amount} experience and is level {reached}"
             ), None
         if call.name == "begin_combat":
-            # Named back, so a smoke run shows whether the model authored a
-            # monster or asked for a fight with nothing in it.
+            # Everybody rolls and the engine sorts them, exactly as _fighting
+            # does it. Found by a real run: an earlier version answered "a
+            # fight began against Zombie" and never said who was up, so the
+            # model supplied a turn order out of its own head and this script
+            # reported that it had gone through the engines. Gary says who is
+            # in a fight; it never says who goes first.
             wanted = arguments.get("adversaries") or []
-            names = ", ".join(str(one.get("name")) for one in wanted if isinstance(one, dict))
-            return f"a fight began against {names or 'nothing'}", None
-        if call.name == "attack":
+            for one in wanted:
+                if not isinstance(one, dict):
+                    continue
+                state.enemies.append(
+                    world.Foe(
+                        id=f"foe-{len(state.enemies) + 1}",
+                        name=str(one.get("name") or "something"),
+                        max_hp=int(one.get("hit_points") or 1),
+                        hp=int(one.get("hit_points") or 1),
+                        armour_class=int(one.get("armour_class") or 10),
+                        attack_bonus=int(one.get("attack_bonus") or 0),
+                        damage=str(one.get("damage") or ruleset.unarmed_damage),
+                    )
+                )
+            if not state.enemies:
+                return "refused: a fight needs something to fight", None
+
+            order = []
+            for fighter in [*state.party, *state.enemies]:
+                # A sheet of tens here, so the party's modifier is nothing —
+                # the same reason `check` passes zero.
+                bonus = fighter.attack_bonus if isinstance(fighter, world.Foe) else 0
+                order.append(
+                    (ruleset.initiative(bonus).total, fighter.id, fighter.name)
+                )
+            order.sort(key=lambda one: (-one[0], one[2]))
+            state.fight = world.Fight(order=[one[1] for one in order])
             return (
-                f"{arguments.get('attacker')} swung at {arguments.get('target')}",
-                None,
+                "a fight began. The order is "
+                + ", ".join(f"{name} ({total})" for total, _, name in order)
+            ), None
+        if call.name == "attack":
+            # Resolved, not acknowledged. The same real run had this answering
+            # "Zombie swung at Bramble", so the model narrated the blow
+            # missing on its own authority and the report called it clean.
+            # Whether a blow lands and how much it hurt are the two things
+            # gary is never allowed to decide, so they are the two things a
+            # harness standing in for the router must actually decide.
+            if state.fight is None:
+                return "refused: nobody is fighting", None
+            attacker = _fighter(state, arguments.get("attacker", ""))
+            target = _fighter(state, arguments.get("target", ""))
+            if attacker is None or target is None:
+                return "refused: that is not somebody in this fight", None
+            if attacker.id != state.fight.whose:
+                up = _by_id(state, state.fight.whose)
+                return (
+                    f"refused: it is not {attacker.name}'s turn — it is "
+                    f"{up.name if up else 'nobody'}'s"
+                ), None
+
+            hitting = isinstance(attacker, world.Foe)
+            guard = (
+                target.armour_class
+                if isinstance(target, world.Foe)
+                else ruleset.default_armour_class
             )
+            swing = ruleset.resolve(
+                dc=guard,
+                modifier=attacker.attack_bonus if hitting else 0,
+                reason=f"attack on {target.name}",
+            )
+            said = f"{attacker.name} missed {target.name}"
+            if swing.degree in (
+                systems.Degree.SUCCESS,
+                systems.Degree.CRITICAL_SUCCESS,
+            ):
+                hurt = dice.roll(
+                    attacker.damage if hitting else ruleset.unarmed_damage,
+                    f"{attacker.name} hits {target.name}",
+                )
+                target.hp = max(0, target.hp - hurt.total)
+                said = f"{attacker.name} hit {target.name} for {hurt.total}"
+            _advance(state)
+            return (
+                f"{said} ({swing.roll.total} against {guard}). Their turn is over."
+            ), swing
         if call.name == "end_turn":
-            return "that turn is over", None
+            # The router refuses this on the player's own turn — they say what
+            # they do, gary does not do it for them — and names whose turn
+            # ended otherwise.
+            if state.fight is None:
+                return "refused: nobody is fighting", None
+            up = _by_id(state, state.fight.whose)
+            if up is not None and not isinstance(up, world.Foe):
+                return (
+                    f"refused: it is {up.name}'s turn, and {up.name} is the "
+                    "player's to take — ask them what they do"
+                ), None
+            _advance(state)
+            return f"{up.name if up else 'that'}'s turn is over", None
         if call.name == "end_combat":
+            state.fight = None
+            state.enemies.clear()
             return "the fight is over", None
         if call.name == "scene":
             # Noted, exactly as the router notes it. One turn is not a scene,
@@ -262,20 +470,41 @@ async def play(model: str, scene: str = "turn") -> int:
     opening = scene == "opening"
     state = playing.world()
 
-    prompt = narration.Prompt(
-        briefing=ruleset.briefing(),
-        model=model,
-        system_slug=ruleset.slug,
-        module_slug=module.slug,
-        module_title=module.title,
-        module_premise=module.premise,
-        module_hook=module.hook,
-        world=world.render(state),
-        # The opening answers gary-api's instruction rather than a player, so
-        # it is the one thing here where the transcript is genuinely empty.
-        message=play_module.OPENING if opening else playing.says,
-        transcript=[] if opening else [("player", playing.says)],
-    )
+    if playing.closing:
+        # Assembled the way scenes.close_scene assembles it, empty fields and
+        # all. That prompt shows the scene and the world and asks for a
+        # summary; why the party came is not part of summarising what they
+        # did. Filling those in here would report on a prompt gary never
+        # sends, which is the same trap the opening scene avoids by sending
+        # the router's own instruction rather than a copy.
+        prompt = narration.Prompt(
+            briefing="",
+            model=model,
+            system_slug=ruleset.slug,
+            module_slug=module.slug,
+            module_title="",
+            module_premise="",
+            module_hook="",
+            world=world.render(state),
+            scene_title=playing.title,
+            transcript=list(playing.transcript),
+        )
+    else:
+        prompt = narration.Prompt(
+            briefing=ruleset.briefing(),
+            model=model,
+            system_slug=ruleset.slug,
+            module_slug=module.slug,
+            module_title=module.title,
+            module_premise=module.premise,
+            module_hook=module.hook,
+            world=world.render(state),
+            # The opening answers gary-api's instruction rather than a player,
+            # so it is the one thing here where the transcript is genuinely
+            # empty.
+            message=play_module.OPENING if opening else playing.says,
+            transcript=[] if opening else [("player", playing.says)],
+        )
 
     gary = narration.narrator(model)
     called: list[tuple[str, dict]] = []
@@ -286,14 +515,22 @@ async def play(model: str, scene: str = "turn") -> int:
     print(f"system   {ruleset.name}")
     print(f"module   {module.title}")
     print(f"scene    {scene} — watching for {playing.watching}")
-    if opening:
+    if playing.closing:
+        print(f"closing  {playing.title!r}, {len(playing.transcript)} turns in it")
+        # Said rather than silently used: production picks this pass's model
+        # with models.scene_model() and not the campaign's, so a run against
+        # a model named here is answering "could this one recap", which is a
+        # different question from the one the deployment asks.
+        print(f"         (a deployment would recap on {models.scene_model()})")
+    elif opening:
         print("player   (nobody has said anything — this is the opening)")
     else:
         print(f'player   "{playing.says}"')
     print()
-    print("narration " + "-" * 60)
+    print(("recap " if playing.closing else "narration ") + "-" * 60)
 
-    generator = gary.narrate(prompt)
+    generator = gary.close(prompt) if playing.closing else gary.narrate(prompt)
+    recap = ""
     sending = None
     try:
         while True:
@@ -310,14 +547,23 @@ async def play(model: str, scene: str = "turn") -> int:
             elif isinstance(event, narration.Calls):
                 results = []
                 for call in event.calls:
-                    summary, detail = run_tool(call, ruleset, state, called)
+                    summary, detail = run_tool(
+                        call, ruleset, state, called, closing=playing.closing
+                    )
                     if detail is not None and hasattr(detail, "degree"):
                         graded.append(detail)
                     results.append(narration.Result(call, summary))
                 sending = results
+            elif isinstance(event, narration.Recap):
+                # How a close ends, where a turn ends with prose. Printed as
+                # it arrives so a run that produced an empty one shows that
+                # rather than reporting a blank line as a recap.
+                recap = event.text
+                sys.stdout.write(event.text)
+                sys.stdout.flush()
             else:
                 # Refused — the only event left, so an else rather than a
-                # third isinstance that nothing could fall past.
+                # fourth isinstance that nothing could fall past.
                 print(f"\n\nrefused: {event.detail}")
     except narration.NarrationError as error:
         print(f"\n\nUNREACHABLE: {error}")
@@ -336,8 +582,38 @@ async def play(model: str, scene: str = "turn") -> int:
         print("tools it called: NONE")
 
     print()
+
+    if playing.closing:
+        # A different question from the one a turn asks. Nothing here is
+        # being adjudicated — the dice were thrown in the scene that just
+        # ended — so what is worth watching is whether the model stayed
+        # inside the pass it was given and whether it caught what the prose
+        # added and the world never heard about.
+        print("did it reconcile?")
+        print(
+            "  a recap came back           "
+            + ("yes" if recap.strip() else "NO — the scene would close without one")
+        )
+        outside = [name for name, _ in called if name not in narration.CLOSING_TOOLS]
+        print(
+            "  stayed inside the close     "
+            + ("yes" if not outside else f"NO — asked for {', '.join(outside)}")
+        )
+        wrote = [name for name, _ in called if name in narration.CLOSING_TOOLS]
+        print(
+            "  wrote down what it narrated "
+            + (", ".join(wrote) if wrote else "nothing — the key and the bell are lost")
+        )
+        print(f"\nrecapped in {len(recap.split())} words")
+        return 0
+
     print("did it go through the engines?")
-    asked_for_a_number = any(name in ("roll", "check") for name, _ in called)
+    # An attack counts. It is resolved against the target's armour by the
+    # same ruleset that grades a check, so a fight turn that called nothing
+    # else has still asked the rules for every number in it — and an earlier
+    # version of this printed "it decided the outcome itself" directly above
+    # four valid degrees it had just been handed.
+    asked_for_a_number = any(name in ("roll", "check", "attack") for name, _ in called)
     if playing.rolls:
         print(
             f"  asked for a roll or check   {'yes' if asked_for_a_number else 'NO'}"

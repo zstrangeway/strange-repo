@@ -278,7 +278,13 @@ def system_prompt(prompt: Prompt) -> str:
                 "survived, a problem solved without one — award experience "
                 "for it. You never say what level anybody is or that they "
                 "levelled; the rules work that out from the total and tell "
-                "you, and you narrate what they say."
+                "you, and you narrate what they say.\n"
+                "- `attack` is the whole of a swing. The rules roll it, "
+                "decide whether it landed, take the hit points off and move "
+                "the turn on, and tell you what happened. Narrate that — and "
+                "do not also call `damage` for the same blow. The rule above "
+                "about recording what you narrate is what makes that "
+                "tempting, and doing it takes the hit points off twice."
             ),
             (
                 "What is yours and what is theirs. The world is yours: what "
@@ -430,7 +436,9 @@ class Fragments:
                     "gm.unparseable_arguments", tool=held["name"], raw=raw[:200]
                 )
                 arguments = {}
-            built.append(Call(held["name"], arguments if isinstance(arguments, dict) else {}))
+            built.append(
+                Call(held["name"], arguments if isinstance(arguments, dict) else {})
+            )
         return built
 
     def __bool__(self) -> bool:
@@ -466,9 +474,7 @@ class OpenRouterNarrator:
             # even when gary has run out of room to keep asking.
             last = round_ == ROUNDS - 1
             if last:
-                logger.warning(
-                    "gm.out_of_rounds", model=prompt.model or self.model
-                )
+                logger.warning("gm.out_of_rounds", model=prompt.model or self.model)
                 conversation.append({"role": "user", "content": WRAP_UP})
 
             fragments = Fragments()

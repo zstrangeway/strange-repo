@@ -812,6 +812,17 @@ class WhatGaryIsToldToDoTests(unittest.TestCase):
         text = openrouter.system_prompt(a_prompt())
         self.assertIn("never say what level", text)
 
+    def test_gary_is_told_an_attack_already_took_the_hit_points_off(self):
+        # Found by a real smoke run, once the harness started answering
+        # `attack` the way the router does. Told "hit Bramble for 7", the
+        # model narrated the blow and then called `damage` for 7 as well, so
+        # one swing cost fourteen. It was obeying the rule directly above —
+        # never state that the world changed without recording it — which is
+        # exactly why this one has to be said. Pinning that gary is told is
+        # all this can do: the next run said it anyway. See BACKLOG item 9.
+        text = openrouter.system_prompt(a_prompt())
+        self.assertIn("do not also call `damage` for the same blow", text)
+
 
 class LongMemoryTests(unittest.TestCase):
     def test_says_plainly_when_there_is_nothing_before_this_scene(self):

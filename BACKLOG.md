@@ -12,9 +12,10 @@ decided. Moving them here would make two places to look and one of them wrong.
 An item says how it was found, so it can be re-checked rather than argued about.
 When one is done, delete it — the commit is the record.
 
-*Last swept 2026-08-27 against `040e12c`, by running all three tiers, three
-real-model turns, and reading the deployed apps. Every tier was green; nothing
-below is a failing test.*
+*Last swept 2026-08-29 against `d4df350`, by running all three tiers, five
+real-model turns across five scenes, and reading the deployed apps. Every
+tier was green; nothing below is a failing test — item 9 is a live bug that
+no test catches, which is the point of it being written down.*
 
 ## Worth real work
 
@@ -78,10 +79,54 @@ whose fight was already over. A scene now says whether it has anything to roll,
 and the report says whether an award was inside the bound rather than leaving
 it in the arguments to be checked by eye.
 
-**What no run has covered, and what is therefore still unproven:** a fight
-(`begin_combat`, `attack`, `end_turn`, `end_combat`) and the scene close pass.
-Both want a scene of their own, which is now a table entry rather than a
-refactor — `SCENES` in `smoke.py`.
+**Run 2026-08-29, same model, on a new `--fight` scene** — something coming up
+the stair, nothing in the fight yet. It found two things, one in this script
+and one in gary.
+
+The script first. `begin_combat` answered "a fight began against Zombie" and
+`attack` answered "Zombie swung at Bramble" — neither said anything the router
+says. The router rolls initiative for both sides and answers with the order;
+it resolves a swing against the target's armour and answers "hit Bramble for 7
+(15 against 12)". So the model was told neither who was up nor whether its
+blow landed, invented both, narrated a miss on its own authority — and the
+report printed a clean bill of health. **That is the third time this harness
+has been looser than the thing it stands in for**, after the skill-not-an-
+ability check and the modifier taken from the model, and it is the worst of
+the three: who goes first and whether a blow lands are the two things gary is
+explicitly never allowed to decide, so they are the two things a stand-in has
+to actually decide. Both now go through `ruleset.initiative` and
+`ruleset.resolve`, and both are pinned on a fixed seed.
+
+Then gary — and this one is **not fixed**, so it has its own item below. Re-run
+against the honest harness, the model narrated the real numbers — 2, then 7,
+then a miss, then 7, matching the four degrees the engine returned. But it also
+called `damage` for 7 *after* `attack` had already taken those hit points off,
+so one blow cost fourteen and Bramble went down at the wrong time.
+
+Worth keeping alongside the earlier generalisation: **a rule that is right
+everywhere else can be the thing that produces the bug.** The model was not
+ignoring its instructions here, it was following the one directly above the
+one it needed — "you never state that the world changed without recording it
+— moving the party, hurting someone" — and nothing told it that `attack` had
+already done the recording.
+
+The same run caught the report accusing a model wrongly for the third time —
+"asked for a roll or check NO ← it decided the outcome itself" printed
+directly above four valid degrees the engine had just handed back, because
+only `roll` and `check` counted and an `attack` is graded too.
+
+**Run 2026-08-29, same model, on a new `--close` scene** — a scene that ended
+with three things in its prose and none of them in its world. It passed on the
+first attempt, which is the first time any of these has: it wrote down the
+iron key, moved the party to the belfry, and set `bell-rings` to 4 by updating
+the fact that was already there rather than adding a second one beside it. It
+stayed inside the closing tool set and came back with a 61-word recap. The
+close pass had never been run against a real model before this.
+
+**What no run has covered, and what is therefore still unproven:** nothing in
+the tool set now, but every scene has been run against one free model only,
+and the first two runs ever recorded disagreed with each other. A second model
+on the same five scenes is the cheapest thing left here.
 
 ### 2. `play.py` is a quarter of the API in one file
 
@@ -131,14 +176,69 @@ scores are the two contracts most worth one scenario each.
 
 Sentry is wired properly on gary-web: a real DSN in `fly.toml`, source maps
 uploaded at build with the release pinned to the commit SHA, events tunnelled
-through the app's own origin. gary-api has none of it. A 500 in the turn runner
-is a JSON line in Fly's log buffer and nothing else — no alert, no grouping, no
-stack.
+through the app's own origin. gary-api has none of it.
+
+**This entry used to say "no alert, no grouping, no stack", and the stack part
+was wrong.** `logs.py` catches every unhandled exception in the ASGI middleware
+and logs it with `exc_info`, and the formatter turns that into an `error` object
+carrying the type, the message and the full formatted traceback — inside the
+JSON deliberately, so a stack never trails outside the object. It arrives with
+the request id, the method, the path and the duration, and that id already went
+back to the browser in `x-request-id`. That is a good 500 record and the entry
+should not have implied otherwise.
+
+What is actually missing is narrower, and worth stating precisely because it
+changes what would fix it:
+
+- **Retention.** Fly's built-in logs are a live tail over a short rolling
+  buffer, not a history. A 500 at 2am that nobody is tailing is gone.
+- **Alerting.** Nothing says it happened. You look, or you never find out.
+- **Grouping.** The same bug four hundred times is four hundred lines rather
+  than one issue with a count and a first-seen.
+
+A log drain to any sink closes the first two more cheaply than an error tracker
+does, so "add Sentry" is not the only answer and should not be assumed. What
+argues for Sentry specifically is that gary-web is already on it with source
+maps and a release pinned to the commit SHA, and gary-api now reports that same
+SHA on `/health` — so one commit names the deployed API, the deployed bundle and
+every event from either, and a player saying "the turn broke" is one correlated
+trace instead of two tools joined by hand. `sentry-sdk` is also already in the
+image, pulled in transitively by `fastapi-cloud-cli`, so this would promote
+something that already ships rather than add a dependency.
 
 Worth reading alongside the thing the READMEs already admit: gary-web's own log
 lines are in the browser console and nobody collects them. Between the two, the
 only durable record of a bad turn is gary-api's log, and only if somebody thinks
 to look within the retention window.
+
+### 9. A model can take the same hit points off twice in a fight
+
+Found by the `--fight` smoke run above, and **still open**. `attack` resolves
+the swing, rolls the damage, writes the `DAMAGED` event and moves the order
+on. Nothing stops gary then calling `damage` for the same blow, and a real
+model did exactly that on two runs out of two.
+
+The second run is the one worth reading. `attack` answered "Bramble hit
+Drowned Corpse for 2", the world went 22 → 20, gary called `damage` 2 on top
+so the world went to 18 — and then narrated "it's still 20 hit points
+strong". Gary's own prose and gary's own world disagreed by one application of
+the damage, which is the exact failure the record-what-you-narrate rule exists
+to prevent, arrived at by obeying it.
+
+**A prompt rule was tried and did not work.** `openrouter.py` now says plainly
+that `attack` is the whole of a swing and not to call `damage` for the same
+blow, pinned by
+`test_gary_is_told_an_attack_already_took_the_hit_points_off`. The free model
+above still did it on the very next run. The rule is kept because it costs
+nothing and may hold on a stronger model, but it should not be believed: it
+has been tried once and failed once, and no run has yet shown it working.
+
+The real fix is an engine-level refusal — `damage` naming a fighter that an
+`attack` in the same turn already hurt is a second application of one blow,
+and the router could say so the way it refuses everything else it will not do.
+That is a change to what combat permits, though, and there may be a legitimate
+case for two lots of damage in one turn (a trap and a swing), so it wants
+agreeing before it is built rather than after.
 
 ## Cheap, and stale things get believed
 
