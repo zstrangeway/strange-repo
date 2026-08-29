@@ -67,6 +67,18 @@ subtle one.
 
 ## Checks
 
-`task typecheck` type-checks the components. There are no unit tests here on
+`pnpm --filter @gary/ui test` lints and type-checks the components, and CI runs
+it as its own job that deploys wait on. There are no unit tests here on
 purpose: these are presentational components with no logic of their own, and
 what they render is covered end to end by gary-web's Gherkin suite.
+
+The eslint config is the workspace root's `eslint.config.mjs`, not one in here,
+and the lint task runs from the root — eslint will not lint a file outside its
+config's base path, and run from anywhere below the root it answered "File
+ignored because outside of base path" for every file in this package. As a
+*warning*, so it exited 0 having linted nothing. These components went unlinted
+that way for as long as the package has existed.
+
+The root config gives this package the TypeScript rules and not the Next ones.
+A component library has no routing, no `next/image` and no server boundary for
+those to have an opinion about.

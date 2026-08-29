@@ -89,6 +89,26 @@ async def _render_refusal(_request: Request, error: Exception) -> JSONResponse:
     )
 
 
+# What a build with no release stamp says, rather than saying nothing. An
+# absent field would read the same as an old revision that predates this
+# endpoint reporting one, which is exactly the confusion it exists to end.
+UNSTAMPED = "unknown"
+
+
+def release() -> str:
+    """The build this process came from.
+
+    Baked into the image at build time from the commit being deployed:
+    nothing in a running container can work it out otherwise — the image
+    carries no ``.git``, and Fly's own release number counts deploys rather
+    than commits, so it cannot tell you which code answered.
+
+    Read per call rather than at import, so a spec can arrange it. It is
+    fixed for a container's life, so there is nothing to cache.
+    """
+    return os.environ.get("RELEASE") or UNSTAMPED
+
+
 async def health() -> dict[str, str]:
     # Always 200: the app answering is itself the signal that it is up, and
     # the body carries the state of what it depends on. A non-200 here would
@@ -98,6 +118,9 @@ async def health() -> dict[str, str]:
     return {
         "status": "ok" if reachable else "degraded",
         "database": "ok" if reachable else "unavailable",
+        # Which build answered. Without it a deploy that silently did not
+        # take looks identical to one that did.
+        "version": release(),
     }
 
 

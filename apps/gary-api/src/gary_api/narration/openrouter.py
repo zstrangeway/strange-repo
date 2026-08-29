@@ -181,7 +181,12 @@ def schema(offered: tuple[str, ...] | None = None) -> list[dict]:
         ),
         "move_party": "Record that the party has moved somewhere new.",
         "remember": "Record a fact about the world so it is still true later.",
-        "damage": "Take hit points off a character.",
+        "damage": (
+            "Take hit points off somebody for something that is not a swing "
+            "in a fight — a trap, a fall, poison, the room itself. A swing "
+            "is `attack`, which takes them off for you; calling this as well "
+            "would take them off twice."
+        ),
         "heal": "Give hit points back to a character.",
         "add_condition": "Record that a character is under a condition.",
         "remove_condition": "Record that a condition has ended.",
@@ -195,8 +200,10 @@ def schema(offered: tuple[str, ...] | None = None) -> list[dict]:
             "the order are rolled for you and you never decide them."
         ),
         "attack": (
-            "Have whoever is up swing at somebody. Whether it lands and what "
-            "it costs are the rules' to say, not yours."
+            "Have whoever is up swing at somebody. This is the whole of a "
+            "swing: the rules roll it, decide whether it lands, take the hit "
+            "points off, move the turn on and tell you what happened. Do not "
+            "call `damage` as well — that is a second wound for one blow."
         ),
         "end_turn": (
             "Finish the current combatant's turn and move to the next. Never "
@@ -273,7 +280,17 @@ def system_prompt(prompt: Prompt) -> str:
                 "makes your own story wrong on the next turn, because the "
                 "world is what you will be told then and your prose is not.\n"
                 "- If a tool refuses, that refusal is what happened. Narrate "
-                "around it rather than pretending it worked."
+                "around it rather than pretending it worked.\n"
+                "- When the party overcomes something — a fight won, a hazard "
+                "survived, a problem solved without one — award experience "
+                "for it. You never say what level anybody is or that they "
+                "levelled; the rules work that out from the total and tell "
+                "you, and you narrate what they say.\n"
+                "- The rule above is about things you narrate that no tool "
+                "has recorded. It does not mean recording something twice: "
+                "`attack` has already taken the hit points off before it "
+                "answers you, so calling `damage` for the same blow wounds "
+                "somebody twice for one swing."
             ),
             (
                 "What is yours and what is theirs. The world is yours: what "
@@ -425,7 +442,9 @@ class Fragments:
                     "gm.unparseable_arguments", tool=held["name"], raw=raw[:200]
                 )
                 arguments = {}
-            built.append(Call(held["name"], arguments if isinstance(arguments, dict) else {}))
+            built.append(
+                Call(held["name"], arguments if isinstance(arguments, dict) else {})
+            )
         return built
 
     def __bool__(self) -> bool:
@@ -461,9 +480,7 @@ class OpenRouterNarrator:
             # even when gary has run out of room to keep asking.
             last = round_ == ROUNDS - 1
             if last:
-                logger.warning(
-                    "gm.out_of_rounds", model=prompt.model or self.model
-                )
+                logger.warning("gm.out_of_rounds", model=prompt.model or self.model)
                 conversation.append({"role": "user", "content": WRAP_UP})
 
             fragments = Fragments()
@@ -484,27 +501,42 @@ class OpenRouterNarrator:
                     extra_body={"reasoning": {"effort": EFFORT}},
                 )
 
-                async for chunk in stream:
-                    # A mid-stream failure arrives as a frame rather than a
-                    # status, because the headers went out long ago.
-                    problem = getattr(chunk, "error", None)
-                    if problem:
-                        raise NarrationError(str(problem))
+                try:
+                    async for chunk in stream:
+                        # A mid-stream failure arrives as a frame rather than a
+                        # status, because the headers went out long ago.
+                        problem = getattr(chunk, "error", None)
+                        if problem:
+                            raise NarrationError(str(problem))
 
-                    if not chunk.choices:
-                        continue
+                        if not chunk.choices:
+                            continue
 
-                    choice = chunk.choices[0]
-                    finish = choice.finish_reason or finish
-                    delta = choice.delta
-                    if delta is None:
-                        continue
+                        choice = chunk.choices[0]
+                        finish = choice.finish_reason or finish
+                        delta = choice.delta
+                        if delta is None:
+                            continue
 
-                    if delta.content:
-                        spoken.append(delta.content)
-                        yield Said(delta.content)
+                        if delta.content:
+                            spoken.append(delta.content)
+                            yield Said(delta.content)
 
-                    fragments.add(getattr(delta, "tool_calls", None))
+                        fragments.add(getattr(delta, "tool_calls", None))
+                finally:
+                    # Closed the moment the loop is done with it, however it
+                    # is done. The caller stops consuming this generator when
+                    # a turn ends and calls `aclose()`, which abandons the
+                    # response body still open — openai 2.x tolerated that,
+                    # 3.x raises out of httpcore while collecting the
+                    # abandoned iterator. It was a leaked connection on both.
+                    #
+                    # Nested inside the outer try rather than guarded with a
+                    # `stream is not None`: that guard could never be false
+                    # and fall through, because nothing reaches it without an
+                    # exception already in flight. A branch nothing can take
+                    # is a branch nobody can test.
+                    await stream.close()
 
             except NarrationError:
                 raise
@@ -591,19 +623,34 @@ class OpenRouterNarrator:
                     stream=True,
                 )
 
-                async for chunk in stream:
-                    problem = getattr(chunk, "error", None)
-                    if problem:
-                        raise NarrationError(str(problem))
-                    if not chunk.choices:
-                        continue
+                try:
+                    async for chunk in stream:
+                        problem = getattr(chunk, "error", None)
+                        if problem:
+                            raise NarrationError(str(problem))
+                        if not chunk.choices:
+                            continue
 
-                    delta = chunk.choices[0].delta
-                    if delta is None:
-                        continue
-                    if delta.content:
-                        spoken.append(delta.content)
-                    fragments.add(getattr(delta, "tool_calls", None))
+                        delta = chunk.choices[0].delta
+                        if delta is None:
+                            continue
+                        if delta.content:
+                            spoken.append(delta.content)
+                        fragments.add(getattr(delta, "tool_calls", None))
+                finally:
+                    # Closed the moment the loop is done with it, however it
+                    # is done. The caller stops consuming this generator when
+                    # a turn ends and calls `aclose()`, which abandons the
+                    # response body still open — openai 2.x tolerated that,
+                    # 3.x raises out of httpcore while collecting the
+                    # abandoned iterator. It was a leaked connection on both.
+                    #
+                    # Nested inside the outer try rather than guarded with a
+                    # `stream is not None`: that guard could never be false
+                    # and fall through, because nothing reaches it without an
+                    # exception already in flight. A branch nothing can take
+                    # is a branch nobody can test.
+                    await stream.close()
 
             except NarrationError:
                 raise

@@ -206,6 +206,19 @@ understanding that produced gary-api, so it cannot notice the two drifting
 apart — that is the whole reason `test:e2e` exists. Keep it small; it is there
 to catch drift, not to cover behaviour.
 
+Twelve scenarios: sign-in and identity, a campaign and a turn, a reload, and
+one each for the three features with the deepest coverage on both sides of the
+wire and none across it — a rolled set of scores, a fight, and a level gained.
+Those three are the shape to copy. A scenario belongs here when getting it
+wrong would mean gary-api and this app disagreeing about a contract, and when
+no browser has ever checked that contract against a real gary-api.
+
+A step in this tier must never name `apiStub` — `world.apiUrl` is whichever
+gary-api the run is against. A step that reaches for the stub by name works
+only in the tier the stub runs in, and the tier it then cannot run in is the
+one that exists to catch the stub being wrong. That was a real bug in
+`the choices should be the system's own`.
+
 The specs need a Playwright browser. Either install one:
 
 ```sh

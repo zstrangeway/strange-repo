@@ -59,8 +59,18 @@ class Chunk:
 
 
 class Stream:
+    """What `chat.completions.create(stream=True)` answers with.
+
+    `closed` is recorded rather than ignored: openai's real `AsyncStream` has
+    an awaitable `close()`, and this double did not — so the code could leak
+    the response body and every test still passed. That is the third time a
+    double here has been looser than the thing it stands for, and this one
+    hid a connection leak for as long as it existed.
+    """
+
     def __init__(self, chunks):
         self.chunks = chunks
+        self.closed = False
 
     def __aiter__(self):
         async def go():
@@ -69,24 +79,38 @@ class Stream:
 
         return go()
 
+    async def close(self):
+        self.closed = True
+
 
 def client_serving(*rounds):
     """A stubbed OpenAI client that answers each round in turn."""
     sent = []
     remaining = list(rounds)
 
+    # Kept, so a test can ask whether the response was given back rather than
+    # only whether the right chunks came out of it.
+    streams = []
+
     class Completions:
         async def create(self, **kwargs):
             sent.append(kwargs)
             if not remaining:
                 raise AssertionError("asked for more rounds than were staged")
-            return Stream(remaining.pop(0))
+            made = Stream(remaining.pop(0))
+            streams.append(made)
+            return made
 
     class Chat:
         completions = Completions()
 
     class Client:
         chat = Chat()
+
+    # Attached after the class rather than inside it: a class body does not
+    # see the enclosing function's names the way a method would, so
+    # `streams = streams` in there is a name defining itself.
+    Client.streams = streams
 
     return Client(), sent
 
@@ -213,6 +237,80 @@ class StreamingTests(unittest.TestCase):
         )
         told = drive(narrator_with(client), a_prompt())
         self.assertTrue([e for e in told if isinstance(e, narration.Said)])
+
+
+class ClosingTheStreamTests(unittest.TestCase):
+    """The response body is ours to close, and we were not closing it.
+
+    `play.py` calls `aclose()` on the narrator's generator the moment a turn
+    ends, which abandons the `async for` over the stream with the HTTP
+    response still open. openai 2.x tolerated it; 3.x raises a RuntimeError
+    out of httpcore while collecting the abandoned iterator, which is how a
+    real smoke run found it. It was a leaked connection on both.
+    """
+
+    def test_a_narrated_turn_closes_its_stream(self):
+        client, _ = client_serving(
+            [Chunk([Choice(Delta(content="A door."), finish_reason="stop")])]
+        )
+        drive(narrator_with(client), a_prompt())
+        self.assertTrue(client.streams[-1].closed, "the stream was left open")
+
+    def test_a_closing_pass_closes_its_stream(self):
+        client, _ = client_serving(
+            [Chunk([Choice(Delta(content="They left."), finish_reason="stop")])]
+        )
+        close_with(narrator_with(client), a_prompt())
+        self.assertTrue(client.streams[-1].closed, "the stream was left open")
+
+    def test_the_stream_is_closed_even_when_the_model_fails(self):
+        # The path that matters most: something went wrong mid-stream, and the
+        # response still has to be given back rather than left to the
+        # collector.
+        client, _ = client_serving(
+            [Chunk([Choice(Delta(content="Half a s"))], error={"message": "gone"})]
+        )
+        with self.assertRaises(narration.NarrationError):
+            drive(narrator_with(client), a_prompt())
+        self.assertTrue(client.streams[-1].closed, "the stream was left open")
+
+
+def client_that_cannot_connect():
+    """One that fails before there is any stream to give back."""
+
+    class Refusing:
+        async def create(self, **kwargs):
+            raise RuntimeError("no route to host")
+
+    class Chat:
+        completions = Refusing()
+
+    class Client:
+        chat = Chat()
+
+    return Client()
+
+
+class NothingToCloseTests(unittest.TestCase):
+    """`create` failing leaves no stream, and the `finally` has to cope.
+
+    Otherwise the cleanup raises a second error on top of the first, and the
+    one the caller sees is about a missing attribute rather than about not
+    reaching the model.
+    """
+
+    def test_a_narrated_turn_that_never_opened_a_stream(self):
+        with self.assertRaises(narration.NarrationError) as caught:
+            drive(narrator_with(client_that_cannot_connect()), a_prompt())
+        self.assertIn("no route to host", str(caught.exception))
+
+    def test_a_closing_pass_that_never_opened_a_stream(self):
+        # The close pass swallows this at the caller — a scene closes without
+        # its recap rather than refusing to close — so the error has to be the
+        # real one for the log to be worth reading.
+        with self.assertRaises(narration.NarrationError) as caught:
+            close_with(narrator_with(client_that_cannot_connect()), a_prompt())
+        self.assertIn("no route to host", str(caught.exception))
 
 
 class FragmentTests(unittest.TestCase):
@@ -790,6 +888,53 @@ class ClosingTests(unittest.TestCase):
         client, _ = client_serving(asking, asking, asking, asking)
         told = close_with(narrator_with(client), a_prompt())
         self.assertEqual(told[-1].text, "")
+
+
+class WhatGaryIsToldToDoTests(unittest.TestCase):
+    """Awarding needs a rule in the prompt, not just a tool description.
+
+    Found by a real smoke run: handed a scene where a monster had just been
+    killed, the model narrated the aftermath, called nothing at all, and
+    `award_experience` went untouched. Most tools are self-evident from what
+    they do — `attack`, `heal`, `end_combat` — and a model reaches for them
+    when the fiction calls for one. Awarding is not: nothing in a turn says
+    "and now hand out experience" unless gary has been told that overcoming
+    something is when you do it.
+    """
+
+    def test_gary_is_told_to_award_experience(self):
+        text = openrouter.system_prompt(a_prompt())
+        self.assertIn("award experience", text)
+
+    def test_gary_is_told_the_level_is_not_its_to_give(self):
+        text = openrouter.system_prompt(a_prompt())
+        self.assertIn("never say what level", text)
+
+    def test_the_attack_tool_says_it_already_took_the_hit_points_off(self):
+        # Found by a real smoke run. Told "hit Bramble for 7", the model
+        # narrated the blow and then called `damage` for 7 as well, so one
+        # swing cost fourteen — and it was right to, on what it had been
+        # told. `attack` said only that the rules "say" what a swing costs,
+        # which is about who authors the number; `damage` said "take hit
+        # points off a character", which is exactly the job the model
+        # believed was still outstanding. The schema is what a model reads at
+        # the moment it picks a tool, so this is where it has to be true.
+        described = {one["function"]["name"]: one for one in openrouter.schema()}
+        attack = str(described["attack"])
+        self.assertIn("take the hit points off", attack)
+        self.assertIn("Do not call `damage` as well", attack)
+
+    def test_the_damage_tool_says_it_is_not_for_a_swing(self):
+        described = {one["function"]["name"]: one for one in openrouter.schema()}
+        self.assertIn("is not a swing", str(described["damage"]))
+
+    def test_gary_is_told_recording_twice_is_not_recording(self):
+        # The prose half. The schema above is read when picking a tool; this
+        # is read when deciding whether the turn is finished, and the rule it
+        # qualifies — never state that the world changed without recording it
+        # — is the one the model was following when it double-wrote.
+        text = openrouter.system_prompt(a_prompt())
+        self.assertIn("does not mean recording something twice", text)
 
 
 class LongMemoryTests(unittest.TestCase):

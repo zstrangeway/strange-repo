@@ -2,19 +2,16 @@ version: '3'
 
 tasks:
   lint:
-    desc: Say that these components are not linted, and why
+    desc: Lint the components, and fail on a warning
     cmds:
-      # Nothing lints this package. gary-web's eslint cannot reach it — the
-      # files sit outside its config's base path and it refuses them by name
-      # — and giving this package a config of its own means an eslint of its
-      # own, which is a dependency to discuss rather than one to add quietly.
-      #
-      # Said out loud rather than left as a missing script. A lint task that
-      # exits 0 having linted nothing is indistinguishable from one that
-      # passed. Before this the script was worse than either: it named a task
-      # that did not exist, so it failed on sight and nobody had run it.
-      - 'echo "@gary/ui: NOT LINTED. No eslint here, and gary-web cannot lint outside its own base path. See BACKLOG.md."'
-
+      # The config is the workspace root's, and this runs from there, because
+      # eslint will not lint a file outside its config's base path. Run from
+      # anywhere below it this answered "File ignored because outside of base
+      # path" for every file here — as a *warning*, so it exited 0 having
+      # linted none of them, which is the failure mode this repo keeps finding.
+      - pnpm -w exec eslint packages/ui --max-warnings 0
+      # Says how many, so a run that linted nothing cannot read like a pass.
+      - 'echo "@gary/ui: linted $(ls src/components/*.tsx src/hooks/*.ts src/lib/*.ts 2>/dev/null | wc -l) files with the workspace config"'
 
   typecheck:
     desc: Type-check the components
@@ -23,8 +20,9 @@ tasks:
       - 'echo "@gary/ui: type-checked $(ls src/components/*.tsx | wc -l) components and $(ls src/lib/*.ts | wc -l) lib file(s)"'
 
   test:
-    desc: Type-check, and say where these components' behaviour is actually covered
+    desc: Lint, type-check, and say where these components' behaviour is covered
     cmds:
+      - task: lint
       - task: typecheck
       # Named rather than left blank. A `test` task that exits 0 having run
       # nothing reads exactly like a suite that passed.

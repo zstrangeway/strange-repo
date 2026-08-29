@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     { name = "Claude", email = "noreply@anthropic.com" }
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 dependencies = [
     "alembic>=1.19.1",
     "argon2-cffi>=25.1.0",
@@ -23,7 +23,7 @@ dependencies = [
     # other end is usually a Claude. Owning the SSE framing, the fragmented
     # tool-call arguments and the retries ourselves is the part most likely to
     # be subtly wrong.
-    "openai>=2.53.0",
+    "openai>=3.3.1",
     # Signs Apple's client secret (ES256) and verifies its id_token.
     "pyjwt[crypto]>=2.10.1",
     "sqlalchemy[asyncio]>=2.0.51",
@@ -35,7 +35,7 @@ gary-api-seed = "gary_api.seed:main"
 gary-api-smoke = "gary_api.smoke:main"
 
 [build-system]
-requires = ["uv_build>=0.8.17,<0.9.0"]
+requires = ["uv_build>=0.8.17,<0.13.0"]
 build-backend = "uv_build"
 
 [dependency-groups]

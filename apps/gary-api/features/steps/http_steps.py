@@ -1,9 +1,23 @@
 import json
+import os
 
 from behave import given, then, when
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from gary_api import db
+
+
+@given('the service was built as release "{release}"')
+def step_built_as_release(context, release):
+    os.environ["RELEASE"] = release
+
+
+@given("the service was built with no release stamp")
+def step_built_without_release(context):
+    # What every local build and every image built outside the deploy
+    # workflow looks like. Popped rather than set empty, so this arranges
+    # absence and not an empty string that happens to read the same.
+    os.environ.pop("RELEASE", None)
 
 
 @given("the database is unreachable")

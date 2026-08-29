@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { Given, When, Then } from "@cucumber/cucumber";
 
 import * as apiStub from "../support/api-stub.mjs";
-import { world } from "../support/hooks.mjs";
+import { world, PATIENCE } from "../support/hooks.mjs";
 
 // The table, in a browser.
 //
@@ -65,7 +65,7 @@ export async function say(message) {
     // put the message somewhere the submit will never read it.
     await composer().and(world.page.locator(":not([disabled])")).waitFor({
       state: "visible",
-      timeout: 15_000,
+      timeout: PATIENCE,
     });
     await composer().fill(message);
     await world.page.getByTestId("say").click();
@@ -140,7 +140,7 @@ async function makeCharacter(name, characterClass) {
   await world.page.getByRole("option", { name: characterClass }).click();
   await world.page.getByTestId("add-character").click();
   await world.page.waitForSelector(`[data-testid="member-${name}"]`, {
-    timeout: 15_000,
+    timeout: PATIENCE,
   });
 }
 
@@ -156,7 +156,7 @@ When("I open that campaign's party", async function () {
     { waitUntil: "domcontentloaded" },
   );
   await world.page.waitForSelector('[data-testid="add-character"]', {
-    timeout: 15_000,
+    timeout: PATIENCE,
   });
 });
 
@@ -171,7 +171,7 @@ When("I take them in", async function () {
 Then("I should be building the party", async function () {
   await world.page.waitForURL(
     (url) => /^\/campaigns\/[0-9a-f-]{36}\/party$/.test(new URL(url).pathname),
-    { timeout: 15_000 },
+    { timeout: PATIENCE },
   );
 });
 
@@ -194,7 +194,7 @@ Then("I should be able to take them in", async function () {
     () =>
       document.querySelector('[data-testid="take-them-in"]')?.disabled === false,
     undefined,
-    { timeout: 15_000 },
+    { timeout: PATIENCE },
   );
 });
 
@@ -264,7 +264,7 @@ When("gary finishes", async function () {
     () =>
       document.querySelector('[data-testid="composer"]')?.disabled === false,
     undefined,
-    { timeout: 15_000 },
+    { timeout: PATIENCE },
   );
 });
 
@@ -275,14 +275,14 @@ When("I move it to {string}", async function (name) {
 
 Then("there should be a way to start one", async function () {
   await world.page.waitForSelector('a[href="/campaigns/new"]', {
-    timeout: 15_000,
+    timeout: PATIENCE,
   });
 });
 
 Then("I should be on a campaign page", async function () {
   await world.page.waitForURL(
     (url) => /^\/campaigns\/[0-9a-f-]{36}$/.test(new URL(url).pathname),
-    { timeout: 15_000 },
+    { timeout: PATIENCE },
   );
 });
 
@@ -318,7 +318,7 @@ Then("I should be able to say something again", async function () {
     () =>
       document.querySelector('[data-testid="composer"]')?.disabled === false,
     undefined,
-    { timeout: 15_000 },
+    { timeout: PATIENCE },
   );
 });
 
@@ -343,7 +343,7 @@ Then("the transcript should still show what I said", async function () {
 
 Then("gary should answer", async function () {
   const answer = world.page.getByTestId("turn-gm").last();
-  await answer.waitFor({ timeout: 15_000 });
+  await answer.waitFor({ timeout: PATIENCE });
   const said = (await answer.textContent()) ?? "";
   assert.ok(said.trim().length > "gary".length, "gary said nothing");
 });
@@ -352,7 +352,7 @@ Then(
   "the narration should appear while it is still being written",
   async function () {
     const answer = world.page.getByTestId("turn-gm").last();
-    await answer.waitFor({ timeout: 15_000 });
+    await answer.waitFor({ timeout: PATIENCE });
     const said = (await answer.textContent()) ?? "";
 
     // Both halves matter. Narration on screen proves it rendered; the
@@ -402,7 +402,7 @@ When("I start a new scene called {string}", async function (title) {
   // Closing a scene runs a whole pass through a model, so this is the one
   // control here that is slow on purpose — wait for the seam, not the click.
   await world.page.waitForSelector('[data-testid="scene-break"]', {
-    timeout: 15_000,
+    timeout: PATIENCE,
   });
 });
 
@@ -418,7 +418,7 @@ Then("the transcript should show a break for {string}", async function (title) {
         (found) => found.textContent?.trim() === want,
       ),
     title,
-    { timeout: 15_000 },
+    { timeout: PATIENCE },
   );
 });
 
@@ -479,7 +479,7 @@ Then("the composer should be waiting for me afterwards", async function () {
     () =>
       document.querySelector('[data-testid="composer"]')?.disabled === false,
     undefined,
-    { timeout: 15_000 },
+    { timeout: PATIENCE },
   );
 });
 
@@ -555,7 +555,7 @@ Given('I already have a campaign on {string}', async function (system) {
 });
 
 Then("I should be able to choose how scores are decided", async function () {
-  await world.page.waitForSelector('[data-testid="method"]', { timeout: 15_000 });
+  await world.page.waitForSelector('[data-testid="method"]', { timeout: PATIENCE });
 });
 
 Then("the choices should be the system's own", async function () {
@@ -567,7 +567,7 @@ Then("the choices should be the system's own", async function () {
   const answered = await world.page.evaluate(async (base) => {
     const response = await fetch(`${base}/catalogue/dnd-5e`);
     return (await response.json()).methods.map((one) => one.name);
-  }, apiStub.BASE_URL);
+  }, world.apiUrl);
 
   assert.deepEqual(offered.map((one) => one.trim()), answered);
   await world.page.keyboard.press("Escape");
@@ -598,7 +598,7 @@ async function rollScores() {
       return shown.length > 0 && shown !== before;
     },
     world.wasRolled,
-    { timeout: 15_000 },
+    { timeout: PATIENCE },
   );
 }
 
@@ -613,7 +613,7 @@ Then("I should see {int} scores to place", async function (count) {
       [...document.querySelectorAll('[data-testid="sheet"] input')].length >=
       want,
     Math.min(count, 3),
-    { timeout: 15_000 },
+    { timeout: PATIENCE },
   );
 });
 
@@ -685,7 +685,7 @@ Then("I should be able to choose {string}", async function (label) {
   await world.page.getByTestId("method").click();
   await world.page
     .getByRole("option", { name: label, exact: false })
-    .waitFor({ timeout: 15_000 });
+    .waitFor({ timeout: PATIENCE });
   await world.page.keyboard.press("Escape");
 });
 

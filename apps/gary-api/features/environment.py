@@ -125,6 +125,12 @@ def before_scenario(context, scenario):
     # may call from are fixed when the app is built.
     os.environ.pop("BROWSER_ORIGINS", None)
 
+    # The build stamp, absent unless a scenario arranges one. Cleared here
+    # because a scenario that sets it must not hand it to the next one — and
+    # because a developer with RELEASE exported would otherwise see the
+    # unstamped scenario pass for the wrong reason.
+    os.environ.pop("RELEASE", None)
+
     context.client = TestClient(app)
 
     def rebuild_app():

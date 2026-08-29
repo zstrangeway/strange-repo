@@ -1,4 +1,4 @@
-FROM python:3.11-slim AS builder
+FROM python:3.13-slim AS builder
 
 RUN pip install --no-cache-dir uv==0.8.17
 
@@ -15,7 +15,7 @@ COPY src ./src
 RUN uv sync --locked --no-dev
 
 
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 WORKDIR /app
 
@@ -28,6 +28,21 @@ COPY alembic.ini ./
 COPY migrations ./migrations
 
 ENV PATH="/app/.venv/bin:$PATH"
+
+# The commit this image was built from, reported by /health. Passed in from
+# the deploy workflow: only apps/gary-api reaches the build context, so there
+# is no .git here to read a version out of. Empty locally, which /health
+# reports as "unknown" rather than pretending to a version it does not have.
+ARG RELEASE=""
+ENV RELEASE=$RELEASE
+
+# Say which of the two happened. An image that cannot name its own build looks
+# exactly like one that can until the day you need it to.
+RUN if [ -n "$RELEASE" ]; then \
+      echo "Release: this image reports itself as $RELEASE"; \
+    else \
+      echo "Release: NO release stamp — /health will report version=unknown"; \
+    fi
 
 EXPOSE 8080
 
