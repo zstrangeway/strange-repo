@@ -205,10 +205,33 @@ What is still thin:
   the direct Anthropic provider was deleted as a second way to reach models
   the router already reaches — so it is a `--model` away whenever somebody
   wants to spend the few cents.
-- **Nothing checks that a legitimate draft is not wrongly refused.** All three
-  runs were accepted. A model that phrases a fair rewrite in a way the check
-  rejects would be worse for somebody using this than a missed invention, and
-  no run has yet produced one.
+- **The check is not trigger-happy, and that is measured now.** Six free
+  models were pointed at a real Greenhouse posting and the example master on
+  2026-08-29; two were unavailable (429, 403 — both surfaced as ordinary
+  refusals, which is worth knowing on its own) and four produced drafts. All
+  four were accepted, none wrongly. So the false-refusal rate is zero over
+  four, which is thin evidence but the right sign.
+
+- **⚠️ One of those four invented something and the check passed it.** Not a
+  name — a claim. It appended clauses to bullets it otherwise kept:
+  "demonstrating experience managing large-scale distributed systems",
+  "applying engineering rigor to fast-paced deployment cycles",
+  "strengthening core software engineering capabilities". None of those
+  phrases is anywhere in the master resume. No new employer, title, skill or
+  date, so nothing in `grounding.py` had anything to catch, and the summary
+  showed the rewrites, which is the only reason it is visible at all.
+
+  This is the same family as the "deep Postgres expertise" case but a step
+  worse: an intensifier is a stronger version of a claim that was there,
+  whereas "experience managing large-scale distributed systems" is a claim
+  that was not. It is the strongest argument yet that a name-based check
+  under-covers what "never invents experience" was meant to mean, and it is
+  a product decision rather than a defect — the check does exactly what it
+  is documented to do.
+
+  Two of the other four barely changed anything at all, which is its own
+  finding about small free models: a tailoring that returns the master
+  unchanged is accepted and useless.
 
 ### 9. The browser suite waits a fixed fifteen seconds, twenty-five times
 
