@@ -16,6 +16,12 @@ from dataclasses import dataclass, field
 
 HEADING = re.compile(r"^(#{2,3})\s+(.*)$")
 
+# Markdown emphasis. Bolding a line is not rewriting it, and a real draft came
+# back having bolded six labels — six entries in the summary saying a line had
+# been reworded when every word was identical. A summary nobody can read is
+# what turns approving into rubber-stamping.
+EMPHASIS = re.compile(r"[*_`]")
+
 
 @dataclass
 class Section:
@@ -42,6 +48,11 @@ def sections(markdown: str) -> list[Section]:
     return [s for s in found if s.heading or any(line.strip() for line in s.body)]
 
 
+def _plain(line: str) -> str:
+    """A line with its emphasis taken off, for comparing what it says."""
+    return EMPHASIS.sub("", line).strip()
+
+
 @dataclass(frozen=True)
 class Summary:
     """Every change, in the order somebody would want to read them."""
@@ -53,6 +64,7 @@ class Summary:
     rewritten: list[tuple[str, str]]
     cut: list[str]
     fresh: list[str]
+    reformatted: int = 0
 
     def render(self) -> str:
         lines: list[str] = []
@@ -71,6 +83,10 @@ class Summary:
             lines.append(f"  cut           {line}")
         for line in self.fresh:
             lines.append(f"  new line      {line}")
+        if self.reformatted:
+            # Counted rather than listed. It happened, so it is said; it
+            # changed nothing anybody needs to read, so it is said once.
+            lines.append(f"  reformatted   {self.reformatted} line(s), emphasis only")
         if not lines:
             # Never empty. A blank summary reads like the summary failed
             # rather than like the draft came back unchanged.
@@ -108,8 +124,22 @@ def compute(master: str, draft: str, *, rewrites: int = 12) -> Summary:
     dropped = [s.heading for s in before if s.key not in after_order and s.heading]
     added = [s.heading for s in after if s.key not in before_order and s.heading]
 
-    rewritten, cut, fresh = _line_changes(master, draft, limit=rewrites)
-    return Summary(moved_up, moved_down, dropped, added, rewritten, cut, fresh)
+    # Lines inside a section that was dropped whole are not reported again on
+    # their own: "left out Gravy Live" followed by its dates listed as cut
+    # says one thing twice, and less clearly the second time.
+    in_dropped = {
+        _plain(line)
+        for section in before
+        if section.heading in dropped
+        for line in section.body
+        if line.strip()
+    }
+    rewritten, cut, fresh, reformatted = _line_changes(
+        master, draft, limit=rewrites, ignore=in_dropped
+    )
+    return Summary(
+        moved_up, moved_down, dropped, added, rewritten, cut, fresh, reformatted
+    )
 
 
 # Below this, two lines are different things rather than one edited into the
@@ -144,8 +174,8 @@ def _body_lines(markdown: str) -> list[str]:
 
 
 def _line_changes(
-    master: str, draft: str, *, limit: int
-) -> tuple[list[tuple[str, str]], list[str], list[str]]:
+    master: str, draft: str, *, limit: int, ignore: set[str] | None = None
+) -> tuple[list[tuple[str, str]], list[str], list[str], int]:
     """What happened to the prose: rewritten, cut, and newly written.
 
     Deliberately not `difflib.get_opcodes` over the two documents. That
@@ -161,9 +191,21 @@ def _line_changes(
     nowhere in the master, and a rewrite only when a gone line and a new line
     genuinely resemble each other.
     """
+    ignore = ignore or set()
     before, after = _body_lines(master), _body_lines(draft)
-    gone = [line for line in before if line not in after]
-    fresh = [line for line in after if line not in before]
+    # Compared with emphasis stripped, so bolding a line does not read as
+    # rewriting it, and a genuine reword still does.
+    said_before = {_plain(line) for line in before}
+    said_after = {_plain(line) for line in after}
+    reformatted = sum(
+        1 for line in after if line not in before and _plain(line) in said_before
+    )
+    gone = [
+        line
+        for line in before
+        if _plain(line) not in said_after and _plain(line) not in ignore
+    ]
+    fresh = [line for line in after if _plain(line) not in said_before]
 
     rewritten: list[tuple[str, str]] = []
     for old in list(gone):
@@ -179,4 +221,4 @@ def _line_changes(
             gone.remove(old)
             fresh.remove(match)
 
-    return rewritten[:limit], gone[:limit], fresh[:limit]
+    return rewritten[:limit], gone[:limit], fresh[:limit], reformatted

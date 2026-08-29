@@ -140,3 +140,57 @@ class Comments(unittest.TestCase):
     def test_a_comment_on_one_line_closes_itself(self):
         master = "<!-- a note -->\n\n## Skills\n\nPython\n"
         self.assertEqual(summary.compute(master, "## Skills\n\nPython\n").cut, [])
+
+
+class NoiseFoundOnARealResume(unittest.TestCase):
+    """A summary nobody can read is a summary nobody reads.
+
+    Both of these came out of tailoring an actual four-page resume: the
+    approval artifact filled up with changes that were not changes, and the
+    two edits that mattered were buried among them. Noise here is not
+    cosmetic — it is what turns approving into rubber-stamping.
+    """
+
+    def test_bolding_a_line_is_not_rewriting_it(self):
+        master = "## Skills\n\nLanguages: TypeScript, Python\n"
+        draft = "## Skills\n\n**Languages:** TypeScript, Python\n"
+        computed = summary.compute(master, draft)
+        self.assertEqual(computed.rewritten, [])
+        self.assertEqual(computed.cut, [])
+        self.assertEqual(computed.fresh, [])
+        self.assertEqual(computed.reformatted, 1)
+
+    def test_reformatting_is_still_reported_as_having_happened(self):
+        master = "## Skills\n\nLanguages: TypeScript\nFrontend: React\n"
+        draft = "## Skills\n\n**Languages:** TypeScript\n**Frontend:** React\n"
+        rendered = summary.compute(master, draft).render()
+        self.assertIn("reformatted", rendered)
+        self.assertIn("2", rendered)
+
+    def test_a_real_reword_survives_the_emphasis_stripping(self):
+        master = "- Led a team of 3\n"
+        draft = "- **Led a team of 12**\n"
+        computed = summary.compute(master, draft)
+        self.assertEqual(len(computed.rewritten), 1)
+        self.assertEqual(computed.reformatted, 0)
+
+    def test_a_dropped_section_does_not_also_list_its_lines(self):
+        # "left out Gravy Live" and then its dates listed separately as cut
+        # says one thing twice, and the second time less clearly.
+        master = (
+            "## Experience\n\n### Gravy Live – Frontend Engineer\n\n"
+            "Aug 2017 – Nov 2019\n\n- Did the frontend\n\n"
+            "### Arine – Senior Engineer\n\n2025\n\n- Did the backend\n"
+        )
+        draft = (
+            "## Experience\n\n### Arine – Senior Engineer\n\n2025\n\n"
+            "- Did the backend\n"
+        )
+        computed = summary.compute(master, draft)
+        self.assertIn("Gravy Live – Frontend Engineer", computed.dropped)
+        self.assertEqual(computed.cut, [])
+
+    def test_a_line_cut_from_a_section_that_stayed_is_still_reported(self):
+        master = "## Skills\n\nPython\nRust\n"
+        draft = "## Skills\n\nPython\n"
+        self.assertEqual(summary.compute(master, draft).cut, ["Rust"])

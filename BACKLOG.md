@@ -195,10 +195,25 @@ scenarios now.
 
 What is still thin:
 
-- **One model, one posting, one resume.** The example master is the only
-  document the check has ever been run against in anger, and it is the one
-  shaped to suit it. A real resume with a different heading style is the
-  obvious next thing to try.
+- ~~One model, one posting, one resume.~~ **Done, and it found three bugs.**
+  A real four-page resume was pointed at the parser on 2026-08-29. The
+  headings parsed (11 employers, 10 titles) but **the skills check found
+  nothing at all**: that resume calls the section "Technical Skills" and has a
+  separate "Core Competencies", and the parser matched only a heading starting
+  with "Skill". The check had nothing to check against and said so by staying
+  quiet, which is the worst way for a check to fail. It now matches any
+  heading that holds skills, strips the "Languages:" style labels people group
+  them under, and drops brackets anywhere rather than only at the ends —
+  "Amazon Web Services (AWS)" was normalising to "amazon web services (aws".
+
+  The other two were in the summary, and both made it unreadable: bolding a
+  line read as rewriting it (seven entries for a draft that changed no words),
+  and a section dropped whole had its lines listed again individually. Noise
+  there is not cosmetic — an approval artifact nobody can read is what turns
+  approving into rubber-stamping.
+
+  What is still untried: one resume is not resumes. A resume with no headings
+  at all, or one written as a single prose block, would find more.
 - **The paid model has never run.** `anthropic/claude-sonnet-5` is the
   default and no call has ever been made on it; every run has been on the
   free model. That is now one model id apart rather than one client apart —

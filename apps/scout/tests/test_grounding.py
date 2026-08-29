@@ -180,3 +180,58 @@ class Scanning(unittest.TestCase):
     def test_it_works_with_no_posting_to_compare_against(self):
         found = grounding.scan(MASTER, "I am an expert in Kubernetes.")
         self.assertFalse(found[0].from_posting)
+
+
+class RealResumeShapes(unittest.TestCase):
+    """Shapes found in an actual resume rather than in a fixture.
+
+    Every one of these was silently wrong until a real four-page resume was
+    pointed at the parser. The skills one is the worst kind of bug this
+    project can have: the check reported nothing to catch because it had
+    found nothing to check against.
+    """
+
+    def test_a_section_called_technical_skills(self):
+        markdown = "## Technical Skills\n\nTypeScript, Python\n\n## Experience\n"
+        self.assertEqual(
+            grounding.Master.parse(markdown).skills, frozenset({"typescript", "python"})
+        )
+
+    def test_a_section_called_core_competencies(self):
+        markdown = "## Core Competencies\n\nCloud Architecture, CI/CD Automation\n"
+        self.assertIn("ci/cd automation", grounding.Master.parse(markdown).skills)
+
+    def test_skills_grouped_under_their_own_labels(self):
+        # "Languages: TypeScript, Python" is one line naming two skills, not
+        # one skill called "Languages: TypeScript".
+        markdown = (
+            "## Technical Skills\n\n"
+            "Languages: TypeScript, Python\n"
+            "Frontend: React, Vue.js\n"
+        )
+        skills = grounding.Master.parse(markdown).skills
+        self.assertIn("typescript", skills)
+        self.assertIn("react", skills)
+        self.assertNotIn("languages: typescript", skills)
+
+    def test_a_parenthesised_group_of_skills(self):
+        markdown = "## Skills\n\nAWS (Lambda, S3, CDK), Docker\n"
+        skills = grounding.Master.parse(markdown).skills
+        self.assertIn("docker", skills)
+        self.assertIn("s3", skills)
+
+    def test_an_employer_with_an_abbreviation_after_it(self):
+        markdown = "### Amazon Web Services (AWS) – Software Engineer\n"
+        master = grounding.Master.parse(markdown)
+        self.assertIn("amazon web services aws", master.employers)
+
+    def test_a_draft_may_name_a_skill_the_master_groups_under_a_label(self):
+        markdown = (
+            "## Technical Skills\n\nLanguages: TypeScript, Python\n\n"
+            "## Experience\n\n### Arine – Senior Software Engineer\n"
+        )
+        draft = (
+            "## Technical Skills\n\nTypeScript\n\n"
+            "### Arine – Senior Software Engineer\n"
+        )
+        self.assertEqual(grounding.check(markdown, draft), [])

@@ -97,6 +97,13 @@ class Finding:
         return f'"{self.term}" is not in the master resume'
 
 
+# Brackets are dropped wherever they appear rather than only at the ends.
+# "Amazon Web Services (AWS)" otherwise normalises to "amazon web services
+# (aws" — the closing bracket stripped as trailing punctuation and the opening
+# one left behind, which is nothing anybody wrote.
+BRACKETS = re.compile(r"[()\[\]{}<>]")
+
+
 def normalise(text: str) -> str:
     """Lower case, and no punctuation hanging off either end.
 
@@ -104,7 +111,7 @@ def normalise(text: str) -> str:
     and a check that refuses one of them trains somebody to stop reading its
     refusals. `+` and `#` survive, because C++ and C# are skills.
     """
-    return text.lower().strip(".,;:!?()[]{}<>\"'`*_ \t")
+    return BRACKETS.sub("", text).lower().strip(".,;:!?\"'`*_ \t").strip()
 
 
 def _words(text: str) -> set[str]:
@@ -123,20 +130,38 @@ def headings(markdown: str) -> list[tuple[str, str | None]]:
     return found
 
 
-def skills(markdown: str) -> list[str]:
-    """The entries under a `## Skills` heading.
+# Headings that hold skills. Real resumes almost never call the section
+# "Skills": the one this was calibrated against has "Technical Skills" and
+# "Core Competencies", and matching only a leading "Skill" found neither — so
+# the skills check silently had nothing to check against, which is the worst
+# shape a check can fail in.
+SKILL_HEADINGS = ("skill", "competenc", "technolog", "tool", "stack", "expertise")
 
-    Commas, bullets and newlines all separate, because people write that
-    section every one of those ways.
+# "Languages: TypeScript, Python" names two skills, not one called
+# "Languages: TypeScript". The label is how people group them and is not
+# itself a claim.
+SKILL_LABEL = re.compile(r"^\s*[A-Za-z][A-Za-z/&+ .-]{0,30}:\s*")
+
+
+def holds_skills(heading: str) -> bool:
+    heading = heading.strip().lower()
+    return any(word in heading for word in SKILL_HEADINGS)
+
+
+def skills(markdown: str) -> list[str]:
+    """The entries under any heading that holds skills.
+
+    Commas, bullets, pipes and newlines all separate, because people write
+    that section every one of those ways.
     """
     section: list[str] = []
     collecting = False
     for line in markdown.splitlines():
         if line.startswith("## "):
-            collecting = line[3:].strip().lower().startswith("skill")
+            collecting = holds_skills(line[3:])
             continue
         if collecting:
-            section.append(line)
+            section.append(SKILL_LABEL.sub("", line))
     entries = re.split(r"[,\n•|]|^\s*[-*]\s+", "\n".join(section), flags=re.MULTILINE)
     return [entry.strip() for entry in entries if entry.strip()]
 
