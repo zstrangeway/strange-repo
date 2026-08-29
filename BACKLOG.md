@@ -12,10 +12,10 @@ decided. Moving them here would make two places to look and one of them wrong.
 An item says how it was found, so it can be re-checked rather than argued about.
 When one is done, delete it — the commit is the record.
 
-*Last swept 2026-08-29 against `d4df350`, by running all three tiers, five
-real-model turns across five scenes, and reading the deployed apps. Every
-tier was green; nothing below is a failing test — item 9 is a live bug that
-no test catches, which is the point of it being written down.*
+*Last swept 2026-08-29 against `57854f9`, by running all three tiers, nine
+real-model turns across five scenes and three models, and reading the deployed
+apps. Every tier was green and nothing below is a failing test — these are
+things no test is looking for.*
 
 ## Worth real work
 
@@ -149,6 +149,30 @@ And the 550B's first attempt came back "Upstream error from Nvidia: Service
 temporarily overloaded" — the run reported `UNREACHABLE` and exited 1 rather
 than reporting an empty turn, which is the failure path working.
 
+**The lesson from the fight runs, kept after the item itself was deleted:
+read the contract before blaming the model.** The double-write looked like a
+model ignoring instructions, and a prompt rule was written and failed. It was
+neither. `attack`'s description said the rules "say" what a swing costs —
+which is about who authors the number, not whether it has been applied — and
+never said the hit points come off; `damage` said "take hit points off a
+character", which is exactly the job the model believed was outstanding.
+Calling both was a correct reading of the contract as written. Prose at the
+end of a rules list is not where a tool gets picked; the schema is.
+
+Of everything this file has recorded, three findings were the harness or the
+schema being wrong and one — the award — was a genuine gap in what gary was
+told. The ratio is not in the model's favour.
+
+An engine-level refusal was considered and deliberately not built. Every
+refusal in this codebase is something the rules know: that is not an ability in
+this system, it is not their turn, they are already down. "Was this `damage`
+redundant?" is a guess at intent, and `combat.feature:191` already specs
+`damage` landing on an adversary mid-fight — a swing and a collapsing ceiling
+on one target in one turn is ordinary play the engine could not tell from a
+double-write. Results now carry the standing number instead ("now on 18 of
+22"), which puts the discrepancy in front of the one actor that can correct it
+without forbidding a move that may have been right.
+
 **What no run has covered, and what is therefore still unproven:** the
 `--opening`, `--won` and `--close` scenes have each been run against one free
 model only. `--fight` now has four runs across three, which is the shape the
@@ -156,10 +180,12 @@ others want.
 
 ### 2. `play.py` is a quarter of the API in one file
 
-1679 lines: the router, twenty Pydantic schemas, the tool dispatch (`_fighting`,
+1902 lines: the router, twenty Pydantic schemas, the tool dispatch (`_fighting`,
 `_run`) and the turn runner. It has absorbed every feature since campaigns —
-scenes, the opening, combat, character creation — and each one added to the same
-module rather than beside it.
+scenes, the opening, combat, character creation, advancement — and each one
+added to the same module rather than beside it. It was 1679 when this entry was
+written and the number was left stale for a fortnight, which is item 6 happening
+to this file.
 
 Nothing is wrong with it today. It is simply where the next bug will be, and
 where a change will be hardest to make confidently. The seams are already
@@ -185,18 +211,34 @@ what every existing rule applies to, which is the part to look at first.
 ### 4. The tier that exists to catch drift does not reach the newest work
 
 `test:e2e` covers sign-in, identity, profile, one campaign with one turn, and a
-reload — nine scenarios. It does not touch combat or the score methods, which
-are the two most recent and most intricate features.
+reload — nine scenarios. It does not touch combat, advancement, or the score
+methods, which are the three most recent and most intricate features.
 
-Combat is 22 scenarios in gary-api, 2 in gary-web, and 0 end to end. Both web
-scenarios run against the stub, which is precisely the thing the README says
-cannot notice gary-api and gary-web drifting apart. The score methods are the
-same shape: `/catalogue/{slug}` publishes what an edition permits, whether gary
-rolls it and whether the results are yours to arrange, and only the stub's
-version of that contract is ever checked by a browser.
+| feature | gary-api | gary-web | end to end |
+| --- | --- | --- | --- |
+| combat | 22 | 2 | **0** |
+| advancement | 24 | 6 | **0** |
+| score methods | in `catalogue` | in `creation` | **0** |
 
-Keep the tier small — that is its design — but a fight and a rolled set of
-scores are the two contracts most worth one scenario each.
+Every one of those gary-web numbers is against the stub in
+`features/support/api-stub.mjs`, which is a thing I wrote from the same
+understanding as the code it stands in for — so it agrees with gary-api by
+construction rather than by test. That is precisely what the README says this
+tier exists to catch, and this is the newest and most intricate third of the
+app it does not reach.
+
+The score methods are the same shape as the other two: `/catalogue/{slug}`
+publishes what an edition permits, whether gary rolls it and whether the
+results are yours to arrange, and only the stub's version of that contract is
+ever checked by a browser.
+
+Advancement is the sharpest of the three because it is the newest — it shipped
+on 2026-08-28 and the contract it added (`Turn.changes`, `Member.experience`,
+`Member.next_level`) has never been exercised by a browser against a real
+gary-api at all.
+
+Keep the tier small — that is its design. A fight, a level gained, and a rolled
+set of scores are the three contracts most worth one scenario each.
 
 ### 5. gary-api has no error tracking
 
@@ -236,64 +278,6 @@ Worth reading alongside the thing the READMEs already admit: gary-web's own log
 lines are in the browser console and nobody collects them. Between the two, the
 only durable record of a bad turn is gary-api's log, and only if somebody thinks
 to look within the retention window.
-
-### 9. Tool results were deltas, and two tool descriptions disagreed
-
-Found by the `--fight` smoke run, and worth keeping because **the first
-diagnosis was wrong**. A real model, told "Bramble hit Drowned Corpse for 2",
-then called `damage` for 2 as well, so one swing wounded twice. It looked like
-a model ignoring its instructions. It was not.
-
-Read what the model was actually given at the moment it chose:
-
-    "attack": "Have whoever is up swing at somebody. Whether it lands and
-               what it costs are the rules' to say, not yours."
-    "damage": "Take hit points off a character."
-
-`attack` said the rules *say* what a swing costs — which is about who authors
-the number, not about whether it has been applied — and never said the hit
-points come off. `damage` described exactly the job the model believed was
-still outstanding. **The model read the contract correctly and the contract
-was wrong.** A prompt rule was tried first and the very next run ignored it,
-which is the clue that should have been followed sooner: prose at the end of a
-rules list is not where a model decides which tool to call, and the schema is.
-
-The second half was that every result reported a delta and never a standing
-number. `attack` answered "hit for 2"; `damage` answered "took 2". Neither said
-what the target was now on. So within a turn gary kept its own books against a
-world snapshot taken before the turn began, nothing ever contradicted a wrong
-write, and on one run gary narrated a corpse at 20 while the world had it at
-18 — its arithmetic right, its second write invisible to it.
-
-Both are fixed. `attack` now says it takes the hit points off and moves the
-turn on and not to call `damage` as well; `damage` says it is for hurt that is
-not a swing. `attack`, `damage` and `heal` all answer with the standing number
-— "Bramble took 2 — Bramble is now on 4 of 8" — so gary can never be more than
-one result behind the world, and the smoke harness answers the same way so it
-cannot drift from the router again.
-
-**An engine-level refusal was considered and deliberately not built.** Every
-refusal in this codebase is something the rules know — that is not an ability
-in this system, it is not their turn, they are already down. "Was this
-`damage` redundant?" is not knowable; it is a guess at intent, and it would be
-the first heuristic among them. `combat.feature:191` already specs `damage`
-landing on an adversary mid-fight, so a swing and a collapsing ceiling on the
-same target in one turn is ordinary play the engine could not tell from a
-double-write — it would forbid a correct move and leave gary narrating around
-a refusal that should not have happened.
-
-The standing number is the better version of that backstop and is already in.
-A redundant call now answers "now on 18 of 22" while gary is holding 20, so
-the discrepancy reaches the one actor that can correct it, in the same turn,
-without blocking anything. Correction rather than prohibition.
-
-**What is still open is only whether the fix holds as more models are run.**
-Four runs across three models so far, recorded in item 1.
-
-The generalisation is the valuable part: **when a model does the wrong thing,
-read the contract before blaming the model.** Of the findings in this file,
-three were this harness or this schema being wrong and one — the award — was a
-genuine gap in what gary was told. The ratio is not in the model's favour.
 
 ## Cheap, and stale things get believed
 
