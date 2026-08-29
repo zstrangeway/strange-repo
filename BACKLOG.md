@@ -12,7 +12,7 @@ decided. Moving them here would make two places to look and one of them wrong.
 An item says how it was found, so it can be re-checked rather than argued about.
 When one is done, delete it — the commit is the record.
 
-*Last swept 2026-08-29 against `c9bd4dd`, by running all three tiers, nine
+*Last swept 2026-08-29 against `902bd4c`, by running all three tiers, nine
 real-model turns across five scenes and three models, and reading the deployed
 apps. Every tier was green and nothing below is a failing test — these are
 things no test is looking for.*
@@ -173,6 +173,26 @@ double-write. Results now carry the standing number instead ("now on 18 of
 22"), which puts the discrepancy in front of the one actor that can correct it
 without forbidding a move that may have been right.
 
+**Run 2026-08-29, same model, on the openai 3 upgrade** — and this is the one
+that paid for the whole habit. All five CI gates passed the upgrade, and they
+could not have seen it: every tier runs `GM_FAKE=1`, so none of them touches
+this module. A real turn showed a `RuntimeError` out of `httpcore` on every
+stream teardown.
+
+It was not the library's fault. **We were never closing the response**, in
+either `narrate` or `close` — `play.py` calls `aclose()` on the generator when
+a turn ends, abandoning the body still open. openai 2.x cleaned up after us
+silently. So it was a leaked connection per turn since the feature was built,
+invisible on both versions, and the new library complaining was the first
+honest signal anything was wrong.
+
+The double could not have caught it either: it had no `close()` where the real
+`AsyncStream` has an awaitable one. **Third double in this file found looser
+than the thing it stands for**, after grading a skill as an ability and
+answering `attack` without resolving it. The pattern is worth stating plainly:
+a double written from the same understanding as the code agrees with it by
+construction rather than by test, and only a real model has ever disagreed.
+
 **What no run has covered, and what is therefore still unproven:** the
 `--opening`, `--won` and `--close` scenes have each been run against one free
 model only. `--fight` now has four runs across three, which is the shape the
@@ -184,7 +204,7 @@ others want.
 `_run`) and the turn runner. It has absorbed every feature since campaigns —
 scenes, the opening, combat, character creation, advancement — and each one
 added to the same module rather than beside it. It was 1679 when this entry was
-written and the number was left stale for a fortnight, which is item 6 happening
+written and the number was left stale for a fortnight, which is item 5 happening
 to this file.
 
 Nothing is wrong with it today. It is simply where the next bug will be, and
@@ -253,28 +273,9 @@ final `COPY`, which is the whole of what #20 needed to fail. A better one runs
 the specs inside the image, which is more machinery and would want the
 database.
 
-### 5. `openai` has no upper bound, on the one library nothing tests
-
-`pyproject.toml` says `openai>=2.53.0`. A major therefore reaches the narrator
-through a lockfile bump with nothing in the manifest to review, and
-`narration/openrouter.py` is the module no test tier exercises — all three run
-`GM_FAKE=1`.
-
-That happened: #24 took the lock to openai 3.3.1 and passed all five checks.
-Two real-model smoke runs showed the narrator itself is fine — streaming,
-fragmented tool-call accumulation and the result round-trip all hold — but
-every stream teardown now raises `RuntimeError: generator didn't stop after
-athrow()` out of the `httpcore2` that 3.x brings in. Zero occurrences across
-five runs on 2.53.0. `play.py:1868` and `scenes.py:273` close the stream
-exactly as the smoke does, so that would be a spurious traceback per turn, in
-the log that is currently the only durable record of a bad turn.
-
-Closed unmerged. Without an upper bound it returns next month looking like a
-routine lock update, which is the argument for adding one.
-
 ## Cheap, and stale things get believed
 
-### 6. Only two shapes of document rot are caught
+### 5. Only two shapes of document rot are caught
 
 `apps/gary-api/tests/test_documents.py` now checks the two things that are
 exact: no document names a `"kind"` the world does not have, and gary-api's
@@ -306,7 +307,7 @@ What is still uncaught is every claim made in a sentence rather than a name. A
 README that describes the wrong behaviour in fluent English, with every
 identifier spelled correctly, passes all of this.
 
-### 7. Two things dependabot cannot do, now that it is configured
+### 6. Two things dependabot cannot do, now that it is configured
 
 `.github/dependabot.yml` exists: github-actions, npm at the workspace root, uv
 for gary-api, and docker for the two base images — monthly, grouped so minor
@@ -340,7 +341,7 @@ from here, and guessing a tag is how a green CI turns red for no reason.
 Dependabot will propose them with a changelog attached, which is the better
 version of the same change.
 
-### 8. The browser suite's patience is one number now, and still untested
+### 7. The browser suite's patience is one number now, and still untested
 
 **The old title was wrong and worth correcting: nothing waited fifteen
 seconds.** All twenty-seven were *ceilings* on condition waits —
