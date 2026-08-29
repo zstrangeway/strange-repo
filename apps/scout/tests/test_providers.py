@@ -17,7 +17,7 @@ from support import InAScratchHome
 from scout import providers
 from scout.errors import ScoutError
 from scout.providers.openrouter import DEFAULT_MODEL, OpenRouterProvider
-from scout.providers.prompt import SYSTEM
+from scout.providers.prompt import STRUCTURE, SYSTEM
 
 
 class Loading(unittest.TestCase):
@@ -150,3 +150,42 @@ class TheOpenRouterProvider(unittest.TestCase):
         with patched, self.assertRaises(ScoutError) as caught:
             OpenRouterProvider().tailor(master="# Ada\n", posting="x")
         self.assertIn("model call failed", str(caught.exception))
+
+
+class Structuring(unittest.TestCase):
+    """The second thing a provider is asked for, and its stub."""
+
+    def test_it_sends_the_structure_instruction(self):
+        patched, client = self._client(self._choice("# Ada"))
+        with patched:
+            OpenRouterProvider().structure(resume="Ada Lovelace")
+        sent = client.chat.completions.create.call_args.kwargs
+        self.assertEqual(sent["messages"][0]["content"], STRUCTURE)
+        self.assertIn("Ada Lovelace", sent["messages"][1]["content"])
+
+    _client = TheOpenRouterProvider._client
+    _choice = staticmethod(TheOpenRouterProvider._choice)
+
+    def setUp(self):
+        self.previous = os.environ.get("OPENROUTER_API_KEY")
+        os.environ["OPENROUTER_API_KEY"] = "sk-or-not-real"
+        self.addCleanup(
+            lambda: (
+                os.environ.__setitem__("OPENROUTER_API_KEY", self.previous)
+                if self.previous
+                else os.environ.pop("OPENROUTER_API_KEY", None)
+            )
+        )
+
+
+class TheStubStructures(InAScratchHome):
+    def test_it_hands_back_what_a_scenario_asked_for(self):
+        directory = self.home / ".scout"
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "fake-structured.md").write_text("# Ada\n", encoding="utf-8")
+        self.assertEqual(providers.load("fake").structure(resume="Ada"), "# Ada\n")
+
+    def test_it_hands_the_resume_straight_back_otherwise(self):
+        # Unstructured is a legal thing for a model to return, and the case
+        # the verifier has to survive: every word is still there.
+        self.assertEqual(providers.load("fake").structure(resume="Ada"), "Ada")

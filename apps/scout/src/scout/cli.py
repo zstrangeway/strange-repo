@@ -8,8 +8,18 @@ them rather than a second implementation of them.
 
 import argparse
 import sys
+from pathlib import Path
 
-from . import applications, db, example, packages, paths, postings, tailoring
+from . import (
+    applications,
+    db,
+    example,
+    importer,
+    packages,
+    paths,
+    postings,
+    tailoring,
+)
 from .errors import ScoutError
 from .providers import load as load_provider
 
@@ -39,6 +49,38 @@ def _init(args: argparse.Namespace) -> int:
     else:
         master.write_text(example.GUIDANCE + example.MASTER, encoding="utf-8")
         print(f"  wrote   {master.relative_to(paths.home())} — replace it with yours")
+    return 0
+
+
+def _import(args: argparse.Namespace) -> int:
+    """Convert a real resume into the file scout reads, and prove it kept it."""
+    source = Path(args.path).expanduser()
+    master = paths.master_resume_path()
+    if master.exists() and not args.replace:
+        raise ScoutError(
+            f"There is already a master resume at {master}.",
+            detail=(
+                "It is the document every check is made against, so scout "
+                "will not write over it by accident. Pass --replace if that "
+                "is what you want."
+            ),
+        )
+
+    text = importer.read(source)
+    markdown = importer.convert(text, load_provider(args.provider))
+    found = importer.employers(markdown)
+
+    master.parent.mkdir(parents=True, exist_ok=True)
+    master.write_text(markdown, encoding="utf-8")
+
+    print(f"Wrote {master} from {source}")
+    print(f"  {len(found)} employer(s): " + (", ".join(found) or "none"))
+    print("  checked: every word of the original survived, and none were added")
+    print(
+        "\nRead it before you tailor anything. The words are guaranteed; the "
+        "structure is not. An employer that did not become a heading is one "
+        "the skills and dates checks cannot see."
+    )
     return 0
 
 
@@ -172,6 +214,18 @@ def build_parser() -> argparse.ArgumentParser:
         "init", help="Create resumes/ and an example master resume"
     )
     start.set_defaults(handler=_init)
+
+    bring = subcommands.add_parser(
+        "import", help="Turn a real resume (PDF or text) into resumes/master.md"
+    )
+    bring.add_argument("path", help="Your resume, as a .pdf, .txt or .md")
+    bring.add_argument(
+        "--replace", action="store_true", help="Overwrite an existing master resume"
+    )
+    bring.add_argument(
+        "--provider", default="openrouter", choices=("openrouter", "fake")
+    )
+    bring.set_defaults(handler=_import)
 
     save = subcommands.add_parser("save", help="Save a job posting")
     source = save.add_mutually_exclusive_group(required=True)

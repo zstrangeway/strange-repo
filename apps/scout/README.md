@@ -27,9 +27,15 @@ export SCOUT_HOME=$PWD                   # or just run scout from here
 uv run --directory /absolute/path/to/apps/scout scout init
 ```
 
-`init` writes `resumes/master.example.md` and `resumes/master.md`. Replace the
-second with your own resume — keeping the two rules in the comment at the top
-of it — and then:
+`init` writes `resumes/master.example.md` and `resumes/master.md`. If you
+already have a resume, bring it in instead:
+
+```sh
+scout import ~/resume.pdf        # or .txt, or .md
+```
+
+The model reads the structure; a deterministic check proves it changed nothing
+(see below). Then:
 
 ```sh
 scout save --url https://job-boards.greenhouse.io/acme/jobs/4012345
@@ -103,6 +109,33 @@ Nothing cheap catches the right-hand column, and scout does not pretend to.
 That is why every tailoring prints **what changed** — sections moved, lines
 rewritten, before and after. Read it before you send the resume. It is the
 only thing standing between you and the right-hand column.
+
+### Importing your actual resume
+
+`scout import` asks the model to put markdown around your resume, then
+**refuses the result unless the words are conserved in both directions** —
+every word of the original present, and no word that was not there before. The
+model may add `#`, `-` and whitespace, and nothing else. It may drop a running
+header the PDF repeats on every page, and nothing else.
+
+That is a tighter guarantee than tailoring's. There the model is *meant* to
+rewrite, so only new names can be caught. Here nothing may change at all, so
+everything can be — a reworded job title shows up as both a loss and an
+invention, and the import is refused with nothing written.
+
+It has to be that tight, because the master resume is the document every other
+check is made against. An importer that quietly dropped a job would poison the
+one source of truth scout has, and every check downstream would agree with it.
+
+**The words are guaranteed; the structure is not.** The import prints the
+employers it recognised and tells you to read the file. An employer that did
+not become a `###` heading is one the skills and dates checks cannot see.
+
+> This was regular expressions first, and it was the wrong tool: teaching the
+> parser two employers it had missed silently lost it seven it had been
+> finding. Resume formats vary without limit; a rule chasing them gets more
+> fragile with every one it learns. Reading structure out of a mess is what a
+> model is better at — and word conservation is what makes trusting it safe.
 
 ### How it reads your master resume
 
@@ -224,6 +257,7 @@ tell you, rather than the turn dying.
 | | |
 | --- | --- |
 | `scout init` | Create `resumes/` and an example master resume |
+| `scout import FILE` | Turn a real resume (PDF or text) into `resumes/master.md` |
 | `scout save --url URL` / `--text TEXT` | Save a posting (`--text -` reads stdin) |
 | `scout list [--in-play]` | Everything saved, or only what has not ended |
 | `scout show REF` | One posting, its history and its text |

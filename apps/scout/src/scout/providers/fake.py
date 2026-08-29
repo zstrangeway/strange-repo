@@ -15,11 +15,20 @@ from .. import paths
 from ..errors import ScoutError
 
 DRAFT_FILE = "fake-draft.md"
+STRUCTURED_FILE = "fake-structured.md"
 FAILURE_FILE = "fake-failure.txt"
 
 
 class FakeProvider:
     name = "fake"
+
+    def structure(self, *, resume: str) -> str:
+        structured = paths.database_path().parent / STRUCTURED_FILE
+        if structured.exists():
+            return structured.read_text(encoding="utf-8")
+        # Unstructured, which is a legal thing for a model to return and the
+        # case the verifier has to survive: every word is still there.
+        return resume
 
     def tailor(self, *, master: str, posting: str) -> str:
         directory = paths.database_path().parent

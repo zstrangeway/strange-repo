@@ -19,6 +19,9 @@ dependencies = [
     # is the client even though the model on the other end is usually a
     # Claude. The same trade gary-api makes, for the same reason.
     "openai>=2.53.0",
+    # Reads the resume somebody actually has. Pure Python, so a fresh clone
+    # still compiles nothing.
+    "pypdf>=6.0.0",
     # Turns a job board's HTML into the posting and drops the chrome. Chosen
     # over readability-lxml for handling boards that wrap the posting in
     # several layers of div, which is most of them.

@@ -17,7 +17,7 @@ import os
 import openai
 
 from ..errors import ScoutError
-from .prompt import SYSTEM, request
+from .prompt import STRUCTURE, SYSTEM, request
 
 BASE_URL = "https://openrouter.ai/api/v1"
 
@@ -35,7 +35,13 @@ class OpenRouterProvider:
     def __init__(self, model: str | None = None) -> None:
         self.model = model or os.environ.get("SCOUT_MODEL", DEFAULT_MODEL)
 
+    def structure(self, *, resume: str) -> str:
+        return self._ask(STRUCTURE, resume)
+
     def tailor(self, *, master: str, posting: str) -> str:
+        return self._ask(SYSTEM, request(master, posting))
+
+    def _ask(self, system: str, user: str) -> str:
         key = os.environ.get(API_KEY_VARIABLE)
         if not key:
             raise ScoutError(
@@ -52,8 +58,8 @@ class OpenRouterProvider:
                 model=self.model,
                 max_tokens=16000,
                 messages=[
-                    {"role": "system", "content": SYSTEM},
-                    {"role": "user", "content": request(master, posting)},
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
                 ],
             )
         except openai.APIStatusError as exc:

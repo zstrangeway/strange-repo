@@ -32,3 +32,36 @@ def request(master: str, posting: str) -> str:
         f"<posting>\n{posting}\n</posting>\n\n"
         "Tailor the master resume to this posting."
     )
+
+
+# Importing is a different job from tailoring and gets a different
+# instruction. Reading structure out of a resume is what a model is genuinely
+# better at than a rule — formats vary without limit, and a parser chasing
+# them gets more fragile with every one it learns. What keeps it honest is not
+# this prompt but `importer.verify`, which requires every word of the original
+# to survive and refuses any word that was not there before.
+STRUCTURE = """\
+You are adding markdown structure to somebody's resume. You are not editing \
+it.
+
+Mark it up like this:
+
+  # Their name
+  ## Section          (Summary, Skills, Experience, Education, ...)
+  ### Employer — Job title
+  Dates on their own line under the heading
+  - bullets as bullets
+
+Rules, in order of importance:
+
+1. Do not change, add, or remove a single word. Not a heading, not a date, \
+not a company name, not "and". You may only insert markdown markers and \
+whitespace, and join a line that was wrapped mid-sentence.
+2. Every employer gets a `###` heading in `Employer — Job title` form. If the \
+resume wrapped that across two lines, join them.
+3. Keep the sections the resume already has, under their own names. Do not \
+rename "Technical Skills" to "Skills".
+4. Page numbers and repeated headers or footers from the PDF are the only \
+thing you may drop.
+
+Return the markdown and nothing else. No preamble, no code fence."""

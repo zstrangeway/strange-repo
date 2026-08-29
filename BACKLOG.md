@@ -214,6 +214,13 @@ What is still thin:
 
   What is still untried: one resume is not resumes. A resume with no headings
   at all, or one written as a single prose block, would find more.
+
+  The same resume also forced `scout import`, and forced it to be model-driven
+  rather than a parser — the deterministic first attempt found 9 employers of
+  11, and fixing the 2 it missed dropped it to 2. What keeps a model near the
+  master resume honest is `importer.verify`, which requires word conservation
+  in both directions. On the real PDF it now finds all 10 employers with
+  nothing lost and nothing added.
 - **The paid model has never run.** `anthropic/claude-sonnet-5` is the
   default and no call has ever been made on it; every run has been on the
   free model. That is now one model id apart rather than one client apart —

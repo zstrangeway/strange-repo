@@ -33,6 +33,10 @@ class Provider(Protocol):
         """Return the draft as markdown, or raise ``ScoutError``."""
         ...
 
+    def structure(self, *, resume: str) -> str:
+        """Return the resume as markdown, having changed none of its words."""
+        ...
+
 
 def load(name: str = "openrouter") -> Provider:
     """The provider by name.
