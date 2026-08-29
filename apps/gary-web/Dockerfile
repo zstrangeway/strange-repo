@@ -3,7 +3,7 @@
 
 # Build context is the repository root: the pnpm workspace has to be intact
 # for the app's dependencies to resolve.
-FROM node:22-slim AS base
+FROM node:26-slim AS base
 
 ENV PNPM_HOME=/pnpm \
     PATH=/pnpm:$PATH \
