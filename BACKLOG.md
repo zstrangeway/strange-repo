@@ -15,7 +15,8 @@ When one is done, delete it — the commit is the record.
 *Last swept 2026-08-29 against `c9bd4dd`, by running all three tiers, nine
 real-model turns across five scenes and three models, and reading the deployed
 apps. Every tier was green and nothing below is a failing test — these are
-things no test is looking for.*
+things no test is looking for. Item 8 was added the same day when scout landed,
+and rewritten twice as its smoke check was actually run.*
 
 ## Worth real work
 
@@ -314,33 +315,118 @@ and patch arrive as one pull request per ecosystem and a major arrives alone.
 That is the answer to the ten that were opened against `apps/example-web` and
 `apps/example-api` and closed against a repo shape that had already gone.
 
-**The file is valid; whether it produces anything is still unseen.** Dependabot
-posted its own `.github/dependabot.yml` check on the pull request that added it
-and it passed, which settles the schema — including the `uv` ecosystem name,
-which the supported-ecosystems table still does not list and which had to be
-taken from the options reference. So the "bad key opens nothing and reads like
-a quiet month" risk is gone.
+### 8. scout's grounding check has been run against one model, once
 
-What is left is narrower: nothing has watched a monthly run actually open a
-pull request, and a config that parses can still match no manifests. Worth one
-look at Dependency graph → Dependabot after the first month, and worth
-remembering that the last ten pull requests were closed rather than merged —
-this only helps if somebody reads them.
+It has now seen real drafts — three runs on 2026-08-29, all
+`nvidia/nemotron-3-super-120b-a12b:free` through OpenRouter, against the
+example master resume and one saved posting. `pnpm --filter scout smoke`
+costs nothing by default, so this is cheap to repeat and should be repeated
+before anything that touches `grounding.py` or `providers/prompt.py`.
 
-**`superfly/flyctl-actions/setup-flyctl@master` is pinned to a branch.** Both
-deploy jobs use it, so the deploy path runs whatever is on that branch on the
-day — dependabot has no version to bump and cannot help. Pinning it to a tag
-or a SHA is a decision about the deploy path rather than a dependency bump,
-which is why it was not made while writing the config.
+**Run 1 found two things no spec had thought of, and both are now fixed:**
 
-The three actions the closed pull requests wanted at v7 — `actions/checkout`,
-`actions/setup-node`, `astral-sh/setup-uv` — are still at v4, v4 and v5. They
-were deliberately not bumped by hand: the current majors could not be verified
-from here, and guessing a tag is how a green CI turns red for no reason.
-Dependabot will propose them with a changelog attached, which is the better
-version of the same change.
+- The model gave the second employer the first one's dates — Thornfield
+  Systems shown as 2021–2025, which are Wilding Labs'. Every year in the draft
+  appeared somewhere in the master, so nothing caught it. `grounding.py` now
+  checks dates against the employer they sit under.
+- The summary reported a deleted bullet and an unrelated promoted one as a
+  *rewrite* of each other, because `difflib` aligns by position. The summary
+  is the only defence against inflation, so one that invents an edit is worse
+  than one that says less. It now compares by content.
 
-### 8. The browser suite's patience is one number now, and still untested
+**Run 1 also showed the inflation gap doing exactly what the README says.**
+The posting asked for "deep Postgres experience"; "ran the Postgres upgrade"
+came back as "applied deep Postgres expertise to". No new employer, skill or
+title, so the check passed it — correctly, by its own definition — and the
+summary showed it. That is the design working, not a defect, and it is the
+reason the summary is not optional.
+
+**Run 3, after both fixes, was clean**: six honest rewrites, no invention, no
+date corruption, and a summary in which every reported pair was genuinely a
+rewrite of that line.
+
+Two more were found the same way — by pointing scout at real Greenhouse and
+python.org boards rather than at fixtures — and are now fixed: a board's
+**index page** saved silently as a posting, and the MCP save tool told a model
+to "use the edit command", which only existed on the command line. Both have
+scenarios now.
+
+What is still thin:
+
+- ~~One model, one posting, one resume.~~ **Done, and it found three bugs.**
+  A real four-page resume was pointed at the parser on 2026-08-29. The
+  headings parsed (11 employers, 10 titles) but **the skills check found
+  nothing at all**: that resume calls the section "Technical Skills" and has a
+  separate "Core Competencies", and the parser matched only a heading starting
+  with "Skill". The check had nothing to check against and said so by staying
+  quiet, which is the worst way for a check to fail. It now matches any
+  heading that holds skills, strips the "Languages:" style labels people group
+  them under, and drops brackets anywhere rather than only at the ends —
+  "Amazon Web Services (AWS)" was normalising to "amazon web services (aws".
+
+  The other two were in the summary, and both made it unreadable: bolding a
+  line read as rewriting it (seven entries for a draft that changed no words),
+  and a section dropped whole had its lines listed again individually. Noise
+  there is not cosmetic — an approval artifact nobody can read is what turns
+  approving into rubber-stamping.
+
+  What is still untried: one resume is not resumes. A resume with no headings
+  at all, or one written as a single prose block, would find more.
+
+  The same resume also forced `scout import`, and forced it to be model-driven
+  rather than a parser — the deterministic first attempt found 9 employers of
+  11, and fixing the 2 it missed dropped it to 2. What keeps a model near the
+  master resume honest is `importer.verify`, which requires word conservation
+  in both directions. On the real PDF it now finds all 10 employers with
+  nothing lost and nothing added.
+- ~~The paid model has never run.~~ **Done, 2026-08-29, and it found the
+  failure mode nobody had seen.** `anthropic/claude-sonnet-5` refused two
+  honest drafts in a row — the false refusals this file had been recording as
+  unmeasured, and they turned up on the first paid run rather than after
+  fifty. Both were word-shape, not judgement: "UIs" where the master says
+  "UI", and "TypeScript/React" where it has both halves separately. Plurals,
+  possessives and slash- or hyphen-joined compounds now match; each rule is
+  reversible and none of them lets an unknown word through, because every part
+  of a compound still has to be real.
+
+  A false refusal is worse for somebody than a missed invention: it is the
+  failure that teaches people to stop reading refusals. Expect more of them,
+  and expect each to be a small deterministic fix — which is the argument for
+  running this against a paid model before trusting it, not after.
+
+  The third run was accepted and correct. It cost **$0.0683**. `scout import`
+  and a refused `scout-smoke` now report their cost too; before, a refused run
+  spent money and said nothing, which under-reported the bill.
+
+- **The check is not trigger-happy, and that is measured now.** Six free
+  models were pointed at a real Greenhouse posting and the example master on
+  2026-08-29; two were unavailable (429, 403 — both surfaced as ordinary
+  refusals, which is worth knowing on its own) and four produced drafts. All
+  four were accepted, none wrongly. So the false-refusal rate is zero over
+  four, which is thin evidence but the right sign.
+
+- **⚠️ One of those four invented something and the check passed it.** Not a
+  name — a claim. It appended clauses to bullets it otherwise kept:
+  "demonstrating experience managing large-scale distributed systems",
+  "applying engineering rigor to fast-paced deployment cycles",
+  "strengthening core software engineering capabilities". None of those
+  phrases is anywhere in the master resume. No new employer, title, skill or
+  date, so nothing in `grounding.py` had anything to catch, and the summary
+  showed the rewrites, which is the only reason it is visible at all.
+
+  This is the same family as the "deep Postgres expertise" case but a step
+  worse: an intensifier is a stronger version of a claim that was there,
+  whereas "experience managing large-scale distributed systems" is a claim
+  that was not. It is the strongest argument yet that a name-based check
+  under-covers what "never invents experience" was meant to mean, and it is
+  a product decision rather than a defect — the check does exactly what it
+  is documented to do.
+
+  Two of the other four barely changed anything at all, which is its own
+  finding about small free models: a tailoring that returns the master
+  unchanged is accepted and useless.
+
+### 9. The browser suite's patience is one number now, and still untested
 
 **The old title was wrong and worth correcting: nothing waited fifteen
 seconds.** All twenty-seven were *ceilings* on condition waits —

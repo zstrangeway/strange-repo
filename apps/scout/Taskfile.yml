@@ -1,0 +1,40 @@
+version: '3'
+
+tasks:
+  init:
+    desc: Create resumes/ and an example master resume in the current directory
+    cmds:
+      - uv run scout init
+
+  lint:
+    desc: Lint and format-check, and fail on anything
+    cmds:
+      - uv run ruff check .
+      - uv run ruff format --check .
+
+  mcp:
+    desc: Run the MCP server on stdio (what the Claude Code config block runs)
+    cmds:
+      - uv run scout-mcp
+
+  smoke:
+    desc: 'Tailor once against a REAL model: task scout:smoke -- <ref>'
+    cmds:
+      # Deliberately not part of `test`. It costs money, needs a key, and is
+      # the only thing here that talks to a model — so it is run by hand and
+      # its output is read rather than its exit code.
+      - uv run scout-smoke {{.CLI_ARGS}}
+
+  test:
+    desc: Lint, then the specs and unit tests under one 100% coverage gate
+    cmds:
+      - task: lint
+      - uv run coverage erase
+      # --parallel, because the MCP specs drive a real server subprocess and
+      # its coverage lands in a separate data file. Without the combine below,
+      # every line of mcp_server.py reads as uncovered while the specs that
+      # drive it pass.
+      - uv run coverage run --parallel -m behave
+      - uv run coverage run --parallel -m unittest discover -s tests
+      - uv run coverage combine
+      - uv run coverage report

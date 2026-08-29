@@ -29,16 +29,21 @@ function pythonMajors() {
   const image = read("apps/gary-api/Dockerfile").match(/^FROM python:(\d+\.\d+)/m);
   if (image) found.push({ where: "apps/gary-api/Dockerfile", major: image[1] });
 
-  found.push({
-    where: "apps/gary-api/.python-version",
-    major: read("apps/gary-api/.python-version").trim(),
-  });
+  // Both Python apps, not just gary-api. scout is a fourth and fifth place
+  // naming a version, and a place nothing compares is exactly what this file
+  // exists to stop existing.
+  for (const app of ["gary-api", "scout"]) {
+    found.push({
+      where: `apps/${app}/.python-version`,
+      major: read(`apps/${app}/.python-version`).trim(),
+    });
 
-  const requires = read("apps/gary-api/pyproject.toml").match(
-    /requires-python\s*=\s*"[^\d]*(\d+\.\d+)"/,
-  );
-  if (requires) {
-    found.push({ where: "apps/gary-api/pyproject.toml", major: requires[1] });
+    const requires = read(`apps/${app}/pyproject.toml`).match(
+      /requires-python\s*=\s*"[^\d]*(\d+\.\d+)"/,
+    );
+    if (requires) {
+      found.push({ where: `apps/${app}/pyproject.toml`, major: requires[1] });
+    }
   }
 
   return found;
@@ -111,7 +116,7 @@ function agree(runtime, found, least) {
 
 const ok = [
   agree("node", majors(), 4),
-  agree("python", pythonMajors(), 3),
+  agree("python", pythonMajors(), 5),
 ].every(Boolean);
 
 process.exit(ok ? 0 : 1);

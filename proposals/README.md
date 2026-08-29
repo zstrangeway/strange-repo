@@ -20,5 +20,6 @@ folder of things nobody is going to build reads like a roadmap.
 
 ## Waiting
 
-Nothing at the moment. Advancement was the first thing through here and has
-moved into both apps with its steps.
+Nothing at the moment. Approval was the most recent thing through here and has
+moved into `apps/scout/features/` with its steps. Advancement and scout's first
+four features came the same way.

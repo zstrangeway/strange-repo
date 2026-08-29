@@ -78,6 +78,24 @@ jobs:
       - run: pnpm --filter gary-web exec playwright install --with-deps chromium
       - run: pnpm --filter gary-web test
 
+  test-scout:
+    name: scout specs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: pnpm install --frozen-lockfile
+      # No database and no browser: the specs drive the CLI and a real MCP
+      # server subprocess, and the provider is stubbed.
+      - run: pnpm --filter scout test
+
   e2e:
     name: End-to-end specs
     runs-on: ubuntu-latest
