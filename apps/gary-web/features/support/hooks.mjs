@@ -20,6 +20,19 @@ const WEB_PORT = 3999;
 // throwaway database; when off, to the in-memory stub.
 export const fullStack = process.env.GARY_E2E === "1";
 
+// How long a step waits for the page to catch up before giving up. Every one
+// of these is a *ceiling* on a condition wait, not a sleep — `waitForSelector`
+// returns the moment the thing appears, and the suite gets through 74
+// scenarios in about three minutes, which twenty-seven real fifteen-second
+// waits would make arithmetically impossible.
+//
+// It is here, once, because it used to be the literal 15_000 written out
+// twenty-seven times across five files. Raising it for a slow machine meant
+// editing all twenty-seven, so nobody did, and a loaded CI runner failed a
+// suite that is not testing latency. E2E_PATIENCE_MS raises it without
+// touching a line of test code.
+export const PATIENCE = Number(process.env.E2E_PATIENCE_MS ?? 15_000);
+
 export const world = {
   // localhost, not 127.0.0.1: `next dev` blocks cross-origin requests for
   // dev assets, and it treats a different hostname for the same address as

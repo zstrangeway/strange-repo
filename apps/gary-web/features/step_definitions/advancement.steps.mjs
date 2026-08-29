@@ -7,7 +7,7 @@
 import { Then, When } from "@cucumber/cucumber";
 
 import * as apiStub from "../support/api-stub.mjs";
-import { world } from "../support/hooks.mjs";
+import { world, PATIENCE } from "../support/hooks.mjs";
 import { say } from "./play.steps.mjs";
 
 function standing(who) {
@@ -29,7 +29,7 @@ Then("{string} should show as level {int}", async function (who, level) {
         .querySelector(`[data-testid="standing-${name}"]`)
         ?.textContent?.includes(`level ${wanted}`) ?? false,
     [who, level],
-    { timeout: 15_000 },
+    { timeout: PATIENCE },
   );
 });
 

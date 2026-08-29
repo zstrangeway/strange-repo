@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { Given, When, Then } from "@cucumber/cucumber";
 
 import * as apiStub from "../support/api-stub.mjs";
-import { world } from "../support/hooks.mjs";
+import { world, PATIENCE } from "../support/hooks.mjs";
 
 const PAGES = {
   // "/" is the campaigns list now — signing in lands you at your games
@@ -49,7 +49,7 @@ async function through(provider, testId) {
  *  every signed-in page and says who you are. */
 async function signedIn() {
   await world.page.waitForSelector('[data-testid="user-menu"]', {
-    timeout: 15_000,
+    timeout: PATIENCE,
   });
 }
 
@@ -158,7 +158,7 @@ Then("the page shows {string}", async function (expected) {
   await world.page.waitForFunction(
     (want) => document.body.innerText.includes(want),
     expected,
-    { timeout: 15_000 },
+    { timeout: PATIENCE },
   );
 });
 
@@ -172,7 +172,7 @@ Then("I should be signed in as {string}", async function (name) {
         .querySelector('[data-testid="user-menu"]')
         ?.textContent?.includes(want) ?? false,
     name,
-    { timeout: 15_000 },
+    { timeout: PATIENCE },
   );
 });
 
@@ -184,7 +184,7 @@ Then("the sidebar should say the account is {string}", async function (email) {
 Then(/^I should be on the (.+) page$/, async function (name) {
   const expected = pathFor(name);
   await world.page.waitForURL((url) => new URL(url).pathname === expected, {
-    timeout: 15_000,
+    timeout: PATIENCE,
   });
   assert.equal(path(), expected);
 });
@@ -205,7 +205,7 @@ Then(/^the page shows an error about the (.+)$/, async function (subject) {
 
 Then("the page shows a confirmation", async function () {
   await world.page.waitForSelector('[data-testid="confirmation"]', {
-    timeout: 15_000,
+    timeout: PATIENCE,
   });
 });
 
@@ -245,7 +245,7 @@ async function settlesTo(provider, connected) {
         return row ? row.innerText.includes("Not connected") !== want : false;
       },
       [selector, connected],
-      { timeout: 15_000 },
+      { timeout: PATIENCE },
     );
   } catch {
     const text = await world.page.textContent(selector);

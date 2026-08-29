@@ -322,12 +322,29 @@ event: turn      data: {"turn_id": "…", "role": "gm"}
 event: narration data: {"text": "The door groans"}      ← many of these
 event: roll      data: {"notation":"1d20+3","dice":[14],"modifier":3,
                         "total":17,"reason":"Perception"}
-event: world     data: {"kind":"moved","place":"the belfry stair"}
+event: world     data: {"kind":"party-moved","place":"the belfry stair"}
 event: scene     data: {"scene_id":"…","title":"The road north","number":2}
 event: done      data: {"turn_id": "…", "role": "gm"}
 event: refusal   data: {"detail":"…","code":"gm_refused"}
 event: error     data: {"detail":"…","code":"gm_unavailable"}
 ```
+
+#### What gary may call
+
+Fifteen tools, and nothing else. Each is a thing the engines do; gary chooses
+*whether* and *on whom*, never the outcome. `tests/test_documents.py` fails if
+a tool lands and this list does not account for it — which is how a README
+comes to say there is no combat thirty lines below the section describing it.
+
+| | |
+| --- | --- |
+| `roll`, `check` | ask the dice and the rules; gary never invents a number or a degree |
+| `move_party`, `remember`, `pass_time` | record where they are, what is true, how long it took |
+| `damage`, `heal` | hurt or mend somebody for something that is not a swing — a trap, a fall, poison |
+| `add_condition`, `remove_condition` | note that somebody is frightened, prone, whatever the system has |
+| `begin_combat`, `attack`, `end_turn`, `end_combat` | a fight. Gary says who is in it and what is tried; initiative, whether a blow lands and what it costs are the rules' |
+| `award_experience` | what something was worth. The level that follows is the engine's answer, never gary's to give |
+| `scene` | begin a new scene once this turn is over |
 
 Everything refusable outright — no session, not your campaign, nothing said,
 nobody at the table — is refused before a byte is sent. **After that the

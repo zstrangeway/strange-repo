@@ -12,7 +12,7 @@ decided. Moving them here would make two places to look and one of them wrong.
 An item says how it was found, so it can be re-checked rather than argued about.
 When one is done, delete it — the commit is the record.
 
-*Last swept 2026-08-29 against `57854f9`, by running all three tiers, nine
+*Last swept 2026-08-29 against `977f5ae`, by running all three tiers, nine
 real-model turns across five scenes and three models, and reading the deployed
 apps. Every tier was green and nothing below is a failing test — these are
 things no test is looking for.*
@@ -233,23 +233,37 @@ to look within the retention window.
 
 ## Cheap, and stale things get believed
 
-### 4. Nothing catches a document going stale
+### 4. Only two shapes of document rot are caught
 
-The three that had drifted are fixed: gary-api's README no longer says there is
-no combat thirty lines below the section describing combat, `fly.toml` no longer
-explains a scale-to-zero by a Flycast route the browser stopped using, and
-gary-web's README now says what its server actually does rather than that it has
-none.
+`apps/gary-api/tests/test_documents.py` now checks the two things that are
+exact: no document names a `"kind"` the world does not have, and gary-api's
+README names every tool in `narration.TOOLS`. Both directions, because they
+catch opposite mistakes — a renamed thing leaves the old word behind, and an
+added thing leaves the prose describing a smaller app. The second is the one
+that actually bit: "there is no combat" named nothing at all, so no scan for
+missing names could ever have found it.
 
-What has not changed is that all three were found by reading, months late, and
-nothing would have caught any of them. Two of the three were wrong the moment a
-commit landed, and both commits were green.
+It found one on its first run: gary-api's README documented the party-moved
+event under the bare name `moved`, which it has not been since adversaries
+landed.
 
-There is no cheap general answer here — prose cannot be type-checked — but the
-specific shapes are catchable. A README that names a tool, an endpoint or an
-event kind that no longer exists is a grep. `tests/test_pluggable.py` already
-does exactly this for system names in source; the same crude scan over the
-markdown would have caught "there is no combat" the day `begin_combat` landed.
+It then found this file, because the sentence above originally quoted that bug
+in the exact `"kind": …` shape the pattern looks for. The check cannot tell a
+document *claiming* a kind from one *quoting* a wrong one, and the fix is to
+describe the old name rather than spell it in the shape that means a claim —
+cheaper than an allowlist, and an allowlist is the thing that would eventually
+be used to silence a real hit.
+
+**A third check was tried and abandoned, so it does not get tried again.**
+Verifying that every backticked path in a document exists: 59 of 85 came back
+missing and almost all were false — `dice.py` in gary-api's README means
+`src/gary_api/dice.py`, `actions/checkout` is somebody else's repo,
+`text/event-stream` is a MIME type, and `apps/example-web` is deliberate
+history. Resolving those properly is more machinery than the bug is worth.
+
+What is still uncaught is every claim made in a sentence rather than a name. A
+README that describes the wrong behaviour in fluent English, with every
+identifier spelled correctly, passes all of this.
 
 ### 5. Two things dependabot cannot do, now that it is configured
 
@@ -285,22 +299,30 @@ from here, and guessing a tag is how a green CI turns red for no reason.
 Dependabot will propose them with a changelog attached, which is the better
 version of the same change.
 
-### 6. The browser suite waits a fixed fifteen seconds, twenty-five times
+### 6. The browser suite's patience is one number now, and still untested
 
-**Two causes behind these timeouts are now found and fixed**, and both were
-real bugs rather than slowness — which is the lesson worth keeping: every one
-of these failures reported a timeout and none of them was about time.
+**The old title was wrong and worth correcting: nothing waited fifteen
+seconds.** All twenty-seven were *ceilings* on condition waits —
+`waitForSelector` returns the moment the thing appears — and the suite gets
+through 74 scenarios in about three minutes, which twenty-five real
+fifteen-second waits make arithmetically impossible. The cost was never time.
 
-- The stub's turn gate dropped a release that arrived before the turn reached
-  it, so the turn parked forever and the composer never came back. Deadlock,
-  not latency.
-- `scenes.current` raced itself into an unhandled 500, so the turn never
-  happened at all and the browser waited out the clock on a page that was
-  never going to change.
+The real smell was twenty-seven copies of `15_000` across five files, so
+raising it for a slow machine meant editing all twenty-seven and nobody did.
+It is `PATIENCE` in `features/support/hooks.mjs` now, overridable with
+`E2E_PATIENCE_MS`, so a loaded CI runner can be given longer without a line of
+test code changing.
 
-What is left is genuinely unexplained: `say` could click and have nothing
-reach the screen. It now confirms the send and clicks once more before giving
-up, which converts a lost click into a retry and a real message — but it does
-not say *why* the click was lost, and the textarea being uncontrolled rules out
-the obvious answer. The 25 fixed waits are still 25 independent chances for a
-loaded machine to fail a run that is not testing latency.
+**Two causes behind the old timeouts were real bugs rather than slowness**, and
+that is the lesson to keep: every one of those failures reported a timeout and
+none of them was about time. The stub's turn gate dropped a release that
+arrived before the turn reached it — deadlock, not latency. And `scenes.current`
+raced itself into an unhandled 500, so the browser waited out the clock on a
+page that was never going to change.
+
+What is left is genuinely unexplained: `say` could click and have nothing reach
+the screen. It confirms the send and clicks once more before giving up, which
+converts a lost click into a real message but does not say *why* it was lost,
+and the textarea being uncontrolled rules out the obvious answer. Nobody has
+raised `E2E_PATIENCE_MS` and watched whether that makes it go away, which is
+now a one-variable experiment and would at least say whether it is time or not.

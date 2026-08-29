@@ -1,6 +1,6 @@
 import { Given, When, Then } from "@cucumber/cucumber";
 
-import { world } from "../support/hooks.mjs";
+import { world, PATIENCE } from "../support/hooks.mjs";
 
 // Asserts on what was painted rather than on the class that caused it: the
 // class is how the theme is implemented, the background is what someone sees.
@@ -39,7 +39,7 @@ When("I choose the {string} theme", async function (label) {
 Then("the page is {word}", async function (expected) {
   // Polled rather than read once: a stored choice is applied after mount, so
   // a freshly opened page is briefly whatever the system asked for.
-  const deadline = Date.now() + 15_000;
+  const deadline = Date.now() + PATIENCE;
   let measured;
 
   do {
