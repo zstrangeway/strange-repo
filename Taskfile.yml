@@ -12,6 +12,21 @@ includes:
     dir: ./packages/ui
 
 tasks:
+  lint:
+    desc: Lint every package against the one workspace config
+    cmds:
+      # --max-warnings 0, for gary-web's reason: every rule here is a warning,
+      # so without it the run is advisory and a warning sits in the tree until
+      # somebody happens to look.
+      - pnpm exec eslint . --max-warnings 0
+      # Counted from eslint's own output rather than from a glob, so a run
+      # that matched no files reads as the nothing it is instead of as a pass.
+      # A literal block, because the quoting this needs does not survive
+      # being folded onto one line.
+      - |
+        pnpm exec eslint . --format json \
+          | python3 -c 'import json,sys; print(f"workspace: linted {len(json.load(sys.stdin))} files")'
+
   test:
     desc: Run every app's tests
     cmds:

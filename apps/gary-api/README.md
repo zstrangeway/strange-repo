@@ -442,14 +442,36 @@ Looking at that gap is a manual step, and never an automatic one:
 pnpm --filter gary-api smoke                                    # one REAL turn
 pnpm --filter gary-api smoke --opening                          # the opening instead
 pnpm --filter gary-api smoke --won                              # something overcome
+pnpm --filter gary-api smoke --fight                            # something coming up the stair
+pnpm --filter gary-api smoke --close                            # a scene ending
 pnpm --filter gary-api smoke nvidia/nemotron-3-super-120b-a12b:free
 ```
 
 Which scene it plays is `SCENES` in `smoke.py`, named rather than flagged
-because there are three of them now: an ordinary turn, the opening, and one
-where something has just been overcome. That last exists for `award_experience`
-— the one tool with a bound a model can ignore, and the only way to see whether
-a real one respects it is to give it something worth rewarding and watch.
+because there are five of them now. Each exists for a tool a model can get
+wrong in a way a double never would:
+
+- `--won` for `award_experience`, the one tool with a bound a model can
+  ignore. The only way to see whether a real one respects it is to give it
+  something worth rewarding and watch.
+- `--fight` for `begin_combat` and `attack`, with nothing in the fight yet, so
+  a model that wants a blow resolved has to author what it is swinging at
+  first.
+- `--close` for the close pass, which is a different call with a different
+  tool set and a different ending — a `Recap` rather than prose. Its world
+  disagrees with its transcript in three places on purpose: gary narrated a
+  key taken, a fourth bell and the party leaving, and recorded none of them.
+  Reconciling that is the whole business of closing a scene.
+
+**A scene is only as honest as this script's answers to the tools.** Three
+separate real runs have now caught this harness being looser than the router
+rather than catching gary: it graded a check against a skill the router
+refuses, it took a `modifier` straight from the model, and it answered
+`attack` with "Zombie swung at Bramble" — so the model narrated the blow
+missing on its own authority and the report called the turn clean. Whether a
+blow lands and who goes first are the two things gary is never allowed to
+decide, so they are the two things this has to decide. When the router gains a
+refusal, this needs the same one.
 
 It plays one turn against the live API and prints the narration, **which tools
 were called and with what**, the token counts and the cost. What it is looking
@@ -465,8 +487,9 @@ a bad model rather than a bad command line.
 
 It needs `OPENROUTER_API_KEY` and it spends tokens, so it is opt-in and
 nothing calls it for you. **OpenRouter's `:free` models cost nothing and are
-enough to exercise the path** — the two runs so far were free ones, and they
-already disagreed with each other, which is the sort of thing this is for.
+enough to exercise the path** — every run so far has been a free one, and each
+has found something. `BACKLOG.md` keeps the record: the date, the model, and
+whether it went through the engines or narrated around them.
 
 The suggested set in `narration/models.py` is picked on price and reputation,
 not on evidence. Turning that into evidence would mean many runs across many

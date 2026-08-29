@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 import httpx
 
-from gary_api import narration, smoke, systems
+from gary_api import dice, narration, smoke, systems, world
 
 
 class Stub:
@@ -23,11 +23,13 @@ class Stub:
         self.script = script
         self.explode = explode
         self.answered = []
+        self.prompt = None
 
     def sanitise(self, message):
         return message
 
-    async def narrate(self, prompt):
+    async def _drive(self, prompt):
+        self.prompt = prompt
         if self.explode:
             raise self.explode
         for event in self.script:
@@ -35,9 +37,29 @@ class Stub:
             if results is not None:
                 self.answered.append(results)
 
+    def narrate(self, prompt):
+        return self._drive(prompt)
+
+    def close(self, prompt):
+        # The same driving, because that is the real contract: close is
+        # asend-driven exactly as narrate is and differs only in the tools
+        # offered and what it ends with. A double that drove them differently
+        # would let a bug in the caller through.
+        return self._drive(prompt)
+
+
+# What a well-behaved model ends each pass with. A close ends with a Recap
+# where a turn ends with prose, so a script that ends the wrong way is
+# testing a shape the narrator cannot produce.
+ENDINGS = {
+    False: narration.Said("Something happens."),
+    True: narration.Recap("It ended."),
+}
+
 
 def run(script=None, explode=None, scene="turn"):
-    stub = Stub(script or [narration.Said("A door.")], explode)
+    closing = smoke.SCENES[scene].closing
+    stub = Stub(script or [ENDINGS[closing]], explode)
     with patch.object(narration, "narrator", lambda model=None: stub):
         code = __import__("asyncio").run(smoke.play("a/model", scene))
     return code, stub
@@ -62,6 +84,17 @@ class ToolTests(unittest.TestCase):
         self.rules = systems.rulesets()[0]
         self.state = smoke.SCENES["turn"].world()
         self.log = []
+        # Seeded, so a fight resolves the same way every run. Without this
+        # whether a swing lands is chance, and a test that sometimes covers
+        # the hit and sometimes the miss is one that sometimes passes.
+        self.seed("1234")
+
+    def seed(self, value):
+        patcher = patch.dict("os.environ", {"DICE_SEED": value})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        dice.configure()
+        self.addCleanup(dice.reseed)
 
     def call(self, name, arguments):
         return smoke.run_tool(
@@ -92,8 +125,22 @@ class ToolTests(unittest.TestCase):
         self.assertEqual(self.state.minutes, before + 15)
 
     def test_hit_points_and_conditions_are_acknowledged(self):
-        self.assertIn("damage", self.call("damage", {"character": "Bramble"})[0])
+        # The standing number, not only the delta — the router answers this
+        # way now, and a harness that said "noted as damaged" would be back
+        # to letting a model keep its own books.
+        hurt, _ = self.call("damage", {"character": "Bramble", "amount": 2})
+        self.assertIn("Bramble took 2", hurt)
+        self.assertIn("now on 4 of 8", hurt)
         self.assertIn("condition", self.call("add_condition", {})[0])
+
+    def test_healing_gives_them_back_and_says_where_that_leaves_them(self):
+        back, _ = self.call("heal", {"character": "Bramble", "amount": 1})
+        self.assertIn("Bramble recovered 1", back)
+        self.assertIn("now on 7 of 8", back)
+
+    def test_hurting_somebody_who_is_not_here_still_answers(self):
+        summary, _ = self.call("damage", {"character": "a ghost", "amount": 2})
+        self.assertIn("a ghost took 2", summary)
 
     def test_a_tool_gary_does_not_have(self):
         summary, _ = self.call("summon_dragon", {})
@@ -134,6 +181,173 @@ class ToolTests(unittest.TestCase):
             "check", {"characters": ["Bramble"], "dc": 15, "modifier": 100}
         )
         self.assertNotIn("refused", generous)
+
+    def closing_call(self, name, arguments):
+        return smoke.run_tool(
+            narration.Call(name, arguments),
+            self.rules,
+            self.state,
+            self.log,
+            closing=True,
+        )
+
+    def test_a_tool_outside_the_closing_set_is_refused_while_closing(self):
+        # scenes.close_scene refuses these, so a harness that answered them
+        # would show a model reconciling cleanly when production would have
+        # sent it back — the same failure the ability refusal exists for.
+        for name in ("roll", "check", "award_experience", "begin_combat", "attack"):
+            with self.subTest(name=name):
+                summary, _ = self.closing_call(name, {"character": "Bramble"})
+                self.assertIn("refused", summary)
+                self.assertIn("closing a scene", summary)
+
+    def test_the_closing_tools_still_run_while_closing(self):
+        # The point of the pass. Refusing these too would make a close that
+        # can record nothing, which is the opposite of what it is for.
+        for name in narration.CLOSING_TOOLS:
+            with self.subTest(name=name):
+                summary, _ = self.closing_call(name, {"character": "Bramble"})
+                self.assertNotIn("closing a scene", summary)
+
+    def open_a_fight(self, **over):
+        arguments = {
+            "adversaries": [
+                {
+                    "name": "Zombie",
+                    "hit_points": 22,
+                    "armour_class": 8,
+                    "attack_bonus": 3,
+                    "damage": "1d6+2",
+                }
+            ]
+        }
+        arguments.update(over)
+        return self.call("begin_combat", arguments)
+
+    def test_beginning_a_fight_says_who_goes_first(self):
+        # Found by a real run: this used to answer "a fight began against
+        # Zombie" and say nothing about the order, so the model supplied one
+        # out of its own head and the report called the turn clean. Gary says
+        # who is in a fight and never who goes first.
+        summary, _ = self.open_a_fight()
+        self.assertIn("The order is", summary)
+        self.assertIn("Zombie", summary)
+        self.assertIn("Bramble", summary)
+        self.assertEqual(len(self.state.fight.order), 2)
+
+    def test_a_fight_against_nothing_is_refused(self):
+        summary, _ = self.open_a_fight(adversaries=[])
+        self.assertIn("refused", summary)
+
+    def test_an_attack_is_resolved_rather_than_acknowledged(self):
+        # The other half of the same finding. This used to answer "Zombie
+        # swung at Bramble", so the model narrated the blow missing on its
+        # own authority. Whether it landed and what it cost are the two
+        # things gary is never allowed to decide.
+        self.open_a_fight()
+        up = self.state.fight.whose
+        attacker = next(
+            one for one in [*self.state.party, *self.state.enemies] if one.id == up
+        )
+        target = "Zombie" if attacker.name == "Bramble" else "Bramble"
+        summary, swing = self.call(
+            "attack", {"attacker": attacker.name, "target": target}
+        )
+        self.assertTrue("hit" in summary or "missed" in summary, summary)
+        self.assertIn("against", summary)
+        self.assertIn(swing.degree, self.rules.degrees)
+
+    def test_an_attack_out_of_turn_is_refused(self):
+        self.open_a_fight()
+        up = self.state.fight.whose
+        waiting = next(
+            one for one in [*self.state.party, *self.state.enemies] if one.id != up
+        )
+        other = "Zombie" if waiting.name == "Bramble" else "Bramble"
+        summary, _ = self.call("attack", {"attacker": waiting.name, "target": other})
+        self.assertIn("refused", summary)
+        self.assertIn("not " + waiting.name + "'s turn", summary)
+
+    def test_an_attack_with_nobody_fighting_is_refused(self):
+        summary, _ = self.call("attack", {"attacker": "Bramble", "target": "x"})
+        self.assertIn("refused", summary)
+
+    def test_an_attack_on_somebody_not_in_the_fight_is_refused(self):
+        self.open_a_fight()
+        summary, _ = self.call("attack", {"attacker": "Bramble", "target": "the moon"})
+        self.assertIn("refused", summary)
+
+    def up(self):
+        return smoke._by_id(self.state, self.state.fight.whose)
+
+    def test_gary_may_not_end_the_players_turn_for_them(self):
+        # The router refuses this: the player says what they do, and a fight
+        # gary could take their turn in is one they are not playing.
+        self.open_a_fight()
+        # Whoever won initiative goes first, so wind the order on until it is
+        # the player rather than assuming which of the two it was.
+        while isinstance(self.up(), world.Foe):
+            self.call("end_turn", {})
+        summary, _ = self.call("end_turn", {})
+        self.assertIn("refused", summary)
+        self.assertIn("ask them what they do", summary)
+
+    def test_ending_a_fight_clears_it(self):
+        self.open_a_fight()
+        self.call("end_combat", {})
+        self.assertIsNone(self.state.fight)
+        self.assertEqual(self.state.enemies, [])
+
+    def test_a_swing_that_lands_and_one_that_does_not(self):
+        # Both branches on a fixed seed, because "did it land" is the thing
+        # gary is not allowed to decide and so the thing this must decide.
+        # On DICE_SEED=1234 Bramble wins initiative, misses, the order wraps
+        # to the zombie and back, and the third swing connects.
+        self.open_a_fight()
+        first, _ = self.call("attack", {"attacker": "Bramble", "target": "Zombie"})
+        self.assertIn("Bramble missed Zombie", first)
+
+        # The order wrapping is its own branch: the last fighter's turn ends
+        # and the round goes up rather than the index running off the end.
+        self.call("attack", {"attacker": "Zombie", "target": "Bramble"})
+        self.assertEqual(self.state.fight.round, 2)
+
+        landed, _ = self.call("attack", {"attacker": "Bramble", "target": "Zombie"})
+        self.assertIn("Bramble hit Zombie for", landed)
+        self.assertLess(self.state.enemies[0].hp, self.state.enemies[0].max_hp)
+
+    def test_gary_may_end_an_adversarys_turn(self):
+        # The other side of the refusal above. A fight where nobody could end
+        # the zombie's turn would stop on it forever.
+        self.open_a_fight()
+        self.call("attack", {"attacker": "Bramble", "target": "Zombie"})
+        summary, _ = self.call("end_turn", {})
+        self.assertIn("Zombie's turn is over", summary)
+
+    def test_an_adversary_that_is_not_an_object_is_skipped(self):
+        # Models send odd shapes. A bare string here used to be enough to
+        # stop the whole fight opening.
+        summary, _ = self.open_a_fight(
+            adversaries=["a zombie", {"name": "Zombie", "hit_points": 9}]
+        )
+        self.assertIn("The order is", summary)
+        self.assertEqual(len(self.state.enemies), 1)
+
+    def test_nobody_by_that_id(self):
+        # _by_id answers None rather than raising, because the caller's next
+        # line already says "nobody".
+        self.assertIsNone(smoke._by_id(self.state, "not-an-id"))
+
+    def test_ending_a_turn_with_nobody_fighting_is_refused(self):
+        summary, _ = self.call("end_turn", {})
+        self.assertIn("refused", summary)
+
+    def test_a_close_writes_down_what_the_prose_added(self):
+        summary, _ = self.closing_call(
+            "remember", {"key": "iron-key", "value": "taken"}
+        )
+        self.assertEqual(self.state.facts["iron-key"], "taken")
+        self.assertIn("iron-key", summary)
 
     def test_an_award_past_the_bound_is_refused_here_too(self):
         # The bound is the one thing about an award worth watching a real
@@ -232,6 +446,104 @@ class PlayTests(unittest.TestCase):
         # and the router refusing this is the point being demonstrated.
         self.assertEqual(code, 0)
 
+    def test_a_close_is_driven_and_its_recap_reported(self):
+        code, stub = run(
+            [
+                narration.Calls(
+                    [narration.Call("remember", {"key": "iron-key", "value": "taken"})]
+                ),
+                narration.Recap("They took a key and climbed out."),
+            ],
+            scene="close",
+        )
+        self.assertEqual(code, 0)
+        self.assertTrue(stub.answered)
+
+    def test_a_close_that_came_back_without_a_recap_says_so(self):
+        # A scene closes either way — scenes.close_scene will not hold one
+        # open for a missing paragraph — so this is reported, not failed.
+        code, _ = run([narration.Recap("   ")], scene="close")
+        self.assertEqual(code, 0)
+
+    def test_a_close_reaching_outside_its_tools_is_reported(self):
+        code, stub = run(
+            [
+                narration.Calls([narration.Call("roll", {"notation": "1d20"})]),
+                narration.Recap("It ended."),
+            ],
+            scene="close",
+        )
+        self.assertEqual(code, 0)
+        # Answered, and answered with a refusal rather than a number.
+        self.assertIn("closing a scene", stub.answered[0][0].summary)
+
+    def test_a_close_is_sent_the_scene_rather_than_a_player(self):
+        # It has to be assembled the way scenes.close_scene assembles it, or
+        # the run reports on a prompt gary never sends.
+        _, stub = run(scene="close")
+        self.assertEqual(stub.prompt.briefing, "")
+        self.assertEqual(stub.prompt.module_hook, "")
+        self.assertEqual(stub.prompt.message, "")
+        self.assertEqual(stub.prompt.scene_title, smoke.SCENES["close"].title)
+        self.assertEqual(stub.prompt.transcript, list(smoke.CLOSED))
+
+    def test_the_close_scene_leaves_the_world_disagreeing_with_the_prose(self):
+        # The whole point of the scene. A world that already agreed with the
+        # transcript would ask a real model to reconcile nothing and then
+        # report that it reconciled nothing wrong.
+        state = smoke.SCENES["close"].world()
+        said = " ".join(text for _, text in smoke.CLOSED)
+        self.assertIn("iron key", said)
+        self.assertNotIn("iron-key", state.facts)
+        self.assertEqual(state.facts["bell-rings"], "3")
+        self.assertIn("fourth time", said)
+        self.assertIn("chamber", state.place)
+
+    def test_the_fight_scene_starts_with_nothing_in_the_fight(self):
+        # A model that wants a blow resolved has to open the fight and author
+        # what is in it. Pre-loading an enemy would hand it the one thing the
+        # scene exists to watch it do.
+        state = smoke.SCENES["fight"].world()
+        self.assertEqual(state.enemies, [])
+        self.assertIsNone(state.fight)
+
+    def test_a_fight_is_opened_and_a_blow_proposed(self):
+        code, _ = run(
+            [
+                narration.Calls(
+                    [
+                        narration.Call(
+                            "begin_combat",
+                            {"adversaries": [{"name": "a bell-warden", "hp": 11}]},
+                        )
+                    ]
+                ),
+                narration.Calls(
+                    [
+                        narration.Call(
+                            "attack",
+                            {"attacker": "Bramble", "target": "a bell-warden"},
+                        )
+                    ]
+                ),
+                narration.Said("Steel on wet stone."),
+            ],
+            scene="fight",
+        )
+        self.assertEqual(code, 0)
+
+    def test_a_fight_opened_against_nothing_is_named_as_such(self):
+        # An empty adversary list is the shape worth catching: the model
+        # asked for a fight and authored nothing to be in it.
+        code, _ = run(
+            [
+                narration.Calls([narration.Call("begin_combat", {"adversaries": []})]),
+                narration.Said("Something comes."),
+            ],
+            scene="fight",
+        )
+        self.assertEqual(code, 0)
+
     def test_being_unreachable_is_a_failure(self):
         code, _ = run(explode=narration.NarrationError("no route"))
         self.assertEqual(code, 1)
@@ -320,7 +632,7 @@ class MainTests(unittest.TestCase):
         # until they ask for it, in front of a model, having paid for it.
         for name in smoke.SCENES:
             with self.subTest(name):
-                code, _ = run([narration.Said("Something happens.")], scene=name)
+                code, _ = run(scene=name)
                 self.assertEqual(code, 0)
 
     def test_the_opening_flag_is_not_mistaken_for_a_model(self):

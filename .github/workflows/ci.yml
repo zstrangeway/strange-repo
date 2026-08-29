@@ -48,6 +48,22 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter gary-api test
 
+  test-ui:
+    name: gary-ui checks
+    # Its own job because nothing ran these at all. gary-web's job lints and
+    # tests gary-web; packages/ui was reached only incidentally, by `next
+    # build` type-checking what it imports in the image job — which is after
+    # the gate and says nothing about lint.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @gary/ui test
+
   test-web:
     name: gary-web specs
     runs-on: ubuntu-latest
@@ -108,7 +124,7 @@ jobs:
 
   deploy-api:
     name: Deploy gary-api
-    needs: [test-api, test-web, e2e, images]
+    needs: [test-api, test-ui, test-web, e2e, images]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
