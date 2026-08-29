@@ -272,12 +272,23 @@ not a swing. `attack`, `damage` and `heal` all answer with the standing number
 one result behind the world, and the smoke harness answers the same way so it
 cannot drift from the router again.
 
-**Two things are still open, and both need a real model rather than an
-argument.** Whether the fix holds across models, and whether the engine should
-refuse a `damage` naming somebody an `attack` already hurt this turn. That
-refusal is a backstop rather than the fix now, and it would forbid a trap and
-a swing landing on the same person in one turn, so it wants agreeing before it
-is built. The runs so far are recorded in item 1.
+**An engine-level refusal was considered and deliberately not built.** Every
+refusal in this codebase is something the rules know — that is not an ability
+in this system, it is not their turn, they are already down. "Was this
+`damage` redundant?" is not knowable; it is a guess at intent, and it would be
+the first heuristic among them. `combat.feature:191` already specs `damage`
+landing on an adversary mid-fight, so a swing and a collapsing ceiling on the
+same target in one turn is ordinary play the engine could not tell from a
+double-write — it would forbid a correct move and leave gary narrating around
+a refusal that should not have happened.
+
+The standing number is the better version of that backstop and is already in.
+A redundant call now answers "now on 18 of 22" while gary is holding 20, so
+the discrepancy reaches the one actor that can correct it, in the same turn,
+without blocking anything. Correction rather than prohibition.
+
+**What is still open is only whether the fix holds as more models are run.**
+Four runs across three models so far, recorded in item 1.
 
 The generalisation is the valuable part: **when a model does the wrong thing,
 read the contract before blaming the model.** Of the findings in this file,
