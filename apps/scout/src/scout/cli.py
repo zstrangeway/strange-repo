@@ -67,7 +67,8 @@ def _import(args: argparse.Namespace) -> int:
         )
 
     text = importer.read(source)
-    markdown = importer.convert(text, load_provider(args.provider))
+    provider = load_provider(args.provider)
+    markdown = importer.convert(text, provider)
     found = importer.employers(markdown)
 
     master.parent.mkdir(parents=True, exist_ok=True)
@@ -76,6 +77,12 @@ def _import(args: argparse.Namespace) -> int:
     print(f"Wrote {master} from {source}")
     print(f"  {len(found)} employer(s): " + (", ".join(found) or "none"))
     print("  checked: every word of the original survived, and none were added")
+    spent = getattr(provider, "spent", None)
+    if spent:
+        # This command spends money too, so it says what it spent. Only smoke
+        # did before, which under-reported the bill by whatever an import
+        # costs.
+        print(f"  cost: {spent}")
     print(
         "\nRead it before you tailor anything. The words are guaranteed; the "
         "structure is not. An employer that did not become a heading is one "

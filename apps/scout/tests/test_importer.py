@@ -137,3 +137,21 @@ class Employers(unittest.TestCase):
         self.assertEqual(
             importer.employers(markdown), ["Wilding Labs", "Thornfield Systems"]
         )
+
+
+class SayingWhatItCost(InAScratchHome):
+    """`scout import` spends money now, so it reports what it spent."""
+
+    def test_it_prints_the_cost_when_the_provider_reports_one(self):
+        source = self.home / "resume.txt"
+        source.write_text(RESUME, encoding="utf-8")
+        directory = self.home / ".scout"
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "fake-structured.md").write_text(RESUME, encoding="utf-8")
+
+        provider = FakeProvider()
+        provider.spent = "$0.0421 (100 in, 50 out)"
+        with unittest.mock.patch("scout.cli.load_provider", return_value=provider):
+            code, output = self.run_cli("import", source, "--provider", "fake")
+        self.assertEqual(code, 0, output)
+        self.assertIn("cost: $0.0421", output)

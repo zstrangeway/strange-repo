@@ -34,6 +34,10 @@ class OpenRouterProvider:
 
     def __init__(self, model: str | None = None) -> None:
         self.model = model or os.environ.get("SCOUT_MODEL", DEFAULT_MODEL)
+        # What the last call cost, for `scout-smoke` to print. CLAUDE.md asks
+        # a hand-run check to say what it spent afterwards, and the number is
+        # already in the response — passing it on is free.
+        self.spent: str | None = None
 
     def structure(self, *, resume: str) -> str:
         return self._ask(STRUCTURE, resume)
@@ -61,6 +65,8 @@ class OpenRouterProvider:
                     {"role": "system", "content": system},
                     {"role": "user", "content": user},
                 ],
+                # OpenRouter only puts the cost in the response when asked.
+                extra_body={"usage": {"include": True}},
             )
         except openai.APIStatusError as exc:
             raise ScoutError(
@@ -79,7 +85,32 @@ class OpenRouterProvider:
                 detail="Usually a downstream provider being down for that model.",
             )
 
+        self.spent = _spent(response)
         draft = (response.choices[0].message.content or "").strip()
         if not draft:
             raise ScoutError("The model call failed: it returned nothing.")
         return draft
+
+
+def _spent(response) -> str | None:
+    """What the call cost, said the way OpenRouter reported it.
+
+    Best effort on purpose: the cost field is an extension rather than part of
+    the OpenAI schema, so a model or a route that does not report one leaves
+    the token counts, and a run that reports neither says nothing rather than
+    guessing a number.
+    """
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return None
+    tokens = (
+        f"{getattr(usage, 'prompt_tokens', '?')} in, "
+        f"{getattr(usage, 'completion_tokens', '?')} out"
+    )
+    cost = getattr(usage, "cost", None)
+    # Checked for being a number rather than for being present: `cost` is an
+    # OpenRouter extension, so on a route that does not report one the field
+    # can be absent, null, or something else entirely.
+    if not isinstance(cost, int | float):
+        return tokens
+    return f"${cost:.4f} ({tokens})"

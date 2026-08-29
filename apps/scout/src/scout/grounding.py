@@ -104,14 +104,70 @@ class Finding:
 BRACKETS = re.compile(r"[()\[\]{}<>]")
 
 
+def variants(word: str, raw: str | None = None) -> set[str]:
+    """A word and the forms of it that mean the same thing.
+
+    Plurals and possessives only. The first paid run refused an honest resume
+    because a model wrote "UIs" where the master said "UI", and a false
+    refusal is worse for somebody than a missed invention — it is the failure
+    that teaches people to stop reading refusals.
+
+    ``raw`` is the word as it was written, which is how "UIs" and "AWS" are
+    told apart: both are three letters ending in s, but a lower-case s after
+    a capital is somebody pluralising an acronym, and "AWS" is the acronym.
+
+    Deliberately not a stemmer. Stemming would relax the check in ways nobody
+    could predict from reading it; these rules fit in the head, and each one
+    is reversible.
+    """
+    forms = {word}
+    if word.endswith("'s"):
+        forms.add(word[:-2])
+    pluralised = bool(raw) and raw.endswith("s") and len(raw) > 1 and raw[-2].isupper()
+    if len(word) > 3 or pluralised:
+        if word.endswith("es"):
+            forms.add(word[:-2])
+        if word.endswith("s"):
+            forms.add(word[:-1])
+    forms.add(word + "s")
+    forms.add(word + "es")
+    return forms
+
+
+# "TypeScript/React", "Python-Postgres" — a model joining two things somebody
+# has is not claiming a third thing, and refusing it is a false refusal. Both
+# halves still have to be real, so this relaxes nothing: one half being known
+# does not make the other known.
+COMPOUND = re.compile(r"[/\\-]")
+
+
+def known(
+    word: str, vocabulary: frozenset[str] | set[str], raw: str | None = None
+) -> bool:
+    """Whether the vocabulary has this word, in any form of it."""
+    if variants(word, raw) & set(vocabulary):
+        return True
+    parts = [part for part in COMPOUND.split(word) if len(part) > 1]
+    return len(parts) > 1 and all(variants(part) & set(vocabulary) for part in parts)
+
+
+def depunctuate(text: str) -> str:
+    """The word without its punctuation, still cased.
+
+    Case is kept because it is how "UIs" and "AWS" are told apart — see
+    `variants`. `+` and `#` survive, because C++ and C# are skills.
+    """
+    return BRACKETS.sub("", text).strip(".,;:!?\"'`*_ \t").strip()
+
+
 def normalise(text: str) -> str:
     """Lower case, and no punctuation hanging off either end.
 
     "Postgres" and "postgres." at the end of a sentence are the same claim,
     and a check that refuses one of them trains somebody to stop reading its
-    refusals. `+` and `#` survive, because C++ and C# are skills.
+    refusals.
     """
-    return BRACKETS.sub("", text).lower().strip(".,;:!?\"'`*_ \t").strip()
+    return depunctuate(text).lower()
 
 
 def _words(text: str) -> set[str]:
@@ -216,7 +272,7 @@ class Master:
         "Wilding Labs" match a master that writes it as part of a longer
         heading, while "Initech Systems" still fails on "initech".
         """
-        return all(word in self.words for word in _words(term))
+        return all(known(word, self.words) for word in _words(term))
 
 
 def _prose_findings(master: Master, draft: str) -> list[Finding]:
@@ -246,7 +302,11 @@ def _prose_findings(master: Master, draft: str) -> list[Finding]:
                     or word in KNOWN_TECHNOLOGIES
                 )
             )
-            if candidate and word not in seen and word not in master.words:
+            # Depunctuated rather than raw: a sentence ending "…frontend
+            # UIs." is still somebody pluralising an acronym, and the full
+            # stop is not part of the word.
+            plain = depunctuate(token)
+            if candidate and word not in seen and not known(word, master.words, plain):
                 seen.add(word)
                 findings.append(Finding("term", token.strip(".,;:")))
             starts_sentence = token.endswith((".", "!", "?", ":"))
@@ -290,7 +350,7 @@ def check(master_markdown: str, draft: str) -> list[Finding]:
     for employer, title in headings(draft):
         if not master.mentions(employer):
             findings.append(Finding("employer", employer))
-        if title and normalise(title) not in master.titles:
+        if title and not known(normalise(title), master.titles):
             findings.append(Finding("title", title))
 
     for skill in skills(draft):
@@ -311,10 +371,10 @@ def check(master_markdown: str, draft: str) -> list[Finding]:
                 Finding("date", year, employer=as_written.get(employer, employer))
             )
 
-    known = {finding.term.lower() for finding in findings}
+    reported = {finding.term.lower() for finding in findings}
     findings.extend(
         finding
         for finding in _prose_findings(master, draft)
-        if finding.term.lower() not in known
+        if finding.term.lower() not in reported
     )
     return findings

@@ -235,3 +235,77 @@ class RealResumeShapes(unittest.TestCase):
             "### Arine – Senior Software Engineer\n"
         )
         self.assertEqual(grounding.check(markdown, draft), [])
+
+
+class PluralsAndPossessives(unittest.TestCase):
+    """Found by the first paid run, on a real resume.
+
+    A model wrote "from backend APIs to frontend UIs". The master says "UI
+    testing workflows", so "UIs" was not in it and a completely honest resume
+    was refused. A false refusal is worse for somebody than a missed
+    invention: it is the failure that teaches people to stop reading refusals.
+    """
+
+    MASTER = """# Ada
+
+## Skills
+
+UI, API, Postgres
+
+## Experience
+
+### Wilding Labs — Senior Engineer
+
+- Optimized UI testing workflows and the API behind them
+"""
+
+    def test_a_plural_of_something_in_the_master(self):
+        self.assertEqual(grounding.check(self.MASTER, "- Built the UIs\n"), [])
+
+    def test_a_plural_at_the_end_of_a_sentence(self):
+        # "…from backend APIs to frontend UIs." — the full stop is not part
+        # of the word, and missing that is what made the first fix not work.
+        self.assertEqual(grounding.check(self.MASTER, "- Built the UIs.\n"), [])
+
+    def test_an_es_plural(self):
+        master = "## Skills\n\nIndex\n"
+        self.assertEqual(grounding.check(master, "- Rebuilt the Indexes\n"), [])
+
+    def test_a_singular_of_something_the_master_pluralises(self):
+        master = "## Skills\n\nAPIs\n"
+        self.assertEqual(grounding.check(master, "- Wrote the API\n"), [])
+
+    def test_a_possessive(self):
+        self.assertEqual(grounding.check(self.MASTER, "- Ran Postgres's upgrade\n"), [])
+
+    def test_a_compound_of_two_things_in_the_master(self):
+        # "10+ years across TypeScript/React and Python" — a model joining two
+        # things somebody actually has is not claiming a third thing.
+        master = "## Skills\n\nTypeScript, React, Postgres\n"
+        self.assertEqual(
+            grounding.check(master, "- Built it in TypeScript/React\n"), []
+        )
+
+    def test_a_hyphenated_compound(self):
+        master = "## Skills\n\nPostgres, Python\n"
+        self.assertEqual(grounding.check(master, "- Wrote Python-Postgres glue\n"), [])
+
+    def test_a_compound_hiding_something_new_is_still_caught(self):
+        # The relaxation must not become a way through: one half being real
+        # does not make the other half real.
+        master = "## Skills\n\nTypeScript\n"
+        found = grounding.check(master, "- Built it in TypeScript/Kubernetes\n")
+        self.assertEqual([f.term for f in found], ["TypeScript/Kubernetes"])
+
+    def test_a_plural_of_something_that_is_not_there_is_still_caught(self):
+        # The relaxation must not become a way through. "Kubernetes" is not a
+        # plural of anything in the master.
+        found = grounding.check(self.MASTER, "- Ran the Kubernetes clusters\n")
+        self.assertEqual([f.term for f in found], ["Kubernetes"])
+
+    def test_a_short_word_is_not_stripped_into_a_match(self):
+        # "AWS" must not become "AW" and match something by accident.
+        master = "## Skills\n\nAW\n"
+        self.assertEqual(
+            [f.term for f in grounding.check(master, "- Used AWS\n")], ["AWS"]
+        )

@@ -16,7 +16,11 @@ from support import InAScratchHome
 
 from scout import providers
 from scout.errors import ScoutError
-from scout.providers.openrouter import DEFAULT_MODEL, OpenRouterProvider
+from scout.providers.openrouter import (
+    DEFAULT_MODEL,
+    OpenRouterProvider,
+    _spent,
+)
 from scout.providers.prompt import STRUCTURE, SYSTEM
 
 
@@ -189,3 +193,35 @@ class TheStubStructures(InAScratchHome):
         # Unstructured is a legal thing for a model to return, and the case
         # the verifier has to survive: every word is still there.
         self.assertEqual(providers.load("fake").structure(resume="Ada"), "Ada")
+
+
+class Spending(unittest.TestCase):
+    """What a call cost, which CLAUDE.md asks a hand-run check to report."""
+
+    @staticmethod
+    def _usage(**fields):
+        usage = unittest.mock.Mock(spec_set=list(fields))
+        for name, value in fields.items():
+            setattr(usage, name, value)
+        return unittest.mock.Mock(usage=usage)
+
+    def test_a_response_that_reports_a_cost(self):
+        response = self._usage(prompt_tokens=100, completion_tokens=50, cost=0.0683)
+        self.assertEqual(_spent(response), "$0.0683 (100 in, 50 out)")
+
+    def test_a_route_that_reports_only_tokens(self):
+        response = self._usage(prompt_tokens=100, completion_tokens=50)
+        self.assertEqual(_spent(response), "100 in, 50 out")
+
+    def test_a_cost_field_that_is_not_a_number(self):
+        # OpenRouter's extension, so it can be absent, null, or something
+        # else. Guessing a number here would be worse than saying nothing.
+        response = self._usage(prompt_tokens=100, completion_tokens=50, cost=None)
+        self.assertEqual(_spent(response), "100 in, 50 out")
+
+    def test_a_response_with_no_usage_at_all_says_nothing(self):
+        self.assertIsNone(_spent(unittest.mock.Mock(usage=None)))
+
+    def test_the_provider_keeps_what_the_last_call_cost(self):
+        provider = OpenRouterProvider()
+        self.assertIsNone(provider.spent)

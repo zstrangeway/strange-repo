@@ -221,7 +221,26 @@ What is still thin:
   master resume honest is `importer.verify`, which requires word conservation
   in both directions. On the real PDF it now finds all 10 employers with
   nothing lost and nothing added.
-- **The paid model has never run.** `anthropic/claude-sonnet-5` is the
+- ~~The paid model has never run.~~ **Done, 2026-08-29, and it found the
+  failure mode nobody had seen.** `anthropic/claude-sonnet-5` refused two
+  honest drafts in a row — the false refusals this file had been recording as
+  unmeasured, and they turned up on the first paid run rather than after
+  fifty. Both were word-shape, not judgement: "UIs" where the master says
+  "UI", and "TypeScript/React" where it has both halves separately. Plurals,
+  possessives and slash- or hyphen-joined compounds now match; each rule is
+  reversible and none of them lets an unknown word through, because every part
+  of a compound still has to be real.
+
+  A false refusal is worse for somebody than a missed invention: it is the
+  failure that teaches people to stop reading refusals. Expect more of them,
+  and expect each to be a small deterministic fix — which is the argument for
+  running this against a paid model before trusting it, not after.
+
+  The third run was accepted and correct. It cost **$0.0683**. `scout import`
+  and a refused `scout-smoke` now report their cost too; before, a refused run
+  spent money and said nothing, which under-reported the bill.
+
+- **Older note, kept for the shape of it: the paid model had never run.** `anthropic/claude-sonnet-5` is the
   default and no call has ever been made on it; every run has been on the
   free model. That is now one model id apart rather than one client apart —
   the direct Anthropic provider was deleted as a second way to reach models

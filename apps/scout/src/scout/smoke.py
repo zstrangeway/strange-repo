@@ -61,9 +61,23 @@ def main(argv: list[str] | None = None) -> int:
         # check caught a real model inventing something, which is exactly what
         # this command is for seeing.
         print(str(error), file=sys.stderr)
+        _say_cost(provider)
         return 1
     print(result.render())
+    _say_cost(provider)
     return 0
+
+
+def _say_cost(provider) -> None:
+    """Said on the way out either way.
+
+    A refused draft cost exactly as much as an accepted one — the money is
+    spent when the model answers, not when scout likes the answer — so a run
+    that reports nothing because it was refused is under-reporting the bill.
+    """
+    spent = getattr(provider, "spent", None)
+    if spent:
+        print(f"\nCost: {spent}")
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -82,3 +82,41 @@ class Smoke(InAScratchHome):
         with patched, unittest.mock.patch("sys.stdout"):
             smoke.main([ref, "--model", "google/gemma-4-31b-it:free"])
         self.assertEqual(stub.model, "google/gemma-4-31b-it:free")
+
+
+class Cost(InAScratchHome):
+    def _master(self):
+        (self.home / "resumes").mkdir(parents=True, exist_ok=True)
+        (self.home / "resumes" / "master.md").write_text(MASTER, encoding="utf-8")
+
+    def test_a_provider_that_reports_no_cost_says_nothing_about_it(self):
+        # The stub reports none, and a run that invented a number would be
+        # worse than one that stays quiet.
+        self._master()
+        ref = self.save()
+        stub = unittest.mock.Mock(spec_set=["tailor", "model"])
+        stub.tailor.return_value = MASTER
+        with (
+            unittest.mock.patch("scout.smoke.load", return_value=stub),
+            unittest.mock.patch("sys.stdout") as out,
+        ):
+            self.assertEqual(smoke.main([ref]), 0)
+        said = " ".join(str(call) for call in out.write.call_args_list)
+        self.assertNotIn("Cost:", said)
+
+    def test_a_refused_draft_still_reports_what_it_cost(self):
+        # The money is spent when the model answers, not when scout likes the
+        # answer.
+        self._master()
+        ref = self.save()
+        stub = unittest.mock.Mock(spec_set=["tailor", "model", "spent"])
+        stub.tailor.side_effect = ScoutError("refused")
+        stub.spent = "$0.0683 (100 in, 50 out)"
+        with (
+            unittest.mock.patch("scout.smoke.load", return_value=stub),
+            unittest.mock.patch("sys.stdout") as out,
+            unittest.mock.patch("sys.stderr"),
+        ):
+            self.assertEqual(smoke.main([ref]), 1)
+        said = " ".join(str(call) for call in out.write.call_args_list)
+        self.assertIn("$0.0683", said)
