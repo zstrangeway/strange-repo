@@ -1,13 +1,13 @@
 import { When } from "@cucumber/cucumber";
 
-import { world } from "../support/hooks.mjs";
+import { world, PATIENCE } from "../support/hooks.mjs";
 
 // gary-api's own stand-in provider shows a consent page rather than bouncing
 // straight back, because a real provider does. These steps agree at it the
 // way a person would: say who you are, press the button.
 async function agreeAs(identity) {
   await world.page.waitForSelector('[data-testid="fake-identity"]', {
-    timeout: 15_000,
+    timeout: PATIENCE,
   });
   await world.page.fill('[data-testid="fake-identity"]', identity);
   await Promise.all([
