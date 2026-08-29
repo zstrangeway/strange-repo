@@ -45,12 +45,12 @@ def step_master_team(context):
     assert "Led a team of 3" in context.master
 
 
-@given("no Anthropic API key is set")
+@given("no OpenRouter API key is set")
 def step_no_key(context):
-    os.environ.pop("ANTHROPIC_API_KEY", None)
+    os.environ.pop("OPENROUTER_API_KEY", None)
     # The fake provider has no key to be missing, so this is the one scenario
     # that drives the real one. It refuses before opening a connection.
-    context.provider = "anthropic"
+    context.provider = "openrouter"
 
 
 @given('I have saved a posting for "{title}" at "{company}"')

@@ -32,7 +32,7 @@ Feature: Tailoring a resume to a posting
   #
   # No spec here calls a real model. The provider is stubbed, exactly as
   # gary-api stubs its narrator, and `task scout:smoke` is the opt-in command
-  # that spends real tokens against a real Anthropic key.
+  # that spends real tokens against a real key.
 
   Background:
     Given a scratch scout directory
@@ -164,7 +164,7 @@ Feature: Tailoring a resume to a posting
   # stores it, never logs it, and says so plainly when it is missing rather
   # than failing somewhere inside an HTTP client.
   Scenario: No API key set
-    Given no Anthropic API key is set
+    Given no OpenRouter API key is set
     When I tailor my resume for that posting
     Then scout should refuse it
     And scout should name the variable it expects

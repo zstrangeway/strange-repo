@@ -193,10 +193,12 @@ What is still thin:
   document the check has ever been run against in anger, and it is the one
   shaped to suit it. A real resume with a different heading style is the
   obvious next thing to try.
-- **The paid path has never run.** `anthropic` is the default provider and
-  `claude-sonnet-5` its default model, and no call has ever been made on
-  either — there was no Anthropic key on the machine. The OpenRouter provider
-  is what has been exercised.
+- **The paid model has never run.** `anthropic/claude-sonnet-5` is the
+  default and no call has ever been made on it; every run has been on the
+  free model. That is now one model id apart rather than one client apart —
+  the direct Anthropic provider was deleted as a second way to reach models
+  the router already reaches — so it is a `--model` away whenever somebody
+  wants to spend the few cents.
 - **Nothing checks that a legitimate draft is not wrongly refused.** All three
   runs were accepted. A model that phrases a fair rewrite in a way the check
   rejects would be worse for somebody using this than a missed invention, and

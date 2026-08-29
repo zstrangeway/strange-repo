@@ -34,16 +34,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("ref", help="A saved posting to tailor for")
     parser.add_argument(
-        "--provider", default="openrouter", choices=("openrouter", "anthropic")
-    )
-    parser.add_argument(
         "--model",
         default=DEFAULT_MODEL,
         help=f"default {DEFAULT_MODEL}, which is free",
     )
     args = parser.parse_args(argv)
 
-    provider = load(args.provider)
+    provider = load()
     provider.model = args.model
 
     if args.model.endswith(":free"):
@@ -52,8 +49,8 @@ def main(argv: list[str] | None = None) -> int:
         # Said before it is spent, not after, because after is too late to
         # decide against it.
         print(
-            f"Calling {args.model} once, on {args.provider}. A resume and a "
-            "posting in, a resume out — expect a few cents."
+            f"Calling {args.model} once. A resume and a posting in, a resume "
+            "out — expect a few cents."
         )
 
     try:

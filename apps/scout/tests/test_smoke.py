@@ -57,7 +57,7 @@ class Smoke(InAScratchHome):
         ref = self.save()
         patched, _ = self._provider(draft=MASTER)
         with patched, unittest.mock.patch("sys.stdout") as out:
-            smoke.main([ref, "--provider", "anthropic", "--model", "claude-sonnet-5"])
+            smoke.main([ref, "--model", "anthropic/claude-sonnet-5"])
         said = " ".join(str(call) for call in out.write.call_args_list)
         self.assertIn("few cents", said)
 

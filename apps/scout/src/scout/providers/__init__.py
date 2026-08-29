@@ -1,11 +1,18 @@
 """Where a model gets asked for a draft.
 
-One interface, two implementations. Anthropic is the default; OpenRouter is
-there because it is the key most likely to be on the machine already, and
-because its `:free` models are the only way to run `scout-smoke` for nothing.
+One interface, one implementation. OpenRouter is the only provider scout has,
+and the interface exists so that adding a second one is an afternoon rather
+than an excavation — not because a second one is planned.
 
-Both send the same instruction, from `prompt.py`. Two providers with two
-slightly different versions of it is the failure nobody notices.
+**One provider is not one model.** OpenRouter is a router: the default model
+is a Claude (`anthropic/claude-sonnet-5`), and `SCOUT_MODEL` reaches every
+other model it serves without scout knowing anything about them. A direct
+Anthropic client was written and then deleted, because it was a second way to
+reach models already reachable — and its `:free` models are what make
+`scout-smoke` cost nothing, which a direct client could never do.
+
+The instruction every provider sends lives in `prompt.py` rather than here,
+so a second one cannot quietly drift to a different version of it.
 
 A provider returns markdown and nothing else. It is deliberately not asked to
 report what it changed: `summary.py` works that out by diffing the documents,
@@ -27,17 +34,13 @@ class Provider(Protocol):
         ...
 
 
-def load(name: str = "anthropic") -> Provider:
+def load(name: str = "openrouter") -> Provider:
     """The provider by name.
 
     Imported here rather than at module scope so that `scout save` and
     `scout log` — which need no model at all — do not pay for importing an
     SDK, or fail because one is misconfigured.
     """
-    if name == "anthropic":
-        from .anthropic_api import AnthropicProvider
-
-        return AnthropicProvider()
     if name == "openrouter":
         from .openrouter import OpenRouterProvider
 
@@ -48,5 +51,5 @@ def load(name: str = "anthropic") -> Provider:
         return FakeProvider()
     raise ScoutError(
         f'There is no provider called "{name}".',
-        detail="scout ships with: anthropic, openrouter.",
+        detail="scout ships with: openrouter.",
     )

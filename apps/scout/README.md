@@ -8,9 +8,9 @@ account, no Kanban board, and nothing that applies to a job on your behalf.
 
 **Everything stays here.** Postings and application history are rows in a
 SQLite file under the directory you run it in; resumes are markdown files
-beside them. The only thing that ever leaves the machine is one API call to
-Anthropic, made with your key, when you ask for a tailored resume. Saving a
-posting and logging a status never call a model at all.
+beside them. The only thing that ever leaves the machine is one API call, made
+with your key, when you ask for a tailored resume. Saving a posting and
+logging a status never call a model at all.
 
 ## Quickstart
 
@@ -19,7 +19,7 @@ From a fresh clone, this reaches a logged application in about two minutes.
 ```sh
 cd apps/scout
 uv sync                                  # once
-export ANTHROPIC_API_KEY=sk-ant-...      # yours; scout never stores it
+export OPENROUTER_API_KEY=sk-or-...      # yours; scout never stores it
 
 mkdir -p ~/job-search && cd ~/job-search
 export SCOUT_HOME=$PWD                   # or just run scout from here
@@ -129,7 +129,7 @@ Add this to `.mcp.json` in your project, or to `~/.claude.json`:
       "args": ["run", "--directory", "/absolute/path/to/apps/scout", "scout-mcp"],
       "env": {
         "SCOUT_HOME": "/absolute/path/to/your/job-search",
-        "ANTHROPIC_API_KEY": "sk-ant-..."
+        "OPENROUTER_API_KEY": "sk-or-..."
       }
     }
   }
@@ -168,18 +168,24 @@ the field you read back weeks later to remember who you wrote to.
 
 ## Model and cost
 
-Two providers, one method wide each, both sending the same instruction from
-`providers/prompt.py` — shared rather than copied, because two versions of it
-drifting apart is the failure nobody notices.
+One provider — OpenRouter, with your key from `OPENROUTER_API_KEY`. The
+default model is **`anthropic/claude-sonnet-5`**, and `SCOUT_MODEL` reaches
+anything else it serves.
 
-| Provider | Key | Default model |
-| --- | --- | --- |
-| `anthropic` (default) | `ANTHROPIC_API_KEY` | `claude-sonnet-5` |
-| `openrouter` | `OPENROUTER_API_KEY` | `anthropic/claude-sonnet-5` |
+One provider is not one model. A direct Anthropic client was written and then
+deleted: it was a second way to reach models the router already reaches, and
+it could not do the one thing the router can — serve `:free` models, which is
+what makes the smoke check below cost nothing.
 
-`SCOUT_MODEL` overrides the model, in whichever provider's namespace is
-selected. OpenRouter uses the `openai` client even though a Claude is usually
-on the other end: it serves an OpenAI-compatible API and no Anthropic one.
+The client is `openai`, even though a Claude is usually on the other end:
+OpenRouter serves an OpenAI-compatible API and no Anthropic one. The same
+trade gary-api makes, for the same reason.
+
+The interface is one method wide (`providers/__init__.py`) so that a second
+provider is an afternoon's work, and the instruction both would send lives in
+`providers/prompt.py` so that a second one cannot quietly drift to a different
+version of it. None is implemented, and there is no half-finished one
+pretending otherwise.
 
 One tailoring is one call — a resume and a posting in, a resume out — which on
 a paid model is a few cents.
@@ -189,10 +195,9 @@ task scout:smoke -- orrery-staff-engineer   # one REAL call, run by hand
 ```
 
 `smoke` is the only thing here that talks to a model, and it is never part of
-`task test`. **It costs nothing by default**: it names a `:free` OpenRouter
-model, which exercises this exact path for no money. A paid model is opted
-into with `--provider`/`--model`, and the command says what it expects to
-spend before it spends it.
+`task test`. **It costs nothing by default**: it names a `:free` model, which
+exercises this exact path for no money. A paid model is opted into with
+`--model`, and the command says what it expects to spend before it spends it.
 
 It has already earned its place. Both of the findings in the ⚠️ table above
 came out of its first run, and neither was in any spec beforehand.

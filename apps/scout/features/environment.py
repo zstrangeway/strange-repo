@@ -23,7 +23,7 @@ MANAGED = (
     "SCOUT_HOME",
     "SCOUT_FETCH_TIMEOUT",
     "SCOUT_MODEL",
-    "ANTHROPIC_API_KEY",
+    "OPENROUTER_API_KEY",
 )
 
 
@@ -33,9 +33,9 @@ def before_scenario(context, scenario):
     os.environ["SCOUT_HOME"] = str(context.home)
     # A board that never answers should cost a scenario a second, not fifteen.
     os.environ["SCOUT_FETCH_TIMEOUT"] = "1"
-    # Set so that nothing reaches Anthropic even if a step reaches for the
-    # real provider by mistake. The specs use the fake one.
-    os.environ["ANTHROPIC_API_KEY"] = "not-a-real-key"
+    # Set so that a step reaching for the real provider by mistake fails on
+    # the key rather than on the network. The specs use the fake one.
+    os.environ["OPENROUTER_API_KEY"] = "not-a-real-key"
 
     context.board = None
     context.mcp = None

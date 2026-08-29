@@ -5,9 +5,6 @@ description = "A local-first, bring-your-own-model job search assistant"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    # The user's own key, their own account. scout never proxies a model call
-    # through anything of ours, which is the whole point of bring-your-own.
-    "anthropic>=0.75.0",
     # The stdio server. `mcp` is the official SDK and brings its own
     # transport, so nothing here frames JSON-RPC by hand.
     "mcp>=1.30.0",
@@ -16,8 +13,10 @@ dependencies = [
     # the difference between two error messages somebody can act on, and
     # trafilatura's own fetch collapses both into None.
     "httpx>=0.28.1",
+    # The user's own key, their own account: scout never proxies a call
+    # through anything of ours, which is the whole point of bring-your-own.
     # OpenRouter serves an OpenAI-compatible API and no Anthropic one, so this
-    # is the client for it even though the model on the other end is usually a
+    # is the client even though the model on the other end is usually a
     # Claude. The same trade gary-api makes, for the same reason.
     "openai>=2.53.0",
     # Turns a job board's HTML into the posting and drops the chrome. Chosen

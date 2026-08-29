@@ -1,13 +1,15 @@
-"""The OpenRouter provider.
+"""The OpenRouter provider — the only one scout has.
 
-Here because it is the key most likely to already be on the machine, and
-because OpenRouter is the only way to run scout's smoke check for nothing: its
-`:free` models cost no money and exercise this exact path.
+A router rather than one vendor, which is why it is the only one needed: the
+default model is a Claude, and `SCOUT_MODEL` reaches everything else it serves
+without scout learning a second API. Its `:free` models are also what let
+`scout-smoke` exercise this exact path for no money.
 
-It uses the `openai` client rather than the `anthropic` one even when the
-model on the other end is a Claude, for the reason gary-api records in its own
-dependencies: **OpenRouter serves an OpenAI-compatible API and no Anthropic
-one.** Pointing the Anthropic SDK at it does not work.
+It uses the `openai` client even though the model on the other end is usually
+a Claude, for the reason gary-api records in its own dependencies:
+**OpenRouter serves an OpenAI-compatible API and no Anthropic one.** Pointing
+the Anthropic SDK at it does not work, which is why there is no code here that
+tries.
 """
 
 import os
@@ -21,9 +23,9 @@ BASE_URL = "https://openrouter.ai/api/v1"
 
 API_KEY_VARIABLE = "OPENROUTER_API_KEY"
 
-# Sonnet 5 in OpenRouter's namespace, because that is the paid default this
-# repo works to. `SCOUT_MODEL` takes a model id in whichever provider's
-# namespace is selected — `<vendor>/<model>` here, a bare id for Anthropic.
+# Sonnet 5, because that is the paid default this repo works to, reached
+# through the router rather than through Anthropic directly. `SCOUT_MODEL`
+# takes any id OpenRouter serves, in its `<vendor>/<model>` form.
 DEFAULT_MODEL = "anthropic/claude-sonnet-5"
 
 

@@ -92,7 +92,7 @@ def save_posting(
         "fails. Returns where the file went and what changed."
     )
 )
-def tailor_resume(ref: str, provider: str = "anthropic") -> str:
+def tailor_resume(ref: str, provider: str = "openrouter") -> str:
     logger.info("tool.call tailor_resume")
     try:
         with db.connect() as connection:

@@ -83,8 +83,9 @@ process, and its job is to catch drift, not to cover behaviour.
 for Google and Facebook, and for the same reasons. `pnpm --filter gary-api
 smoke` plays one real turn and prints what the model actually did with the
 tools, which is the only way to see that gap. `pnpm --filter scout smoke`
-does the same for one tailoring. Both are opt-in and never run on their own,
-because they spend somebody's tokens.
+does the same for one tailoring, and costs nothing — it names a `:free`
+model by default, and found two real defects on its first run. Both are
+opt-in and never run on their own.
 
 gary-web's coverage gate covers `src/lib` and nothing else, deliberately. The
 rest of that app is React components, and [Next's own

@@ -221,7 +221,7 @@ def step_master_empty(context):
 
 @then("scout should name the variable it expects")
 def step_names_variable(context):
-    assert "ANTHROPIC_API_KEY" in context.output, context.output
+    assert "OPENROUTER_API_KEY" in context.output, context.output
 
 
 @then("scout should say the dates are not what the master gives that employer")
