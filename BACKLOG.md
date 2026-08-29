@@ -251,17 +251,34 @@ event kind that no longer exists is a grep. `tests/test_pluggable.py` already
 does exactly this for system names in source; the same crude scan over the
 markdown would have caught "there is no combat" the day `begin_combat` landed.
 
-### 5. Dependency drift, and nothing to drive it
+### 5. Two things dependabot cannot do, now that it is configured
 
-There is no `.github/dependabot.yml`. Ten Dependabot pull requests were opened
-and all ten were closed unmerged — several of them against `apps/example-web`
-and `apps/example-api`, which no longer exist, so they were closed against a repo
-shape that had already gone rather than judged on their merits.
+`.github/dependabot.yml` exists: github-actions, npm at the workspace root, uv
+for gary-api, and docker for the two base images — monthly, grouped so minor
+and patch arrive as one pull request per ecosystem and a major arrives alone.
+That is the answer to the ten that were opened against `apps/example-web` and
+`apps/example-api` and closed against a repo shape that had already gone.
 
-CI still pins `actions/checkout@v4`, `actions/setup-node@v4` and
-`astral-sh/setup-uv@v5`, against v7, v7 and v7 proposed. Either configure
-Dependabot for the paths that exist now, or bump the three actions by hand and
-accept that this is manual.
+**Nobody has seen it run.** A dependabot config with a bad key does not fail
+loudly; it errors in the repository's Dependency graph → Dependabot tab and
+opens nothing, which reads exactly like a month with no updates. This
+environment cannot reach the GitHub API for repositories outside this one, so
+the `uv` ecosystem name in particular is taken from the options reference
+rather than from a run. Check that tab once, and check the first month
+actually produces something.
+
+**`superfly/flyctl-actions/setup-flyctl@master` is pinned to a branch.** Both
+deploy jobs use it, so the deploy path runs whatever is on that branch on the
+day — dependabot has no version to bump and cannot help. Pinning it to a tag
+or a SHA is a decision about the deploy path rather than a dependency bump,
+which is why it was not made while writing the config.
+
+The three actions the closed pull requests wanted at v7 — `actions/checkout`,
+`actions/setup-node`, `astral-sh/setup-uv` — are still at v4, v4 and v5. They
+were deliberately not bumped by hand: the current majors could not be verified
+from here, and guessing a tag is how a green CI turns red for no reason.
+Dependabot will propose them with a changelog attached, which is the better
+version of the same change.
 
 ### 6. The browser suite waits a fixed fifteen seconds, twenty-five times
 

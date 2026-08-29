@@ -1,0 +1,79 @@
+# Dependabot was doing this before and it did not work. Ten pull requests were
+# opened and all ten were closed unmerged — several of them against
+# `apps/example-web` and `apps/example-api`, which no longer exist, so they
+# were closed against a repo shape that had already gone rather than judged on
+# their merits. There was no config file at all, so it was guessing at the
+# layout, and it guessed the old one.
+#
+# So this names the directories that exist today, and it is written to produce
+# a few mergeable pull requests a month rather than ten unreadable ones:
+# monthly, grouped, and capped. Minor and patch bumps arrive as one pull
+# request per ecosystem; a major arrives on its own, because a major is the
+# one that wants reading before it is merged.
+version: 2
+
+updates:
+  # The workflow actions. The closed pull requests proposed v7 for
+  # actions/checkout, actions/setup-node and astral-sh/setup-uv against the v4,
+  # v4 and v5 still pinned here — three majors behind at the time they were
+  # closed, and nothing has moved since. Those numbers are not re-checked here
+  # because this environment cannot reach the GitHub API for repositories
+  # outside this one; letting dependabot say what is current is the point.
+  #
+  # One of the five it cannot help with: the deploy steps use
+  # `superfly/flyctl-actions/setup-flyctl@master`, which is a branch and not a
+  # version. Dependabot has nothing to bump, and the deploy runs whatever is
+  # on that branch on the day. Pinning it is a decision about the deploy path
+  # rather than a dependency bump, so it is not made here.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 3
+    groups:
+      actions:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # One entry, at the root, because this is a pnpm workspace and the lockfile
+  # it would update is `pnpm-lock.yaml` here. The manifests in `apps/*` and
+  # `packages/*` resolve through it.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 5
+    groups:
+      javascript:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # `uv` rather than `pip`. gary-api is `pyproject.toml` plus `uv.lock`, and
+  # the Dockerfile and CI both run `uv sync --locked`, which fails outright if
+  # the two disagree. An ecosystem that updated the manifest and left the
+  # lockfile behind would open pull requests that cannot pass, which is how
+  # the last ten went.
+  - package-ecosystem: "uv"
+    directory: "/apps/gary-api"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 5
+    groups:
+      python:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # The two base images. `python:3.11-slim` and `node:22-slim` get security
+  # fixes without the tag moving under a digest, so this is about the majors:
+  # nothing else would ever tell us 3.11 had stopped being maintained.
+  - package-ecosystem: "docker"
+    directories:
+      - "/apps/gary-api"
+      - "/apps/gary-web"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 2
+    groups:
+      images:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
