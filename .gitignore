@@ -8,4 +8,9 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
+.coverage.*
+# scout writes these into whatever directory it is run in, and apps/scout
+# is where it gets run while being worked on.
+.scout/
+apps/scout/resumes/
 archive-*/
