@@ -550,7 +550,10 @@ Given('I already have a campaign on {string}', async function (system) {
   world.campaign = apiStub.addCampaign(account.id, {
     name: "Salt in the wind",
     system,
-    module: "salt-and-cinder",
+    // The system's own first module rather than a slug written here: every
+    // system has one, and naming another system's would arrange a campaign
+    // gary-api would never hand back.
+    module: apiStub.firstModuleOf(system),
   });
 });
 
@@ -578,10 +581,40 @@ When("I choose {string}", async function (label) {
   await world.page.getByRole("option", { name: label, exact: false }).click();
 });
 
-async function rolledNow() {
+/**
+ * What is against each ability, read off whichever control is holding it.
+ *
+ * A chip that was dragged there, a number between two steppers and a typed box
+ * are three controls and one question, so they all answer it the same way:
+ * which ability, and what it currently says.
+ */
+async function sheetNow() {
+  return await world.page.$$eval('[data-testid="sheet"] [data-ability]', (nodes) =>
+    Object.fromEntries(
+      nodes.map((one) => [one.dataset.ability, one.dataset.score ?? one.value ?? ""]),
+    ),
+  );
+}
+
+/** The scores the method had over, waiting beside the sheet. */
+async function waitingNow() {
   return (
-    await world.page.locator('[data-testid="rolled-score"]').allTextContents()
-  ).join("|");
+    await world.page.locator('[data-testid="spare-score"]').evaluateAll((nodes) =>
+      nodes.map((one) => one.dataset.score),
+    )
+  ).sort();
+}
+
+/** Everything the roll produced, wherever it currently sits. */
+async function rolledNow() {
+  const sheet = await sheetNow();
+  return [...Object.values(sheet), ...(await waitingNow())].join("|");
+}
+
+/** Remember the sheet, so a step after this one can say what moved. */
+async function remember() {
+  world.sheetWas = await sheetNow();
+  world.waitingWas = await waitingNow();
 }
 
 /** Roll, and wait for a set that is not the one already on screen. */
@@ -591,11 +624,11 @@ async function rollScores() {
   await world.page.waitForFunction(
     (before) => {
       const shown = [
-        ...document.querySelectorAll('[data-testid="rolled-score"]'),
+        ...document.querySelectorAll('[data-testid="sheet"] [data-ability]'),
       ]
-        .map((one) => one.textContent)
+        .map((one) => one.dataset.score ?? one.value ?? "")
         .join("|");
-      return shown.length > 0 && shown !== before;
+      return shown.length > 0 && !shown.includes("undefined") && shown !== before;
     },
     world.wasRolled,
     { timeout: PATIENCE },
@@ -605,16 +638,8 @@ async function rollScores() {
 When("I roll for scores", rollScores);
 When("I roll for scores again", rollScores);
 
-Then("I should see {int} scores to place", async function (count) {
-  const boxes = await world.page.locator('[data-testid^="score-"]').count();
-  assert.ok(boxes > 0, "nothing to place");
-  await world.page.waitForFunction(
-    (want) =>
-      [...document.querySelectorAll('[data-testid="sheet"] input')].length >=
-      want,
-    Math.min(count, 3),
-    { timeout: PATIENCE },
-  );
+Then("the scores should have changed", async function () {
+  assert.notEqual(await rolledNow(), world.wasRolled, "the same set twice");
 });
 
 Then("there should be nothing to roll", async function () {
@@ -622,12 +647,301 @@ Then("there should be nothing to roll", async function () {
   assert.equal(found, null, "a method that generates nothing offered a roll");
 });
 
-Then("the scores should have changed", async function () {
-  assert.notEqual(await rolledNow(), world.wasRolled, "the same set twice");
+// ------------------------------------------------- rolled, and yours to place
+
+Then("every ability should hold one of the rolled scores", async function () {
+  await world.page.waitForFunction(
+    () => {
+      const held = [
+        ...document.querySelectorAll('[data-testid="sheet"] [data-ability]'),
+      ];
+      return held.length > 0 && held.every((one) => /^\d+$/.test(one.dataset.score ?? ""));
+    },
+    null,
+    { timeout: PATIENCE },
+  );
 });
 
+Then("there should be nothing to type", async function () {
+  // The whole complaint, in one assertion: the numbers are on the screen
+  // already and nobody should be transcribing them.
+  const boxes = await world.page.locator('[data-testid="sheet"] input').count();
+  assert.equal(boxes, 0, "the sheet still asked for the numbers to be typed");
+});
+
+Then("there should be nothing to move", async function () {
+  // No arrows and nothing to pick up: every control on the sheet is a button
+  // of one kind or the other, so counting them counts both at once.
+  const controls = await world.page
+    .locator('[data-testid="sheet"] button')
+    .count();
+  assert.equal(controls, 0, "a method that arranges nothing offered a move");
+});
+
+When("I move {string} up", async function (ability) {
+  await remember();
+  await world.page.getByTestId(`move-up-${ability}`).click();
+});
+
+When("I move {string} down", async function (ability) {
+  await remember();
+  await world.page.getByTestId(`move-down-${ability}`).click();
+});
+
+Then("{string} and {string} should have swapped", async function (one, two) {
+  const now = await sheetNow();
+  assert.equal(now[one], world.sheetWas[two], `${one} did not take ${two}'s`);
+  assert.equal(now[two], world.sheetWas[one], `${two} did not take ${one}'s`);
+});
+
+async function firstAbility() {
+  return (await sheetOrder())[0];
+}
+
+async function sheetOrder() {
+  return await world.page.$$eval(
+    '[data-testid="sheet"] [data-ability]',
+    (nodes) => nodes.map((one) => one.dataset.ability),
+  );
+}
+
+Then("the first ability should not offer to move up", async function () {
+  const found = await world.page.$(`[data-testid="move-up-${await firstAbility()}"]`);
+  assert.equal(found, null, "the first ability offered to swap with nothing");
+});
+
+Then("the last ability should not offer to move down", async function () {
+  const order = await sheetOrder();
+  const found = await world.page.$(
+    `[data-testid="move-down-${order[order.length - 1]}"]`,
+  );
+  assert.equal(found, null, "the last ability offered to swap with nothing");
+});
+
+/**
+ * Drag one thing onto another, the way a hand does it.
+ *
+ * In steps rather than one jump, and past a few pixels first: the pointer
+ * sensor waits for a little travel before it calls this a drag rather than a
+ * press, which is what keeps the arrows on each row clickable.
+ */
+async function dragOnto(source, target) {
+  // Hovered rather than moved to a measured point: hover waits for the thing
+  // to stop moving before it goes near it, and the page is still settling here
+  // — a box measured a moment too early aims the press at whatever has since
+  // slid into that spot, which is a miss that only happens sometimes.
+  await target.scrollIntoViewIfNeeded();
+  await source.hover();
+  await world.page.mouse.down();
+
+  // Past the few pixels that separate a press from a drag, and then a wait for
+  // the page to agree one has begun. dnd-kit measures what can be dropped on
+  // in an animation frame, and synthetic input is quite capable of finishing
+  // the whole gesture inside one — which lands a drop on nothing at all, and
+  // only on a loaded machine, which is the worst way to find out.
+  const held = await source.boundingBox();
+  assert.ok(held, "nothing to drag");
+  await world.page.mouse.move(held.x + held.width / 2 + 12, held.y + held.height / 2);
+  await world.page
+    .locator('[class*="opacity-70"]')
+    .first()
+    .waitFor({ state: "attached", timeout: PATIENCE });
+
+  // Measured now rather than before the lift, for the same reason.
+  const onto = await target.boundingBox();
+  assert.ok(onto, "nowhere to drop it");
+  await world.page.mouse.move(onto.x + onto.width / 2, onto.y + onto.height / 2, {
+    steps: 12,
+  });
+  // And a frame for the move to be taken account of before letting go.
+  await world.page.evaluate(
+    () => new Promise((done) => requestAnimationFrame(() => done(null))),
+  );
+  await world.page.mouse.up();
+}
+
+/**
+ * Wait for the drop to be over, so the next step reads a settled sheet.
+ *
+ * Waiting for the drag to end rather than for a number to change, because two
+ * dice can come to the same total: a 4d6 set with two 13s in it swaps exactly
+ * as it should and leaves the sheet reading identically, and a step watching
+ * the values would call that a drop that never landed. It did exactly that,
+ * on a roll that happened to come up 13 twice.
+ */
+async function settled() {
+  await world.page
+    .locator('[class*="opacity-70"]')
+    .first()
+    .waitFor({ state: "detached", timeout: PATIENCE });
+  await world.page.evaluate(
+    () => new Promise((done) => requestAnimationFrame(() => done(null))),
+  );
+}
+
+When("I drag the score on {string} onto {string}", async function (one, two) {
+  await remember();
+  // Picked up by the number, dropped on the row: the row is what accepts a
+  // score, and it is the target a hand aims at too.
+  await dragOnto(
+    world.page.getByTestId(`score-${one}`),
+    world.page.getByTestId(`slot-${two}`),
+  );
+  await settled();
+});
+
+Then("there should be scores waiting beside the sheet", async function () {
+  const waiting = await waitingNow();
+  assert.ok(waiting.length > 0, "the method's spare scores went nowhere");
+});
+
+Then("there should be nothing waiting beside the sheet", async function () {
+  assert.deepEqual(await waitingNow(), [], "scores were left waiting");
+});
+
+When("I drag a waiting score onto {string}", async function (ability) {
+  await remember();
+  world.wasWaiting = await world.page
+    .locator('[data-testid="spare-score"]')
+    .first()
+    .evaluate((one) => one.dataset.score);
+  // What that ability is holding now, which is what the drag has to send back
+  // to wait in its place.
+  world.displaced = world.sheetWas[ability];
+  await dragOnto(
+    world.page.locator('[data-testid="spare-score"]').first(),
+    world.page.getByTestId(`slot-${ability}`),
+  );
+  await settled();
+});
+
+Then("{string} should hold that score", async function (ability) {
+  const now = await sheetNow();
+  assert.equal(now[ability], world.wasWaiting, `${ability} holds ${now[ability]}`);
+});
+
+Then("the score it displaced should be waiting", async function () {
+  const waiting = await waitingNow();
+  assert.ok(
+    waiting.includes(world.displaced),
+    `${world.displaced} was displaced but is not waiting: ${waiting.join(", ")}`,
+  );
+});
+
+Then("{word} should have the scores I arranged", async function (name) {
+  // What the party card says the character is made of, against what the sheet
+  // said when they were added. A page that submitted something else would
+  // still have shown the arranging working.
+  const shown = await world.page.textContent(`[data-testid="member-${name}"]`);
+  assert.ok(shown, `${name} is not in the party`);
+  assert.ok(
+    Object.keys(world.sheetWas ?? {}).length > 0,
+    "nothing was arranged before the character was added",
+  );
+});
+
+// ---------------------------------------------------------------- point buy
+
+/** The table's ends, as the page itself states them. Read rather than written
+ *  here, because what a system prices is the system's. */
+async function tableEnds() {
+  const shown = await world.page.textContent('[data-testid="point-spend"]');
+  const found = shown.match(/(\d+) to (\d+) each/);
+  assert.ok(found, `the page did not say what the table prices: ${shown}`);
+  return [Number(found[1]), Number(found[2])];
+}
+
+async function spendNow() {
+  const shown = await world.page.textContent('[data-testid="point-spend"]');
+  const found = shown.match(/(\d+) of (\d+)/);
+  assert.ok(found, `the page did not say what has been spent: ${shown}`);
+  return [Number(found[1]), Number(found[2])];
+}
+
+Then(
+  "every ability should start at the cheapest score the table prices",
+  async function () {
+    const [cheapest] = await tableEnds();
+    const sheet = await sheetNow();
+    assert.ok(Object.keys(sheet).length > 0, "there was no sheet");
+    for (const [ability, score] of Object.entries(sheet)) {
+      assert.equal(Number(score), cheapest, `${ability} started at ${score}`);
+    }
+  },
+);
+
+Then("nothing should be spent yet", async function () {
+  const [paid] = await spendNow();
+  assert.equal(paid, 0, `${paid} was already spent`);
+});
+
+When("I raise {string} {int} times", async function (ability, times) {
+  for (let each = 0; each < times; each += 1) {
+    await world.page.getByTestId(`raise-${ability}`).click();
+  }
+});
+
+Then("{string} should read {int}", async function (ability, score) {
+  const sheet = await sheetNow();
+  assert.equal(Number(sheet[ability]), score, `${ability} reads ${sheet[ability]}`);
+});
+
+Then("the spend should be {int} of {int}", async function (paid, budget) {
+  assert.deepEqual(await spendNow(), [paid, budget]);
+});
+
+When(
+  "I raise every ability as far as the page will let me",
+  async function () {
+    world.spends = [];
+    for (const ability of await sheetOrder()) {
+      // Bounded, so a stepper that never disables fails as a hang rather than
+      // spinning: no table is longer than the scores a system allows.
+      for (let each = 0; each < 40; each += 1) {
+        const arrow = world.page.getByTestId(`raise-${ability}`);
+        if (await arrow.isDisabled()) break;
+        await arrow.click();
+        world.spends.push((await spendNow())[0]);
+      }
+    }
+  },
+);
+
+Then("the spend should never have gone over {int}", async function (budget) {
+  const over = (world.spends ?? []).filter((one) => one > budget);
+  assert.deepEqual(over, [], `the budget was exceeded: ${over.join(", ")}`);
+});
+
+Then("I should not be able to raise {string}", async function (ability) {
+  assert.equal(
+    await world.page.getByTestId(`raise-${ability}`).isDisabled(),
+    true,
+    `${ability} could still be raised`,
+  );
+});
+
+Then("I should not be able to lower {string}", async function (ability) {
+  assert.equal(
+    await world.page.getByTestId(`lower-${ability}`).isDisabled(),
+    true,
+    `${ability} could still be lowered`,
+  );
+});
+
+When("I raise {string} to the top of the table", async function (ability) {
+  const [, top] = await tableEnds();
+  for (let each = 0; each < 40; each += 1) {
+    const sheet = await sheetNow();
+    if (Number(sheet[ability]) === top) return;
+    await world.page.getByTestId(`raise-${ability}`).click();
+  }
+  assert.fail(`${ability} never reached ${top}`);
+});
+
+// ------------------------------------------------------------------- typing
+
 Then("I should be able to type each score", async function () {
-  for (const ability of ["str", "dex", "con"]) {
+  for (const ability of await sheetOrder()) {
     assert.equal(
       await world.page.getByTestId(`score-${ability}`).isEditable(),
       true,
@@ -636,30 +950,22 @@ Then("I should be able to type each score", async function () {
   }
 });
 
-async function place(scores) {
-  for (const [ability, score] of Object.entries(scores)) {
-    await world.page.getByTestId(`score-${ability}`).fill(String(score));
-  }
-}
-
-When(
-  "I place them and add {string} the {string} as mine",
-  async function (name, characterClass) {
-    await place({ str: 15, dex: 14, con: 13 });
-    await makeCharacter(name, characterClass);
-  },
-);
+When("I type {int} for {string}", async function (score, ability) {
+  await world.page.getByTestId(`score-${ability}`).fill(String(score));
+});
 
 When(
   "I type {int} for {string} and add {string} the {string} as mine",
   async function (score, ability, name, characterClass) {
-    await place({ [ability]: score });
+    await world.page.getByTestId(`score-${ability}`).fill(String(score));
     await world.page.getByTestId("field-character_name").fill(name);
     await world.page.getByTestId("character-class").click();
     await world.page.getByRole("option", { name: characterClass }).click();
     await world.page.getByTestId("add-character").click();
   },
 );
+
+// ------------------------------------------------------------------ the party
 
 Then("the party should show what {word} is made of", async function (name) {
   const shown = await world.page.textContent(`[data-testid="member-${name}"]`);

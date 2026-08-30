@@ -126,11 +126,14 @@ Feature: Making a character, in a browser
     And the spend should be 3 of 27
 
   Scenario: The budget stops the steppers
+    # Raised as far as the page allows rather than to a number written here:
+    # what the budget buys is the system's arithmetic, and a spec that did the
+    # sum itself would be a second place for the table to live.
     When I open that campaign's party
     And I choose "point buy"
-    And I spend everything I have on "str" and "dex"
-    Then I should not be able to raise "con"
-    And the spend should never have gone over 27
+    And I raise every ability as far as the page will let me
+    Then the spend should never have gone over 27
+    And I should not be able to raise "con"
 
   Scenario: The table's ends stop the steppers
     When I open that campaign's party

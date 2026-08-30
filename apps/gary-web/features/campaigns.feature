@@ -83,7 +83,14 @@ Feature: Campaigns
     When I open that campaign's party
     And I add "Bramble" the "rogue" as mine
     Then the page shows "Bramble"
-    And the page shows "8/8"
+    # Their hit points, whatever they came to. It used to say 8/8 here, which
+    # was the number a character with no scores got — and every character had
+    # no scores, because the page generated six and then asked you to type
+    # them in. They arrive placed now, so a rogue's constitution is worth
+    # something and the flat eight has stopped being the answer. What the card
+    # owes is the hit points; what they are is the system's, and creation.feature
+    # is where that is settled.
+    And the party should show what Bramble is made of
     And the page should say "Bramble" is mine
 
   Scenario: Adding a companion for gary to play

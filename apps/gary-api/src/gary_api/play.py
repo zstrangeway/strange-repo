@@ -60,6 +60,10 @@ class MethodResponse(BaseModel):
     # and typing them in arranges without generating.
     generates: bool
     arrange: bool
+    # And whether it spends the system's budget, which is the third: those two
+    # answer the same for point buy and for typing them in, and a client left
+    # to tell them apart by slug is a client keeping its own copy of the rules.
+    spends: bool
 
 
 class SystemResponse(BaseModel):
@@ -290,6 +294,7 @@ def _as_system(ruleset: systems.Ruleset) -> dict:
                 "blurb": method.blurb,
                 "generates": method.generates,
                 "arrange": method.arrange,
+                "spends": method.spends,
             }
             for method in ruleset.methods
         ],
