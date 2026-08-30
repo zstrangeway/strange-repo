@@ -25,6 +25,7 @@ import { Skeleton } from "@gary/ui/components/skeleton";
 import { SubmitButton } from "@gary/ui/components/submit-button";
 
 import type { Campaign, Character, Score, System } from "@/lib/api";
+import { arrange, cheapest, placed, step } from "@/lib/scores";
 import {
   addCharacter,
   campaign as readCampaign,
@@ -64,6 +65,10 @@ export default function PartyPage({
   // submits them, and two components owning one sheet is one too many.
   const [method, setMethod] = useState<string>("");
   const [rolled, setRolled] = useState<Score[] | null>(null);
+  // Where each generated score currently sits. Positions rather than the
+  // numbers themselves, because two dice can come to the same total and a
+  // swap between two 12s has to still be a swap.
+  const [cells, setCells] = useState<(number | null)[]>([]);
   const [scores, setScores] = useState<Record<string, number>>({});
   const [rolling, setRolling] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
@@ -85,7 +90,17 @@ export default function PartyPage({
     setSystem(found_system ?? null);
     // The first one the system lists, which is the one to take if you do not
     // care. Never a name this app knows.
-    setMethod(found_system?.methods[0]?.slug ?? "");
+    const first = found_system?.methods[0];
+    setMethod(first?.slug ?? "");
+    // Seeded here as well as on a change of method, because a system whose
+    // first method spends would otherwise load with six empty rows and arrows
+    // that cannot do anything until you pick something else and pick it back.
+    setScores(
+      cheapest(
+        found_system?.abilities ?? [],
+        first?.spends ? (found_system?.point_costs ?? {}) : {},
+      ),
+    );
   }, [id, router]);
 
   useEffect(() => {
@@ -118,8 +133,14 @@ export default function PartyPage({
         return;
       }
       setRolled(result.rolled.scores);
-      // Placed already when the method does not let you arrange them, and
-      // left for you when it does.
+      // Every score lands somewhere the moment it exists, in the order it came
+      // back. Nothing is asked of you before there is something to change, and
+      // arranging is then moving what is already on the sheet.
+      setCells(
+        arrange(result.rolled.scores.length, system?.abilities.length ?? 0),
+      );
+      // Placed by gary when the method does not let you arrange them, in which
+      // case its answer is the sheet rather than anything this page worked out.
       setScores(result.rolled.assigned ?? {});
     })();
 
@@ -127,13 +148,30 @@ export default function PartyPage({
     return () => {
       live = false;
     };
-  }, [id, chosen?.generates, chosen?.slug]);
+  }, [id, chosen?.generates, chosen?.slug, system?.abilities]);
 
   if (!campaign || party === null || !system) {
     return <Skeleton className="h-64 w-full" data-testid="party-loading" />;
   }
 
   const mine = party.find((one) => one.played_by === "player");
+
+  // One sheet, however it was arrived at: arranged out of what gary rolled, or
+  // stepped and typed straight in. The form below submits this, so there is
+  // one answer to what the character is made of rather than one per method.
+  const arranging = !!chosen?.generates && chosen.arrange && !!rolled;
+  const sheet = arranging
+    ? placed(cells, system.abilities, rolled.map((one) => one.score))
+    : scores;
+  // The table and the budget belong to the method that spends them. A system
+  // with a point buy does not price a score somebody worked out at a real
+  // table and typed in.
+  const rules = {
+    costs: chosen?.spends ? system.point_costs : {},
+    budget: chosen?.spends ? system.point_budget : 0,
+    low: system.scores[0],
+    high: system.scores[1],
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -234,7 +272,7 @@ export default function PartyPage({
                 // six numbers to play, and a campaign started before this
                 // existed has characters who never did.
                 abilities:
-                  Object.keys(scores).length > 0 ? scores : undefined,
+                  Object.keys(sheet).length > 0 ? sheet : undefined,
                 // The first one is you unless you already are somebody. No
                 // choosing between two buttons for a decision that only has
                 // one sensible answer at the time it is made.
@@ -249,7 +287,8 @@ export default function PartyPage({
                   setParty(await partyOf(id));
                   // Cleared for the next one: a companion arranged from the
                   // last character's leftovers would be the same person twice.
-                  setScores({});
+                  setScores(cheapest(system.abilities, rules.costs));
+                  setCells([]);
                   setRolled(null);
                   return;
                 }
@@ -265,13 +304,31 @@ export default function PartyPage({
                 onMethod={(slug) => {
                   setMethod(slug);
                   // What the last method produced is not what this one would.
+                  // A spread half arranged out of dice and half spent against
+                  // a table is nobody's character.
                   setRolled(null);
-                  setScores({});
+                  setCells([]);
+                  // A spend starts legal and stays legal, rather than starting
+                  // as six holes that have to be filled before the total says
+                  // anything. Nothing to start when nothing is being spent.
+                  setScores(
+                    cheapest(
+                      system.abilities,
+                      system.methods.find((one) => one.slug === slug)?.spends
+                        ? system.point_costs
+                        : {},
+                    ),
+                  );
                 }}
                 rolled={rolled}
+                cells={cells}
+                onCells={setCells}
                 scores={scores}
                 onScore={(ability, score) =>
                   setScores((held) => ({ ...held, [ability]: score }))
+                }
+                onStep={(ability, by) =>
+                  setScores((held) => step(held, ability, by, rules) ?? held)
                 }
                 rolling={rolling}
                 onRoll={() =>
@@ -284,8 +341,14 @@ export default function PartyPage({
                       return;
                     }
                     setRolled(result.rolled.scores);
-                    // Placed already when the method does not let you
-                    // arrange them, and left for you when it does.
+                    setCells(
+                      arrange(
+                        result.rolled.scores.length,
+                        system.abilities.length,
+                      ),
+                    );
+                    // Placed by gary when the method does not let you arrange
+                    // them, in which case its answer is the sheet.
                     setScores(result.rolled.assigned ?? {});
                   })
                 }

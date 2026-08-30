@@ -67,6 +67,11 @@ export type Method = {
   /** Whether you place them afterwards. Two questions and not one: rolling in
    *  order generates without arranging, and typing them in is the reverse. */
   arrange: boolean;
+  /** Whether it spends the system's point budget. The third question, because
+   *  the first two answer the same for point buy and for typing them in, and
+   *  a page that told those apart by their slugs would be keeping a copy of
+   *  the rules where nobody maintains it. */
+  spends: boolean;
 };
 
 /** A ruleset gary can run, and everything it can say about itself. */

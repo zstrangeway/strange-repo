@@ -1953,3 +1953,34 @@ def step_more_hp(context, first, second):
 @then('the body should mention "{what}"')
 def step_body_mentions(context, what):
     assert what in context.response.text, context.response.text
+
+
+@then("{what:Offered} should spend the budget")
+def step_spends(context, what):
+    """Which method spends the budget is the system's to say.
+
+    ``generates`` and ``arrange`` are the same two answers for point buy and
+    for typing them in, so a client reading only those cannot tell one from
+    the other and would have to recognise a slug — which is a copy of the
+    rules living somewhere they are not maintained.
+    """
+    spending = {
+        method["slug"] for method in _body(context)["methods"] if method["spends"]
+    }
+    assert OFFERED[what] in spending, spending
+
+
+@then("{what:Offered} should not spend the budget")
+def step_does_not_spend(context, what):
+    spending = {
+        method["slug"] for method in _body(context)["methods"] if method["spends"]
+    }
+    assert OFFERED[what] not in spending, spending
+
+
+@then("nothing it offers should spend the budget")
+def step_nothing_spends(context):
+    spending = [
+        method["slug"] for method in _body(context)["methods"] if method["spends"]
+    ]
+    assert not spending, spending

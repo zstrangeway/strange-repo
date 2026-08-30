@@ -61,6 +61,7 @@ const METHOD = {
     blurb: "15, 14, 13, 12, 10, 8 — put them where you like.",
     generates: true,
     arrange: true,
+    spends: false,
   },
   "roll-4d6-drop-lowest": {
     slug: "roll-4d6-drop-lowest",
@@ -68,6 +69,17 @@ const METHOD = {
     blurb: "Six sets of four dice, worst of each thrown away.",
     generates: true,
     arrange: true,
+    spends: false,
+  },
+  "roll-3d6-in-order": {
+    slug: "roll-3d6-in-order",
+    name: "Roll 3d6 in order",
+    blurb: "Three dice, six times, straight down the page.",
+    generates: true,
+    // Straight down the page: gary places them and there is nothing left to
+    // decide. The one method here that generates without arranging.
+    arrange: false,
+    spends: false,
   },
   "point-buy": {
     slug: "point-buy",
@@ -75,6 +87,10 @@ const METHOD = {
     blurb: "Spend a budget on scores.",
     generates: false,
     arrange: true,
+    // The only one that spends. generates and arrange answer the same for
+    // this and for typing them in, so without this the page cannot tell a
+    // budget being spent from six numbers being transcribed.
+    spends: true,
   },
   manual: {
     slug: "manual",
@@ -82,6 +98,7 @@ const METHOD = {
     blurb: "Enter six scores you worked out somewhere else.",
     generates: false,
     arrange: true,
+    spends: false,
   },
 };
 
@@ -131,6 +148,37 @@ const CATALOGUE = [
         premise: "Three carters gone on a road with nowhere to hide.",
         hook: "The carters' guild will pay for its drivers found, before the next convoy leaves.",
         opening: "the last waystation before the missing stretch of road",
+      },
+    ],
+  },
+  {
+    slug: "add-1e",
+    name: "Advanced Dungeons & Dragons 1st Edition",
+    blurb: "Deadly, procedural and unsentimental.",
+    // Owed to gary-api's own list, as everything here is. First edition's two
+    // are three dice down the page and the DMG's Method I; neither is a point
+    // buy, which is not a first edition idea.
+    classes: ["fighter", "magic-user", "thief"],
+    abilities: ["str", "dex", "con"],
+    degrees: ["success", "failure"],
+    methods: [
+      METHOD["roll-3d6-in-order"],
+      METHOD["roll-4d6-drop-lowest"],
+      METHOD.manual,
+    ],
+    cannot_generate: "",
+    scores: [3, 18],
+    // No table and no budget: nothing here spends.
+    point_costs: {},
+    point_budget: 0,
+    hit_dice: { fighter: 10, "magic-user": 4, thief: 6 },
+    modules: [
+      {
+        slug: "the-moaning-barrow",
+        title: "The Moaning Barrow",
+        premise: "A long barrow that sounds, in certain winds, like a man.",
+        hook: "The reeve will not seal it until somebody says what is inside.",
+        opening: "the heath above the barrow, in a rising wind",
       },
     ],
   },
@@ -441,6 +489,14 @@ function moduleIn(system, slug) {
   return CATALOGUE.find((one) => one.slug === system)?.modules.find(
     (one) => one.slug === slug,
   );
+}
+
+/** A system's own first module, which is the one to take if you do not care.
+ *  A scenario naming a slug from another system would be arranging a campaign
+ *  gary-api would never hand back. */
+export function firstModuleOf(slug) {
+  const system = CATALOGUE.find((one) => one.slug === slug);
+  return system?.modules[0]?.slug;
 }
 
 function asCampaign(campaign) {
@@ -891,23 +947,42 @@ function handle(method, path, body, request, query) {
         };
       }
 
-      // Rolled here rather than fixed, because a scenario asserts that two
-      // draws differ — a stub handing back the same six numbers twice would
-      // agree with a client that cached the first set.
-      const scores = system.abilities.map(() => {
-        if (wanted.slug === "standard-array") {
-          return { score: 12, dice: [], dropped: null };
-        }
-        const dice = [0, 0, 0, 0].map(
-          () => 1 + Math.floor(Math.random() * 6),
-        );
-        const dropped = Math.min(...dice);
-        return {
-          score: dice.reduce((a, b) => a + b, 0) - dropped,
-          dice,
-          dropped,
-        };
-      });
+      // The array is six numbers whatever a system's abilities are, which is
+      // what gary-api hands back — it does not trim the array to fit. A stub
+      // that handed back one per ability, all of them the same 12, agreed
+      // with a page that could not tell six scores apart and left the spare
+      // ones out of the contract entirely.
+      const scores =
+        wanted.slug === "standard-array"
+          ? [15, 14, 13, 12, 10, 8].map((score) => ({
+              score,
+              dice: [],
+              dropped: null,
+            }))
+          : system.abilities.map(() => {
+              // Rolled here rather than fixed, because a scenario asserts
+              // that two draws differ — a stub handing back the same six
+              // numbers twice would agree with a client that cached the
+              // first set.
+              const dice = [0, 0, 0, 0].map(
+                () => 1 + Math.floor(Math.random() * 6),
+              );
+              if (wanted.slug === "roll-3d6-in-order") {
+                // Three dice and nothing thrown away, the same shape.
+                const three = dice.slice(0, 3);
+                return {
+                  score: three.reduce((a, b) => a + b, 0),
+                  dice: three,
+                  dropped: null,
+                };
+              }
+              const dropped = Math.min(...dice);
+              return {
+                score: dice.reduce((a, b) => a + b, 0) - dropped,
+                dice,
+                dropped,
+              };
+            });
 
       return {
         status: 200,

@@ -75,6 +75,12 @@ class Method:
     you place them afterwards. Those are two questions and not one — rolling
     three dice straight down the page generates and does not arrange, and
     typing them in arranges without generating anything.
+
+    ``spends`` is the third, because the first two do not separate point buy
+    from typing them in: neither generates and both arrange. One spends this
+    system's budget against its cost table and the other is for scores worked
+    out somewhere else, and a client that told them apart by their slugs would
+    be keeping a copy of the rules where nobody maintains it.
     """
 
     slug: str
@@ -82,6 +88,7 @@ class Method:
     blurb: str
     generates: bool
     arrange: bool
+    spends: bool = False
 
 
 # Offered by every system, because it is not really a method: somebody who
@@ -111,6 +118,9 @@ POINT_BUY = Method(
     blurb="Spend a budget on scores, so two characters are comparable.",
     generates=False,
     arrange=True,
+    # The only one that does. What a point costs and how many there are is the
+    # system's, and this is what says the method is the one spending them.
+    spends=True,
 )
 
 ROLL_4D6 = Method(

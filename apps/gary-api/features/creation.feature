@@ -36,6 +36,22 @@ Feature: Making a character
     And it should offer rolling 4d6 and dropping the lowest
     And it should not offer point buy
 
+  # ``generates`` and ``arrange`` do not tell point buy from typing them in:
+  # neither generates anything and both let you arrange what you end up with.
+  # What separates them is that one spends the system's budget and the other
+  # is for scores worked out somewhere else entirely. A client that told them
+  # apart by their slugs would be keeping its own copy of the rules, so the
+  # system says which one spends.
+  Scenario: A system says which of its methods spends the budget
+    When I read the system "dnd-5e"
+    Then point buy should spend the budget
+    And typing them in should not spend the budget
+
+  # And a system with no budget to spend has nothing that spends one.
+  Scenario: Nothing spends a budget a system does not have
+    When I read the system "add-1e"
+    Then nothing it offers should spend the budget
+
   # Typing them in is offered by everything, because it is not a method so
   # much as the absence of one: somebody who rolled at a real table, or built
   # a character by a rule gary does not implement, has an answer already and

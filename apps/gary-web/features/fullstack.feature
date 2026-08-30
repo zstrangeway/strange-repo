@@ -90,7 +90,11 @@ Feature: The whole thing, for real
     And I name it "A Light in the Deep" and start
     Then I should be building the party
     When I add "Bramble" the "rogue" as mine
-    Then the page shows "8/8"
+    # Their hit points, whatever the real ruleset made them. It said 8/8 here,
+    # which was what a character with no scores got — and every character had
+    # none, because the page generated six and then asked for them to be typed
+    # in. They arrive placed now, so a constitution is worth something.
+    Then the party should show what Bramble is made of
     When I take them in
     Then I should be on a campaign page
     When I say "I search the room [[roll 1d20+3 Perception]]"
@@ -146,8 +150,11 @@ Feature: The whole thing, for real
     And the choices should be the system's own
     When I choose "roll 4d6, drop the lowest"
     And I roll for scores
-    Then I should see 6 scores to place
-    When I place them and add "Bramble" the "rogue" as mine
+    Then every ability should hold one of the rolled scores
+    And there should be nothing to type
+    When I move "dex" up
+    Then "str" and "dex" should have swapped
+    When I add "Bramble" the "rogue" as mine
     Then the page shows "Bramble"
     And the party should show what Bramble is made of
 

@@ -52,8 +52,13 @@ diff.
 ## Dependencies
 
 Check what the project already pulls in before reaching for something new — an
-existing dependency usually covers it. If nothing does, bring me the options and
-discuss before adding anything.
+existing dependency usually covers it. If nothing does, bring me two or three
+options with a recommendation and add the one I pick.
+
+That is an invitation, not a hurdle. Don't hand-roll a solved problem to avoid
+the conversation: a version you wrote of what a well-kept library already does
+is the worse outcome, and reaching for the same library the rest of the stack
+already reaches for is how this stays consistent.
 
 ## Model spend
 
