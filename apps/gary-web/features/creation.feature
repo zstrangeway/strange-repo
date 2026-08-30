@@ -14,9 +14,22 @@ Feature: Making a character, in a browser
   # wrong is a character you did not build.
   #
   # So the step reads the method rather than assuming one. Rolled and yours to
-  # arrange means moving what you were given. Rolled in order means there is
-  # nothing to decide. A point buy means spending. Only typing them in — which
-  # is the method for scores worked out somewhere else — still has a box.
+  # arrange means choosing which ability takes which number. Rolled in order
+  # means there is nothing to decide. A point buy means spending. Only typing
+  # them in — which is the method for scores worked out somewhere else — still
+  # has a box.
+  #
+  # Arranging is a choice per ability, not a gesture. It was dragging first,
+  # and dragging is the fussiest way anybody has found to say "that number goes
+  # there": it wants aim, it wants a mouse, and it asks a question of your hands
+  # rather than of your character. Every tool that has solved this — Roll20's
+  # charactermancer, the array assigners, the builders — puts a chooser on each
+  # ability and lists what is going spare in it. The one bug those tools are
+  # reported for is letting the same number be taken twice, so taking one that
+  # is already somewhere trades places with it here.
+  #
+  # And each one says what it is worth, because +2 is the thing being placed
+  # and 15 is only how the system writes it down.
 
   Background:
     Given I have signed in at google as "ada@example.com" named "Ada"
@@ -32,49 +45,59 @@ Feature: Making a character, in a browser
   Scenario: A rolled set arrives already placed
     # Nothing is asked of you before there is something to change. Every score
     # goes somewhere the moment it exists, in the order it came back, and the
-    # step is arranging from there.
+    # step is rearranging from there.
     When I open that campaign's party
     And I choose "roll 4d6, drop the lowest"
     And I roll for scores
     Then every ability should hold one of the rolled scores
     And there should be nothing to type
 
-  Scenario: Swapping two scores with the arrows
+  Scenario: Each score says what it is worth
+    # A 15 is not what anybody is choosing between; a +2 is. What it is worth
+    # is the system's to say, and the page shows what it said.
     When I open that campaign's party
     And I choose "roll 4d6, drop the lowest"
     And I roll for scores
-    And I move "dex" up
+    Then every ability should say what its score is worth
+
+  Scenario: Giving an ability a different score
+    When I open that campaign's party
+    And I choose "roll 4d6, drop the lowest"
+    And I roll for scores
+    And I give "dex" the score that was on "str"
     Then "str" and "dex" should have swapped
     When I add "Bramble" the "rogue" as mine
     Then the party should show what Bramble is made of
-    And Bramble should have the scores I arranged
 
-  Scenario: The arrows stop at the ends
-    # There is nothing above the first ability to swap with, and offering a
-    # button that cannot do anything is worse than not offering one.
+  Scenario: Every ability offers the whole set
+    # Including the ones already somewhere, because taking one of those is how
+    # you swap two scores, and hiding them would leave no way to.
     When I open that campaign's party
     And I choose "roll 4d6, drop the lowest"
     And I roll for scores
-    Then the first ability should not offer to move up
-    And the last ability should not offer to move down
+    Then each ability should offer every rolled score
 
-  Scenario: Dragging a score onto another ability swaps them
+  Scenario: The set survives being rearranged
+    # The scores are the method's and arranging them is only arranging: one
+    # cannot be taken twice, and none can go missing. That is the bug these
+    # choosers are reported for everywhere else.
     When I open that campaign's party
     And I choose "roll 4d6, drop the lowest"
     And I roll for scores
-    And I drag the score on "str" onto "con"
-    Then "str" and "con" should have swapped
+    And I give "dex" the score that was on "str"
+    And I give "con" the score that was on "dex"
+    Then the sheet should still hold the whole rolled set
 
   Scenario: Taking a score the method had spare
-    # The standard array is six numbers whatever a system's abilities are, so
-    # a system with fewer leaves some over. They wait beside the sheet rather
-    # than being dropped on the floor, and they can be brought in.
+    # The standard array is six numbers whatever a system's abilities are, so a
+    # system with fewer leaves some over. They are listed as going spare, and
+    # taking one puts what it displaced back among them.
     When I open that campaign's party
     And I choose "the standard array"
-    Then there should be scores waiting beside the sheet
-    When I drag a waiting score onto "str"
+    Then there should be scores going spare
+    When I give "str" a score that was going spare
     Then "str" should hold that score
-    And the score it displaced should be waiting
+    And the score it displaced should be going spare
 
   Scenario: Rolling again before placing
     # Nobody is stopped from re-rolling: gary-api rolls it, so a re-roll costs
@@ -105,14 +128,18 @@ Feature: Making a character, in a browser
   Scenario: Rolled in order, with nothing to arrange
     # Three dice down the page is the whole of first edition's character
     # creation. There is nothing left to decide, so the page offers nothing to
-    # decide it with — no arrows, no dragging and no boxes.
+    # decide it with — nothing to choose from and no boxes.
     Given I already have a campaign on "add-1e"
     When I open that campaign's party
     And I choose "roll 3d6 in order"
     And I roll for scores
     Then every ability should hold one of the rolled scores
     And there should be nothing to type
-    And there should be nothing to move
+    And there should be nothing to choose
+    # And no modifiers, because first edition has none to show: it has a table
+    # per ability and no general one, which gary-api says by answering nothing
+    # rather than by quietly halving the distance from ten.
+    And no score should say it is worth anything
 
   # ---------------------------------------------------------------- point buy
 

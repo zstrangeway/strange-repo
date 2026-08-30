@@ -52,6 +52,27 @@ Feature: Making a character
     When I read the system "add-1e"
     Then nothing it offers should spend the budget
 
+  # A score is not what anybody is really placing — the modifier is. Nobody
+  # weighs up a 15 against a 14; they weigh up a +2 against the same +2, which
+  # is why those two are worth arguing about and 15 against 13 is not.
+  #
+  # What a score is worth is the system's arithmetic and the systems disagree:
+  # third edition onward halves the distance from ten, and first edition has no
+  # general ability modifier at all. A page working it out with (score - 10) / 2
+  # would be running third edition's rule at a first edition table, which is
+  # the drift the engines exist to stop. So the system says.
+  Scenario: A system says what each of its scores is worth
+    When I read the system "dnd-5e"
+    Then it should say what every score it allows is worth
+    And a 10 should be worth 0
+    And a 15 should be worth 2
+    And a 3 should be worth -4
+
+  Scenario: A system with no modifier says so rather than inventing one
+    When I read the system "add-1e"
+    Then it should say what every score it allows is worth
+    But every score should be worth 0
+
   # Typing them in is offered by everything, because it is not a method so
   # much as the absence of one: somebody who rolled at a real table, or built
   # a character by a rule gary does not implement, has an answer already and

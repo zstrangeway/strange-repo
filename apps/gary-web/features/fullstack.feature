@@ -152,7 +152,7 @@ Feature: The whole thing, for real
     And I roll for scores
     Then every ability should hold one of the rolled scores
     And there should be nothing to type
-    When I move "dex" up
+    When I give "dex" the score that was on "str"
     Then "str" and "dex" should have swapped
     When I add "Bramble" the "rogue" as mine
     Then the page shows "Bramble"
