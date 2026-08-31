@@ -1984,3 +1984,30 @@ def step_nothing_spends(context):
         method["slug"] for method in _body(context)["methods"] if method["spends"]
     ]
     assert not spending, spending
+
+
+@then("it should say what every score it allows is worth")
+def step_says_worth(context):
+    """Every score between the system's lowest and highest, and no holes.
+
+    A table with gaps would be a client having to work the missing ones out,
+    which is the arithmetic this exists to keep out of clients.
+    """
+    body = _body(context)
+    low, high = body["scores"]
+    worth = body["modifiers"]
+    for score in range(low, high + 1):
+        assert str(score) in worth, f"{score} is not priced: {sorted(worth)}"
+
+
+@then("a {score:d} should be worth {worth:d}")
+def step_score_worth(context, score, worth):
+    said = _body(context)["modifiers"][str(score)]
+    assert said == worth, f"a {score} is worth {said}, not {worth}"
+
+
+@then("every score should be worth {worth:d}")
+def step_every_score_worth(context, worth):
+    said = _body(context)["modifiers"]
+    wrong = {score: each for score, each in said.items() if each != worth}
+    assert not wrong, wrong

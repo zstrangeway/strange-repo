@@ -8,6 +8,8 @@ import {
   spent,
   step,
   swapped,
+  worth,
+  worthShowing,
 } from "./scores";
 
 // The fifth edition table, as it arrives from the system. Written out here
@@ -161,5 +163,42 @@ describe("step", () => {
 
   it("has nowhere to step from an empty box", () => {
     expect(step({}, "dex", 1, TYPING)).toBe(null);
+  });
+});
+
+describe("worth", () => {
+  // As a system sends it: every score it allows, and what each is worth.
+  const FIFTH = { 8: -1, 9: -1, 10: 0, 11: 0, 15: 2 };
+
+  it("reads what the system said a score is worth", () => {
+    expect(worth(15, FIFTH)).toBe(2);
+    expect(worth(8, FIFTH)).toBe(-1);
+  });
+
+  it("reads a nothing the system meant", () => {
+    // A 10 being worth nothing is an answer, and shows as +0.
+    expect(worth(10, FIFTH)).toBe(0);
+  });
+
+  it("has nothing to show for a score the system did not price", () => {
+    // Different from zero: this is a system that was never asked, not one
+    // saying the score is worth nothing. First edition prices every score at
+    // zero and means it.
+    expect(worth(18, FIFTH)).toBe(null);
+  });
+});
+
+describe("worthShowing", () => {
+  it("shows a table that says something", () => {
+    expect(worthShowing({ 8: -1, 10: 0, 15: 2 })).toBe(true);
+  });
+
+  it("says nothing for a table that is nothing all the way down", () => {
+    // First edition, which has a table per ability and no general modifier.
+    expect(worthShowing({ 3: 0, 10: 0, 18: 0 })).toBe(false);
+  });
+
+  it("says nothing for a system that priced nothing", () => {
+    expect(worthShowing({})).toBe(false);
   });
 });

@@ -102,6 +102,14 @@ const METHOD = {
   },
 };
 
+/** What every score a system allows is worth, as gary-api sends it: one entry
+ *  per score between the lowest and the highest, keyed the way JSON keys it. */
+function worth(each) {
+  return Object.fromEntries(
+    Array.from({ length: 18 - 3 + 1 }, (_, at) => [String(3 + at), each(3 + at)]),
+  );
+}
+
 const CATALOGUE = [
   {
     slug: "dnd-5e",
@@ -125,6 +133,11 @@ const CATALOGUE = [
     scores: [3, 18],
     point_costs: { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9 },
     point_budget: 27,
+    // Owed to gary-api's own answer, score by score: the third-edition-onward
+    // formula, which 5e kept. Spelled out rather than computed here, because
+    // a stub that computed it would agree with a client that computed it and
+    // neither would be reading what the service said.
+    modifiers: worth((score) => Math.floor((score - 10) / 2)),
     // Owed to gary-api's own table, for the classes this stub offers. A
     // system that names no hit dice — Pathfinder, below — falls back to the
     // default, which is what gary-api does with one it has no die for.
@@ -171,6 +184,10 @@ const CATALOGUE = [
     // No table and no budget: nothing here spends.
     point_costs: {},
     point_budget: 0,
+    // And nothing is worth anything: first edition has a table per ability and
+    // no general modifier, which gary-api answers with zero on purpose rather
+    // than quietly halving the distance from ten.
+    modifiers: worth(() => 0),
     hit_dice: { fighter: 10, "magic-user": 4, thief: 6 },
     modules: [
       {
@@ -197,6 +214,7 @@ const CATALOGUE = [
     scores: [3, 18],
     point_costs: {},
     point_budget: 0,
+    modifiers: worth((score) => Math.floor((score - 10) / 2)),
     degrees: [
       "critical success",
       "success",

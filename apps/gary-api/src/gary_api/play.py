@@ -85,6 +85,12 @@ class SystemResponse(BaseModel):
     # what arrives, the same as it does for any other score.
     point_costs: dict[int, int]
     point_budget: int
+    # What each score this system allows is worth on a check. A table rather
+    # than a formula because the systems disagree about whether there is one:
+    # third edition onward halves the distance from ten, and first edition has
+    # a table per ability and no general modifier at all. A client working it
+    # out itself would run third edition's rule at a first edition table.
+    modifiers: dict[str, int]
     modules: list[ModuleResponse]
 
 
@@ -302,6 +308,14 @@ def _as_system(ruleset: systems.Ruleset) -> dict:
         "scores": list(ruleset.scores),
         "point_costs": ruleset.point_costs,
         "point_budget": ruleset.point_budget,
+        # Every score the system allows, and what each is worth. Asked of the
+        # ruleset one at a time rather than reproduced here, so a system with
+        # its own answer gives it — see ADnD1e.modifier, which returns nothing
+        # on purpose.
+        "modifiers": {
+            str(score): ruleset.modifier(score)
+            for score in range(ruleset.scores[0], ruleset.scores[1] + 1)
+        },
         "modules": [
             {
                 "slug": module.slug,

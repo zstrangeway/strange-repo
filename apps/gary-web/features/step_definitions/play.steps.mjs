@@ -577,6 +577,9 @@ Then("the choices should be the system's own", async function () {
 });
 
 When("I choose {string}", async function (label) {
+  // A different method produces a different set, and the old one is not the
+  // one anything after this has to still hold.
+  world.setWas = null;
   await world.page.getByTestId("method").click();
   await world.page.getByRole("option", { name: label, exact: false }).click();
 });
@@ -596,29 +599,24 @@ async function sheetNow() {
   );
 }
 
-/** The scores the method had over, waiting beside the sheet. */
-async function waitingNow() {
-  return (
-    await world.page.locator('[data-testid="spare-score"]').evaluateAll((nodes) =>
-      nodes.map((one) => one.dataset.score),
-    )
-  ).sort();
-}
-
 /** Everything the roll produced, wherever it currently sits. */
 async function rolledNow() {
-  const sheet = await sheetNow();
-  return [...Object.values(sheet), ...(await waitingNow())].join("|");
+  return (await rolledSet()).join("|");
 }
 
-/** Remember the sheet, so a step after this one can say what moved. */
+/** Remember the sheet, so a step after this one can say what moved.
+ *
+ *  And the set itself, the first time anything is moved since it arrived: what
+ *  the method produced is what the sheet has to still hold afterwards, however
+ *  much it is rearranged. */
 async function remember() {
   world.sheetWas = await sheetNow();
-  world.waitingWas = await waitingNow();
+  if (!world.setWas) world.setWas = await rolledSet();
 }
 
 /** Roll, and wait for a set that is not the one already on screen. */
 async function rollScores() {
+  world.setWas = null;
   world.wasRolled = await rolledNow();
   await world.page.getByTestId("roll-scores").click();
   await world.page.waitForFunction(
@@ -669,35 +667,40 @@ Then("there should be nothing to type", async function () {
   assert.equal(boxes, 0, "the sheet still asked for the numbers to be typed");
 });
 
-Then("there should be nothing to move", async function () {
-  // No arrows and nothing to pick up: every control on the sheet is a button
-  // of one kind or the other, so counting them counts both at once.
+Then("there should be nothing to choose", async function () {
+  // A method that arranges nothing offers no choosers and no boxes: every
+  // control on the sheet is a button of one kind or another, so counting
+  // buttons counts them all.
   const controls = await world.page
     .locator('[data-testid="sheet"] button')
     .count();
-  assert.equal(controls, 0, "a method that arranges nothing offered a move");
+  assert.equal(controls, 0, "a method that arranges nothing offered a choice");
 });
 
-When("I move {string} up", async function (ability) {
-  await remember();
-  await world.page.getByTestId(`move-up-${ability}`).click();
+Then("every ability should say what its score is worth", async function () {
+  const shown = await world.page
+    .locator('[data-testid="sheet"] [data-ability]')
+    .allTextContents();
+  assert.ok(shown.length > 0, "there was no sheet");
+  for (const one of shown) {
+    assert.match(one, /\(\s*[+-]\d+\s*\)/, `no modifier beside ${one}`);
+  }
 });
 
-When("I move {string} down", async function (ability) {
-  await remember();
-  await world.page.getByTestId(`move-down-${ability}`).click();
+Then("no score should say it is worth anything", async function () {
+  // First edition has a table per ability and no general modifier, which
+  // gary-api answers with nothing rather than by halving the distance from
+  // ten. A page showing "(+0)" would be inventing an answer it was not given.
+  const shown = await world.page
+    .locator('[data-testid="sheet"] [data-ability]')
+    .allTextContents();
+  assert.ok(shown.length > 0, "there was no sheet");
+  for (const one of shown) {
+    assert.doesNotMatch(one, /\([+-]/, `${one} claimed to be worth something`);
+  }
 });
 
-Then("{string} and {string} should have swapped", async function (one, two) {
-  const now = await sheetNow();
-  assert.equal(now[one], world.sheetWas[two], `${one} did not take ${two}'s`);
-  assert.equal(now[two], world.sheetWas[one], `${two} did not take ${one}'s`);
-});
-
-async function firstAbility() {
-  return (await sheetOrder())[0];
-}
-
+/** The abilities in the order the sheet lists them. */
 async function sheetOrder() {
   return await world.page.$$eval(
     '[data-testid="sheet"] [data-ability]',
@@ -705,138 +708,113 @@ async function sheetOrder() {
   );
 }
 
-Then("the first ability should not offer to move up", async function () {
-  const found = await world.page.$(`[data-testid="move-up-${await firstAbility()}"]`);
-  assert.equal(found, null, "the first ability offered to swap with nothing");
-});
-
-Then("the last ability should not offer to move down", async function () {
-  const order = await sheetOrder();
-  const found = await world.page.$(
-    `[data-testid="move-down-${order[order.length - 1]}"]`,
-  );
-  assert.equal(found, null, "the last ability offered to swap with nothing");
-});
-
-/**
- * Drag one thing onto another, the way a hand does it.
- *
- * In steps rather than one jump, and past a few pixels first: the pointer
- * sensor waits for a little travel before it calls this a drag rather than a
- * press, which is what keeps the arrows on each row clickable.
- */
-async function dragOnto(source, target) {
-  // Hovered rather than moved to a measured point: hover waits for the thing
-  // to stop moving before it goes near it, and the page is still settling here
-  // — a box measured a moment too early aims the press at whatever has since
-  // slid into that spot, which is a miss that only happens sometimes.
-  await target.scrollIntoViewIfNeeded();
-  await source.hover();
-  await world.page.mouse.down();
-
-  // Past the few pixels that separate a press from a drag, and then a wait for
-  // the page to agree one has begun. dnd-kit measures what can be dropped on
-  // in an animation frame, and synthetic input is quite capable of finishing
-  // the whole gesture inside one — which lands a drop on nothing at all, and
-  // only on a loaded machine, which is the worst way to find out.
-  const held = await source.boundingBox();
-  assert.ok(held, "nothing to drag");
-  await world.page.mouse.move(held.x + held.width / 2 + 12, held.y + held.height / 2);
-  await world.page
-    .locator('[class*="opacity-70"]')
-    .first()
-    .waitFor({ state: "attached", timeout: PATIENCE });
-
-  // Measured now rather than before the lift, for the same reason.
-  const onto = await target.boundingBox();
-  assert.ok(onto, "nowhere to drop it");
-  await world.page.mouse.move(onto.x + onto.width / 2, onto.y + onto.height / 2, {
-    steps: 12,
-  });
-  // And a frame for the move to be taken account of before letting go.
-  await world.page.evaluate(
-    () => new Promise((done) => requestAnimationFrame(() => done(null))),
-  );
-  await world.page.mouse.up();
+/** Open one ability's chooser and take the option at a position in the set. */
+async function give(ability, at) {
+  await world.page.getByTestId(`score-${ability}`).click();
+  await world.page.getByRole("option").nth(at).click();
+  // The trigger closing is the page having taken it.
+  await world.page.getByRole("option").first().waitFor({ state: "detached" });
 }
 
-/**
- * Wait for the drop to be over, so the next step reads a settled sheet.
+/** Where in the rolled set the score on an ability came from.
  *
- * Waiting for the drag to end rather than for a number to change, because two
- * dice can come to the same total: a 4d6 set with two 13s in it swaps exactly
- * as it should and leaves the sheet reading identically, and a step watching
- * the values would call that a drop that never landed. It did exactly that,
- * on a roll that happened to come up 13 twice.
- */
-async function settled() {
-  await world.page
-    .locator('[class*="opacity-70"]')
-    .first()
-    .waitFor({ state: "detached", timeout: PATIENCE });
-  await world.page.evaluate(
-    () => new Promise((done) => requestAnimationFrame(() => done(null))),
+ *  A position and never a value: two dice can come to the same total, and
+ *  "the 13" cannot say which 13 was moved. */
+async function heldAt(ability) {
+  return Number(
+    await world.page
+      .getByTestId(`score-${ability}`)
+      .evaluate((node) => node.getAttribute("data-held")),
   );
 }
 
-When("I drag the score on {string} onto {string}", async function (one, two) {
+When(
+  "I give {string} the score that was on {string}",
+  async function (ability, from) {
+    await remember();
+    await give(ability, await heldAt(from));
+  },
+);
+
+Then("{string} and {string} should have swapped", async function (one, two) {
+  const now = await sheetNow();
+  assert.equal(now[one], world.sheetWas[two], `${one} did not take ${two}'s`);
+  assert.equal(now[two], world.sheetWas[one], `${two} did not take ${one}'s`);
+});
+
+Then("each ability should offer every rolled score", async function () {
+  // Including the ones already somewhere: taking one of those is how two are
+  // swapped, and leaving them out would leave no way to.
+  const wanted = (await rolledSet()).length;
+  for (const ability of await sheetOrder()) {
+    await world.page.getByTestId(`score-${ability}`).click();
+    const offered = await world.page.getByRole("option").count();
+    assert.equal(offered, wanted, `${ability} offered ${offered} of ${wanted}`);
+    await world.page.keyboard.press("Escape");
+    await world.page.getByRole("option").first().waitFor({ state: "detached" });
+  }
+});
+
+/** Every score the method produced, wherever it currently sits. */
+async function rolledSet() {
+  const sheet = Object.values(await sheetNow());
+  return [...sheet, ...(await spareNow())].sort();
+}
+
+Then("the sheet should still hold the whole rolled set", async function () {
+  // None taken twice and none lost. Compared against what was on screen when
+  // the set arrived, because the set is the method's and arranging is only
+  // arranging.
+  assert.deepEqual(await rolledSet(), world.setWas, "the set changed");
+});
+
+Then("there should be scores going spare", async function () {
+  assert.ok((await spareNow()).length > 0, "the spare scores went nowhere");
+});
+
+Then("there should be nothing going spare", async function () {
+  assert.deepEqual(await spareNow(), [], "scores were left over");
+});
+
+/** What nothing is holding, as the page lists it. */
+async function spareNow() {
+  const shown = await world.page.$('[data-testid="spare"]');
+  if (!shown) return [];
+  const text = (await shown.textContent()) ?? "";
+  return (text.match(/\b\d+\b(?=\s*\()/g) ?? []).sort();
+}
+
+When("I give {string} a score that was going spare", async function (ability) {
   await remember();
-  // Picked up by the number, dropped on the row: the row is what accepts a
-  // score, and it is the target a hand aims at too.
-  await dragOnto(
-    world.page.getByTestId(`score-${one}`),
-    world.page.getByTestId(`slot-${two}`),
-  );
-  await settled();
-});
-
-Then("there should be scores waiting beside the sheet", async function () {
-  const waiting = await waitingNow();
-  assert.ok(waiting.length > 0, "the method's spare scores went nowhere");
-});
-
-Then("there should be nothing waiting beside the sheet", async function () {
-  assert.deepEqual(await waitingNow(), [], "scores were left waiting");
-});
-
-When("I drag a waiting score onto {string}", async function (ability) {
-  await remember();
-  world.wasWaiting = await world.page
-    .locator('[data-testid="spare-score"]')
-    .first()
-    .evaluate((one) => one.dataset.score);
-  // What that ability is holding now, which is what the drag has to send back
-  // to wait in its place.
   world.displaced = world.sheetWas[ability];
-  await dragOnto(
-    world.page.locator('[data-testid="spare-score"]').first(),
-    world.page.getByTestId(`slot-${ability}`),
+  // A spare one is a position on the chooser that nothing on the sheet is
+  // holding. Found by position rather than by reading the spare list, which is
+  // a set of numbers and cannot say which of two equal ones is meant.
+  const held = await Promise.all(
+    (await sheetOrder()).map((one) => heldAt(one)),
   );
-  await settled();
+  const size = (await rolledSet()).length;
+  const free = [...Array(size).keys()].filter((at) => !held.includes(at));
+  assert.ok(free.length > 0, "nothing was going spare");
+
+  await world.page.getByTestId(`score-${ability}`).click();
+  const taking = world.page.getByRole("option").nth(free[0]);
+  // What that one reads as, so the step after this can say it arrived.
+  world.wasSpare = ((await taking.textContent()) ?? "").match(/\d+/)[0];
+  await taking.click();
+  await world.page.getByRole("option").first().waitFor({ state: "detached" });
 });
 
 Then("{string} should hold that score", async function (ability) {
   const now = await sheetNow();
-  assert.equal(now[ability], world.wasWaiting, `${ability} holds ${now[ability]}`);
+  assert.equal(now[ability], world.wasSpare, `${ability} holds ${now[ability]}`);
 });
 
-Then("the score it displaced should be waiting", async function () {
-  const waiting = await waitingNow();
+Then("the score it displaced should be going spare", async function () {
+  const spare = await spareNow();
   assert.ok(
-    waiting.includes(world.displaced),
-    `${world.displaced} was displaced but is not waiting: ${waiting.join(", ")}`,
-  );
-});
-
-Then("{word} should have the scores I arranged", async function (name) {
-  // What the party card says the character is made of, against what the sheet
-  // said when they were added. A page that submitted something else would
-  // still have shown the arranging working.
-  const shown = await world.page.textContent(`[data-testid="member-${name}"]`);
-  assert.ok(shown, `${name} is not in the party`);
-  assert.ok(
-    Object.keys(world.sheetWas ?? {}).length > 0,
-    "nothing was arranged before the character was added",
+    spare.includes(world.displaced),
+    `${world.displaced} was displaced but is not spare: ${spare.join(", ")}`,
   );
 });
 

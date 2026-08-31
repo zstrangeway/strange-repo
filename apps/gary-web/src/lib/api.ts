@@ -93,6 +93,11 @@ export type System = {
    *  checks what arrives like any other score. */
   point_costs: Record<string, number>;
   point_budget: number;
+  /** What each score this system allows is worth on a check. A table from the
+   *  system rather than arithmetic here, because the systems disagree about
+   *  whether there is any: third edition onward halves the distance from ten,
+   *  and first edition has a table per ability and no general modifier. */
+  modifiers: Record<string, number>;
   modules: Module[];
 };
 

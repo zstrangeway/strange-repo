@@ -219,4 +219,4 @@ Feature: Making a character, in a browser
     And I roll for scores
     And I choose "point buy"
     Then every ability should start at the cheapest score the table prices
-    And there should be nothing waiting beside the sheet
+    And there should be nothing going spare

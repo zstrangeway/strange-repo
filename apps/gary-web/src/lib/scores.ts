@@ -181,3 +181,38 @@ export function step(
   if (rules.budget > 0 && spent(wanted, rules.costs) > rules.budget) return null;
   return wanted;
 }
+
+/**
+ * What a score is worth on a check, according to the system.
+ *
+ * Never worked out here. The systems disagree about whether there is a general
+ * modifier at all — third edition onward halves the distance from ten, and
+ * first edition has a table per ability and none to apply — so a page doing
+ * the arithmetic itself would run one edition's rule at another's table. That
+ * is the drift the whole system package exists to stop.
+ *
+ * Null when the system priced no such score, which is different from zero: a
+ * zero is a system saying a 10 is worth nothing, and a null is a system that
+ * was never asked about that score. Only the first has anything to show.
+ */
+export function worth(
+  score: number,
+  modifiers: Record<string, number>,
+): number | null {
+  const said = modifiers[String(score)];
+  return said === undefined ? null : said;
+}
+
+/**
+ * Whether a system's modifiers are worth putting on screen at all.
+ *
+ * A presentation question rather than a rule: what a score is worth is still
+ * the system's answer and still comes from it, but a table that answers zero
+ * to everything has nothing to tell anybody. First edition is that table — it
+ * has a table per ability and no general modifier, so gary-api answers nothing
+ * for every score and means it — and printing "(+0)" against all six would be
+ * six pieces of furniture saying the same nothing.
+ */
+export function worthShowing(modifiers: Record<string, number>): boolean {
+  return Object.values(modifiers).some((each) => each !== 0);
+}
