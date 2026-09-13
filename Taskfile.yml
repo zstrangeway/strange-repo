@@ -7,6 +7,9 @@ includes:
   gary-web:
     taskfile: ./apps/gary-web
     dir: ./apps/gary-web
+  creed:
+    taskfile: ./apps/creed
+    dir: ./apps/creed
   scout:
     taskfile: ./apps/scout
     dir: ./apps/scout
@@ -43,3 +46,7 @@ tasks:
       # Last, and needs nothing: no database, no browser, no key. Its own
       # lint runs inside it, the same way gary-web's does.
       - task: scout:test
+      # Same: its own lint runs inside it, and its specs serve their own copy
+      # of the Wahapedia export on localhost rather than reaching the real
+      # one, so the suite does not depend on somebody else being up.
+      - task: creed:test

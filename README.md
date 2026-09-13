@@ -16,6 +16,7 @@ a conviction about what models should not be trusted to decide.
 | App | Stack | What it is |
 | --- | --- | --- |
 | [`apps/scout`](apps/scout) | Python CLI + MCP server | A local-first job search assistant: save a posting, tailor a resume to it, approve what gets sent, log where it got to |
+| [`apps/creed`](apps/creed) | Python CLI + MCP server | Warhammer 40,000 rules and stats from Wahapedia's data export: look a datasheet up, find the stratagem that applies, build a list and have it checked |
 
 Play is divided into **scenes**, which are the unit of gary's memory: the
 model is told the current scene and a recap of each one before it, so a long

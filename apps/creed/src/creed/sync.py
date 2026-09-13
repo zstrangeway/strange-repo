@@ -262,10 +262,11 @@ def sync(
 
         # Start from what is already here: unchanged tables keep their rows
         # without being downloaded, and the army lists come across untouched.
+        # The live file always exists by now: reading the sync state above
+        # opened it, and sqlite3.connect creates what it opens.
         staging.parent.mkdir(parents=True, exist_ok=True)
         staging.unlink(missing_ok=True)
-        if live.exists():
-            shutil.copyfile(live, staging)
+        shutil.copyfile(live, staging)
 
         try:
             connection = db.connect(staging)
