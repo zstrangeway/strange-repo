@@ -1,0 +1,73 @@
+[project]
+name = "creed"
+version = "0.1.0"
+description = "Warhammer 40,000 rules and stats over Wahapedia's data export"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    # The stdio server. `mcp` is the official SDK and brings its own
+    # transport, so nothing here frames JSON-RPC by hand. Same choice as
+    # scout, for the same reason.
+    "mcp>=1.30.0",
+    # Conditional GET is the whole freshness mechanism, so the client needs
+    # to pass If-None-Match through and hand back a 304 rather than swallow
+    # it. httpx does; it is also already the repo's HTTP client.
+    "httpx>=0.28.1",
+    # Every description field in the export is HTML, and not the small set it
+    # looks like at a glance — the abilities table alone holds 580 table
+    # tags, 209 list tags and 807 spans. Tables and nested lists are exactly
+    # what a hand-rolled stripper turns into a run-on sentence, so this is a
+    # library's job. Pulls beautifulsoup4.
+    "markdownify>=1.2.3",
+]
+
+[project.scripts]
+creed = "creed.cli:main"
+creed-mcp = "creed.mcp_server:main"
+
+[build-system]
+requires = ["uv_build>=0.8.17,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "behave>=1.3.3",
+    "coverage>=7.15.4",
+    "ruff>=0.15.0",
+]
+
+[tool.coverage.run]
+source = ["src/creed"]
+branch = true
+# The MCP specs drive a real server subprocess, which records its own data
+# file; `coverage combine` in the test task merges them.
+parallel = true
+# That subprocess is stopped by the transport rather than exiting on its own,
+# and without this its coverage is thrown away on the signal.
+sigterm = true
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 100
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "^\\s*\\.\\.\\.$",
+]
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
+ignore = [
+    # Rules text is full of typographic quotes and dashes straight out of the
+    # export. They are the data, not a mistake to flag.
+    "RUF001",
+    "RUF002",
+    "RUF003",
+    # Datasheet stat columns are M, T, Sv, W, Ld, OC, A, S, AP, D. Those are
+    # the names on the datasheet and renaming them to satisfy a linter would
+    # make every query harder to check against the source.
+    "N815",
+    "N806",
+]

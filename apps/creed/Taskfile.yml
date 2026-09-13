@@ -1,0 +1,32 @@
+version: '3'
+
+tasks:
+  lint:
+    desc: Lint and format-check, and fail on anything
+    cmds:
+      - uv run ruff check .
+      - uv run ruff format --check .
+
+  sync:
+    desc: Pull the current Wahapedia export into the local database
+    cmds:
+      - uv run creed sync
+
+  mcp:
+    desc: Run the MCP server on stdio (what the Claude Code config block runs)
+    cmds:
+      - uv run creed-mcp
+
+  test:
+    desc: Lint, then the specs and unit tests under one 100% coverage gate
+    cmds:
+      - task: lint
+      - uv run coverage erase
+      # --parallel, because the MCP specs drive a real server subprocess and
+      # its coverage lands in a separate data file. Without the combine below,
+      # every line of mcp_server.py reads as uncovered while the specs that
+      # drive it pass.
+      - uv run coverage run --parallel -m behave
+      - uv run coverage run --parallel -m unittest discover -s tests
+      - uv run coverage combine
+      - uv run coverage report
