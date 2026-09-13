@@ -256,7 +256,8 @@ def sync(
             db.set_state(connection, LAST_CHECKED_KEY, _now())
         if held == marker and not force:
             result.already_current = True
-            report(f"already current at {marker}")
+            # Deliberately not reported here. Both callers say this in their
+            # own words, and saying it here too printed it twice.
             return result
 
         # Start from what is already here: unchanged tables keep their rows
@@ -302,5 +303,7 @@ def sync(
     # The swap. os.replace is atomic on every platform creed runs on, so a
     # reader either sees the whole old database or the whole new one.
     os.replace(staging, live)
-    report(f"synced to {marker}: {result.rows} rows")
+    # No summary line here. `on_progress` reports per-table detail; the
+    # caller says what the whole sync amounted to, in its own words, and
+    # doing both printed every outcome twice.
     return result
