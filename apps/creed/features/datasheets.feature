@@ -14,7 +14,7 @@ Feature: Looking up a datasheet
   # the steps are written; the shapes are what is being agreed.
 
   Background:
-    Given magos has a complete sync
+    Given creed has a complete sync
 
   # -------------------------------------------------------------- finding one
 
@@ -37,7 +37,7 @@ Feature: Looking up a datasheet
   Scenario: A name that several factions have
     When I search datasheets for a name more than one faction uses
     Then the results should name each faction that has it
-    And magos should not pick one on my behalf
+    And creed should not pick one on my behalf
 
   Scenario: Narrowing by faction
     When I search datasheets for "captain" in the Space Marines
@@ -45,8 +45,8 @@ Feature: Looking up a datasheet
 
   Scenario: Nothing matches
     When I search datasheets for "Emperor's Own Breakfast Cereal"
-    Then magos should say nothing matched
-    And magos should not invent a datasheet
+    Then creed should say nothing matched
+    And creed should not invent a datasheet
 
   # ------------------------------------------------------- what comes back
 
@@ -93,20 +93,39 @@ Feature: Looking up a datasheet
 
   # ---------------------------------------------------- rules text a model reads
 
-  # Every description field in the export is HTML: <b>, <br>, and
-  # <span class="kwb"> around keywords. Handing that to a model wastes tokens
-  # and reads badly if it is ever shown to a person; stripping it naively
-  # welds words together where a <br> was the only thing separating them.
+  # Every description field in the export is HTML, and it is not the small
+  # set it looks like at a glance. Across the abilities table alone: 807
+  # spans, 580 table tags, 209 list tags, 257 <br>, plus links, images, and a
+  # nonstandard <ky>. So this goes through markdownify rather than anything
+  # hand-rolled — real tables and nested lists are exactly what a regex
+  # stripper turns into a run-on sentence.
+  #
+  # Wahapedia marks rules keywords with <span class="kwb">. Stock markdownify
+  # flattens that, and the emphasis is load-bearing: the rules mean something
+  # different by TYRANIDS than by the word "tyranids". A converter subclass
+  # keeps it.
   Scenario: Rules text comes back readable
     When I look up a datasheet whose ability text is marked up
     Then the ability text should have no HTML tags in it
     And the line breaks in the original should still be line breaks
-    And the keywords the original emphasised should still be distinguishable
+
+  Scenario: Rules keywords keep their emphasis
+    When I look up an ability that emphasises a keyword
+    Then that keyword should still be emphasised in the markdown
+
+  Scenario: A rule written as a table stays a table
+    When I look up an ability whose text contains a table
+    Then the answer should render it as a markdown table
+    And no cell's text should have run into the next
+
+  Scenario: A rule written as a list stays a list
+    When I look up an ability whose text contains a list
+    Then each item should still be its own item
 
   # -------------------------------------------------------------- browsing
 
   Scenario: Listing the factions
-    When I ask magos for the factions
+    When I ask creed for the factions
     Then I should get every faction in the export
     And each should carry the id the other tools take
 

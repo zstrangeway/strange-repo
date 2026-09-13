@@ -1,10 +1,10 @@
-Feature: magos as an MCP server
+Feature: creed as an MCP server
   As someone who lives in a Claude Code session
   I want the rules as tools
   So that a model answering a rules question is reading the export, not its training data
 
   # Same approach as scout's MCP specs, for the same reason: these drive a
-  # real MCP client over a real stdio pipe to a real magos process against a
+  # real MCP client over a real stdio pipe to a real creed process against a
   # real SQLite file. A stdio server is broken by things no in-process test
   # can see — a stray print, a slow import, a missing entry point — and every
   # one of those reaches a human as "server disconnected" with nothing to
@@ -14,9 +14,9 @@ Feature: magos as an MCP server
   # second surface onto the capability, not a second implementation.
 
   Background:
-    Given a scratch magos directory
-    And magos has a complete sync
-    And magos's MCP server running over stdio
+    Given a scratch creed directory
+    And creed has a complete sync
+    And creed's MCP server running over stdio
 
   # ------------------------------------------------------------ the surface
 
@@ -33,7 +33,7 @@ Feature: magos as an MCP server
     When I ask the server what tools it has
     Then the tools should include one for reporting data freshness
     And that tool should report the export's update timestamp
-    And that tool should report when magos last checked
+    And that tool should report when creed last checked
 
   Scenario: Every tool says what it needs
     When I ask the server what tools it has
@@ -84,7 +84,7 @@ Feature: magos as an MCP server
   # data goes stale. So it happens around the call, and the call says what it
   # is reading.
   Scenario: A sync landing does not interrupt a call in flight
-    Given the export has been updated since magos synced
+    Given the export has been updated since creed synced
     When I call the datasheet tool for "Custodian Guard"
     Then the call should succeed
     And the reply should say which sync it was answering from
@@ -102,7 +102,7 @@ Feature: magos as an MCP server
   # Syncing writes progress somewhere. If that somewhere is stdout, the first
   # sync breaks the protocol — and it is the one that always runs.
   Scenario: Syncing says what it did, on stderr
-    Given magos has never synced
+    Given creed has never synced
     When the server starts and syncs
     Then the sync's progress should have gone to stderr
     And the sync should report how many rows it loaded

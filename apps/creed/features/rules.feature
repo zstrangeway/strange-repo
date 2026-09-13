@@ -10,7 +10,7 @@ Feature: Looking up stratagems, abilities and enhancements
   # answer to.
 
   Background:
-    Given magos has a complete sync
+    Given creed has a complete sync
 
   # ------------------------------------------------------------ stratagems
 
@@ -76,10 +76,10 @@ Feature: Looking up stratagems, abilities and enhancements
   # is worse than no answer at all — somebody will spend a CP on it.
   Scenario: A stratagem nobody has
     When I look up a stratagem that is not in the export
-    Then magos should say it found nothing
-    And magos should not describe a stratagem it does not have
+    Then creed should say it found nothing
+    And creed should not describe a stratagem it does not have
 
   Scenario: A phase that is not a phase
     When I ask for stratagems in the "Breakfast phase"
-    Then magos should say which phases there are
-    And magos should not return an empty list as though it were an answer
+    Then creed should say which phases there are
+    And creed should not return an empty list as though it were an answer
