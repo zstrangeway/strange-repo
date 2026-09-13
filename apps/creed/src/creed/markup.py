@@ -19,6 +19,7 @@ from markdownify import MarkdownConverter
 # and so on). Matching the prefix rather than the exact list means a new
 # variant reads as a keyword instead of silently losing its emphasis.
 _KEYWORD_CLASS_PREFIX = "kw"
+_VERSION_CLASS = "h_number"
 
 
 class _WahapediaConverter(MarkdownConverter):
@@ -28,7 +29,22 @@ class _WahapediaConverter(MarkdownConverter):
         classes = el.get("class") or []
         if any(name.startswith(_KEYWORD_CLASS_PREFIX) for name in classes):
             return f"**{text}**"
+        # Wahapedia's rules-version marker sits inside the ability's name with
+        # no separator, so it reads as "DEEP STRIKE24.09". It is worth keeping
+        # — it says which rules commentary the text is from — but not worth
+        # welding to the name.
+        if _VERSION_CLASS in classes:
+            return f" ({text})"
         return text
+
+    # Wahapedia lays rules text out in divs, and markdownify has no rule for
+    # a div, so its text passes through with nothing between it and the next
+    # block. That welds an ability's name onto its version marker onto its
+    # first sentence — "DEEP STRIKE24.09There are many ways...". Treating a
+    # div as the block element it is puts the breaks back.
+    def convert_div(self, el, text, parent_tags=None):
+        text = (text or "").strip()
+        return f"\n\n{text}\n\n" if text else ""
 
     # <ky> is Wahapedia's own tag and means the same thing as a kwb span.
     # BeautifulSoup parses it as an unknown element and markdownify passes its
