@@ -59,15 +59,15 @@ Feature: creed as an MCP server
   # ---------------------------------------------------------- doing work
 
   Scenario: Looking up a datasheet through the server
-    When I call the datasheet tool for "Custodian Guard"
+    When I call the datasheet tool for "Testudo Guard"
     Then the call should succeed
     And the reply should carry its statline and weapons
     And the reply should carry the export's update timestamp
 
   Scenario: Searching through the server
-    When I call the search tool for "contemptor"
+    When I call the search tool for "walker"
     Then the call should succeed
-    And the reply should include "Venerable Contemptor Dreadnought"
+    And the reply should include "Testudo Walker"
 
   Scenario: Finding a stratagem through the server
     When I call the stratagem tool for my own turn in the Shooting phase
@@ -75,7 +75,7 @@ Feature: creed as an MCP server
     And every stratagem in the reply should match both
 
   Scenario: Building a list through the server
-    When I call the start-list tool for the Adeptus Custodes at 2000 points
+    When I call the start-list tool for the Test Guard at 2000 points
     And I call the add-unit tool twice
     And I call the show-list tool
     Then the reply should carry both units and the total
@@ -123,24 +123,24 @@ Feature: creed as an MCP server
   # is reading.
   Scenario: A sync landing does not interrupt a call in flight
     Given the export has been updated since creed synced
-    When I call the datasheet tool for "Custodian Guard"
+    When I call the datasheet tool for "Testudo Guard"
     Then the call should succeed
     And the reply should say which sync it was answering from
 
   # ---------------------------------------------------------- the pipe itself
 
   Scenario: Nothing but protocol on stdout
-    When I call the datasheet tool for "Custodian Guard"
+    When I call the datasheet tool for "Testudo Guard"
     Then everything the server wrote to stdout should be protocol frames
 
   Scenario: Its logs go to stderr
-    When I call the datasheet tool for "Custodian Guard"
+    When I call the datasheet tool for "Testudo Guard"
     Then the server's own log lines should have gone to stderr
 
   # Syncing writes progress somewhere. If that somewhere is stdout, the first
   # sync breaks the protocol — and it is the one that always runs.
   Scenario: Syncing says what it did, on stderr
-    Given creed has never synced
+    Given a creed with no data yet
     When the server starts and syncs
     Then the sync's progress should have gone to stderr
     And the sync should report how many rows it loaded

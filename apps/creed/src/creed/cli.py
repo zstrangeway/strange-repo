@@ -163,13 +163,23 @@ def _list_add(args) -> int:
     with db.session() as connection:
         try:
             provenance = answers.provenance(connection)
-            sheets = datasheets.by_name(connection, args.unit)
-            if not sheets:
-                found = datasheets.search(connection, args.unit)
-                if not found.matches:
-                    return _fail(f"no datasheet matched {args.unit!r}")
-                sheets = [datasheets.get(connection, found.matches[0].id)]
-            unit_id = army.add_unit(connection, args.list, sheets[0].id, args.models)
+            # An id first: `creed search` prints them, so they have to work as
+            # input to this. Then an exact name, then a search.
+            sheet = datasheets.get(connection, args.unit)
+            if sheet is None:
+                sheets = datasheets.by_name(connection, args.unit, args.faction)
+                if len(sheets) > 1:
+                    return _fail(
+                        f"{len(sheets)} datasheets are called {args.unit!r}. "
+                        "Pass an id, or --faction."
+                    )
+                if not sheets:
+                    found = datasheets.search(connection, args.unit, args.faction)
+                    if not found.matches:
+                        return _fail(f"no datasheet matched {args.unit!r}")
+                    sheets = [datasheets.get(connection, found.matches[0].id)]
+                sheet = sheets[0]
+            unit_id = army.add_unit(connection, args.list, sheet.id, args.models)
             priced = army.price(connection, args.list)
         except (answers.NotSyncedError, army.ListError) as error:
             return _fail(str(error))
@@ -335,6 +345,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_parser = list_subparsers.add_parser("add")
     add_parser.add_argument("list", type=int)
     add_parser.add_argument("unit")
+    add_parser.add_argument("--faction")
     add_parser.add_argument("--models", type=int)
     add_parser.set_defaults(handler=_list_add)
 

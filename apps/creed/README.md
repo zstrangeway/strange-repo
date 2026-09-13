@@ -12,3 +12,36 @@ Powered by [Wahapedia][waha]. Please consider supporting the project there.
 
 [export]: https://wahapedia.ru/wh40k11ed/the-rules/data-export/
 [waha]: https://wahapedia.ru
+
+## Using it from Claude Code
+
+```json
+{
+  "mcpServers": {
+    "creed": {
+      "command": "uv",
+      "args": ["run", "--directory", "apps/creed", "creed-mcp"]
+    }
+  }
+}
+```
+
+The server syncs on startup and then answers from the local database. Set
+`CREED_SYNC_ON_START=0` to skip that and use whatever was last synced.
+
+## On the command line
+
+```
+creed sync                       # pull the current export
+creed status                     # how fresh the data is
+creed search contemptor          # find datasheets
+creed show "Custodian Guard"     # one datasheet, whole
+creed stratagems --phase Shooting --turn "Your turn" --max-cp 1
+creed detachments --faction "Adeptus Custodes"
+creed attack "Custodian Guard" "Nobz" --weapon "Guardian spear" --models 4
+creed list new my-army "Adeptus Custodes" --points 2000
+creed list check 1
+```
+
+`creed list check` reports what it checked and names the core rules it cannot
+check. It never says a list is legal.

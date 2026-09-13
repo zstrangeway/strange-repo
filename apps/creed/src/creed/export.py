@@ -14,9 +14,21 @@ at it would mean an app whose specs all pass and whose data is permanently
 out of date, which is the one thing this app exists not to be.
 """
 
+import os
 from dataclasses import dataclass
 
-BASE_URL = "https://wahapedia.ru/wh40k11ed"
+DEFAULT_BASE_URL = "https://wahapedia.ru/wh40k11ed"
+
+
+def base_url() -> str:
+    """Where the export lives.
+
+    Overridable so the specs can serve their own copy on localhost. A spec
+    that reached the real site would fail whenever somebody was on a train,
+    and would be testing Wahapedia's uptime rather than creed.
+    """
+    return os.environ.get("CREED_EXPORT_BASE", DEFAULT_BASE_URL).rstrip("/")
+
 
 # Pipe-delimited, UTF-8 with a BOM. The BOM is not cosmetic: it lands on the
 # first header name, so decoding as plain utf-8 leaves the first column called
@@ -45,7 +57,7 @@ class Table:
 
     @property
     def url(self) -> str:
-        return f"{BASE_URL}/{self.name}.csv"
+        return f"{base_url()}/{self.name}.csv"
 
 
 # Ordered as the specification orders them, so a diff against the workbook is

@@ -9,7 +9,7 @@ Feature: Detachments
   #
   # Detachments.csv and Detachments_chapter_dp.csv are the two tables missing
   # from creed's first pass at the export. The second exists because DP is
-  # not a property of the detachment alone: a Space Marines detachment gives
+  # not a property of the detachment alone: a Test Guard detachment gives
   # a different number to Black Templars than to Blood Angels.
 
   Background:
@@ -18,13 +18,13 @@ Feature: Detachments
   # --------------------------------------------------------------- browsing
 
   Scenario: The detachments a faction has
-    When I ask for the Adeptus Custodes detachments
-    Then every result should be an Adeptus Custodes detachment
+    When I ask for the Test Guard detachments
+    Then every result should be a Test Guard detachment
     And each should carry its Detachment Points
     And each should carry its Force Disposition
 
   Scenario: What one detachment gives an army
-    When I ask what the "Talons Of The Emperor" detachment does
+    When I ask what the "Shield Doctrine" detachment does
     Then I should get its detachment ability
     And I should get the stratagems it brings
     And I should get the enhancements it brings

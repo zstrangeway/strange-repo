@@ -20,7 +20,7 @@ Feature: Working out an attack
   # ------------------------------------------------------------- the basics
 
   Scenario: One unit shooting another
-    When I work out "Custodian Guard" shooting at a target datasheet
+    When I work out "Testudo Guard" shooting at a target datasheet
     Then I should get the chance to hit
     And I should get the chance to wound
     And I should get the chance the save fails

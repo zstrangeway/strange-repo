@@ -22,18 +22,18 @@ Feature: Building an army list
   # ----------------------------------------------------------- starting one
 
   Scenario: Starting a list
-    When I start a list for the Adeptus Custodes at 2000 points
+    When I start a list for the Test Guard at 2000 points
     Then the list should be empty
     And the list should know its faction and its points limit
 
   Scenario: Choosing a detachment
-    Given a list for the Adeptus Custodes at 2000 points
-    When I set its detachment to "Talons Of The Emperor"
+    Given a list for the Test Guard at 2000 points
+    When I set its detachment to "Shield Doctrine"
     Then the list should carry that detachment
     And the list should carry that detachment's Detachment Points
 
   Scenario: A detachment the faction does not have
-    Given a list for the Adeptus Custodes at 2000 points
+    Given a list for the Test Guard at 2000 points
     When I set its detachment to one belonging to another faction
     Then creed should refuse
     And creed should say which detachments that faction has
@@ -41,19 +41,19 @@ Feature: Building an army list
   # ------------------------------------------------------------ adding units
 
   Scenario: Adding a unit
-    Given a list for the Adeptus Custodes at 2000 points
-    When I add a "Custodian Guard" at its smallest size
+    Given a list for the Test Guard at 2000 points
+    When I add a "Testudo Guard" at its smallest size
     Then the list should hold one unit
     And the list's total should be that unit's cost
 
   Scenario: Adding a unit at a size it comes in
-    Given a list for the Adeptus Custodes at 2000 points
-    When I add a "Custodian Guard" of 10 models
+    Given a list for the Test Guard at 2000 points
+    When I add a "Testudo Guard" of 10 models
     Then that unit should be priced at the 10-model cost
 
   Scenario: A size the unit does not come in
-    Given a list for the Adeptus Custodes at 2000 points
-    When I add a "Custodian Guard" of 7 models
+    Given a list for the Test Guard at 2000 points
+    When I add a "Testudo Guard" of 7 models
     Then creed should refuse
     And creed should say which sizes it comes in
 
@@ -99,12 +99,12 @@ Feature: Building an army list
     And I should get the total and what remains of the limit
 
   Scenario: Knowing how much room is left
-    Given a list for the Adeptus Custodes at 2000 points holding 1750 points
+    Given a list for the Test Guard at 2000 points holding 1750 points
     When I ask to see it
     Then creed should say 250 points remain
 
   Scenario: A list over its limit
-    Given a list for the Adeptus Custodes at 2000 points
+    Given a list for the Test Guard at 2000 points
     When I add units coming to 2100 points
     Then creed should say it is 100 points over
     And creed should still let me see the list
@@ -113,7 +113,7 @@ Feature: Building an army list
   # refusing to add the fourth unit because the third made it illegal is how
   # a tool becomes something people work around.
   Scenario: Going over is a warning, not a refusal
-    Given a list for the Adeptus Custodes at 2000 points holding 1990 points
+    Given a list for the Test Guard at 2000 points holding 1990 points
     When I add a unit costing 200 points
     Then the unit should be added
     And creed should warn that the list is over
@@ -142,8 +142,8 @@ Feature: Building an army list
     And creed should say that datasheet is no longer in the export
 
   Scenario: More than one list
-    Given a list for the Adeptus Custodes
-    And a list for the Astra Militarum
+    Given a list for the Test Guard
+    And a list for the Test Xenos
     When I ask for my lists
     Then I should get both
     And working on one should not touch the other

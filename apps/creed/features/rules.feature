@@ -15,7 +15,7 @@ Feature: Looking up stratagems, abilities and enhancements
   # ------------------------------------------------------------ stratagems
 
   Scenario: By name
-    When I look up the stratagem "Explosive Clearance"
+    When I look up the stratagem "BRACE"
     Then I should get that stratagem
     And it should carry its CP cost
     And it should carry when it can be used and what it does
@@ -43,13 +43,13 @@ Feature: Looking up stratagems, abilities and enhancements
     Then every result should satisfy all three
 
   Scenario: A unit's own stratagems
-    When I ask which stratagems apply to "Custodian Guard"
+    When I ask which stratagems apply to "Testudo Guard"
     Then the results should be the ones the export ties to that datasheet
 
   # ------------------------------------------------------------- abilities
 
   Scenario: Looking up a named ability
-    When I look up the ability "Synapse"
+    When I look up the ability "Testudo Resolve"
     Then I should get its rules text
     And it should say which faction it belongs to
 

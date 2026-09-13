@@ -7,7 +7,7 @@ Feature: Looking up a datasheet
   # its models' stats, its wargear, its abilities, its keywords, its unit
   # composition, its points, and who it can lead. Every one of those is a
   # join away from the datasheet id. Handing back one of them is not an
-  # answer to "what is a Custodian Guard" — putting them together is the
+  # answer to "what is a Testudo Guard" — putting them together is the
   # whole job.
   #
   # Numbers here are placeholders and will be pinned to the real export when
@@ -19,18 +19,18 @@ Feature: Looking up a datasheet
   # -------------------------------------------------------------- finding one
 
   Scenario: By its exact name
-    When I look up "Custodian Guard"
+    When I look up "Testudo Guard"
     Then I should get one datasheet
-    And it should be the Adeptus Custodes one
+    And it should be the Test Guard one
 
-  # Nobody types "Venerable Contemptor Dreadnought" correctly the first time.
+  # Nobody types "Testudo Walker" correctly the first time.
   Scenario: By part of its name
-    When I search datasheets for "contemptor"
-    Then the results should include "Venerable Contemptor Dreadnought"
+    When I search datasheets for "walker"
+    Then the results should include "Testudo Walker"
 
   Scenario: Case and punctuation should not matter
-    When I search datasheets for "custodian guard"
-    Then the results should include "Custodian Guard"
+    When I search datasheets for "testudo guard"
+    Then the results should include "Testudo Guard"
 
   # The same name appears under more than one faction, and picking one
   # silently is how somebody ends up quoting the wrong statline.
@@ -40,8 +40,8 @@ Feature: Looking up a datasheet
     And creed should not pick one on my behalf
 
   Scenario: Narrowing by faction
-    When I search datasheets for "captain" in the Space Marines
-    Then every result should be a Space Marines datasheet
+    When I search datasheets for "captain" in the Test Guard
+    Then every result should be a Test Guard datasheet
 
   Scenario: Nothing matches
     When I search datasheets for "Emperor's Own Breakfast Cereal"
@@ -51,7 +51,7 @@ Feature: Looking up a datasheet
   # ------------------------------------------------------- what comes back
 
   Scenario: A datasheet comes back whole
-    When I look up "Custodian Guard"
+    When I look up "Testudo Guard"
     Then the answer should include its statline
     And the answer should include its weapon profiles
     And the answer should include its abilities
@@ -151,6 +151,6 @@ Feature: Looking up a datasheet
     And each should carry the id the other tools take
 
   Scenario: Listing a faction's datasheets
-    When I ask for the Adeptus Custodes datasheets
-    Then every result should be an Adeptus Custodes datasheet
+    When I ask for the Test Guard datasheets
+    Then every result should be a Test Guard datasheet
     And each should carry enough to look it up in full

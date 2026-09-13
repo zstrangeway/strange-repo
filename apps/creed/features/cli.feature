@@ -34,7 +34,7 @@ Feature: creed on the command line
 
   Scenario: Looking up a datasheet
     Given creed has a complete sync
-    When I look up "Custodian Guard" on the command line
+    When I look up "Testudo Guard" on the command line
     Then I should get its statline, weapons and abilities
 
   Scenario: Building a list
@@ -44,7 +44,7 @@ Feature: creed on the command line
 
   Scenario: A command that needs data before there is any
     Given creed has never synced
-    When I look up "Custodian Guard" on the command line
+    When I look up "Testudo Guard" on the command line
     Then creed should say to sync first
     And creed should exit non-zero
 

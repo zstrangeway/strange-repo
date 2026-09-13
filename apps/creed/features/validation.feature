@@ -27,19 +27,19 @@ Feature: Checking a list
   # -------------------------------------------------- what the data can check
 
   Scenario: A list within its points limit
-    Given a list for the Adeptus Custodes at 2000 points holding 1980 points
+    Given a list for the Test Guard at 2000 points holding 1980 points
     When I check it
     Then the points check should pass
 
   Scenario: A list over its points limit
-    Given a list for the Adeptus Custodes at 2000 points holding 2100 points
+    Given a list for the Test Guard at 2000 points holding 2100 points
     When I check it
     Then the points check should fail
     And it should say by how much
 
   Scenario: A unit from the wrong faction
-    Given a list for the Adeptus Custodes
-    When I add a datasheet belonging to the Astra Militarum
+    Given a list for the Test Guard
+    When I add a datasheet belonging to the Test Xenos
     And I check it
     Then the check should fail
     And it should name the unit and its faction
@@ -70,7 +70,7 @@ Feature: Checking a list
     Then the attachment check should pass
 
   Scenario: An enhancement from another detachment
-    Given a list whose detachment is "Talons Of The Emperor"
+    Given a list whose detachment is "Shield Doctrine"
     When I give a character an enhancement from a different detachment
     And I check it
     Then the check should fail
