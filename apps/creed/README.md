@@ -26,8 +26,18 @@ Powered by [Wahapedia][waha]. Please consider supporting the project there.
 }
 ```
 
-The server syncs on startup and then answers from the local database. Set
-`CREED_SYNC_ON_START=0` to skip that and use whatever was last synced.
+The server syncs on startup, then checks hourly for anything new and re-syncs
+only when the export has actually moved. The check costs one request for a
+39-byte file, and a re-sync pays only for the tables that changed.
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `CREED_HOME` | `~/.cache/creed` | Where the database lives |
+| `CREED_SYNC_ON_START` | `1` | `0` skips the startup sync |
+| `CREED_CHECK_INTERVAL` | `3600` | Seconds between checks; `0` turns them off |
+
+Every answer carries the date of the data behind it, so a model reading one
+can say how current it is.
 
 ## On the command line
 

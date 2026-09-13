@@ -23,6 +23,7 @@ Three rules this file exists to keep:
 import logging
 import os
 import sys
+import threading
 
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
@@ -406,6 +407,48 @@ def data_freshness() -> str:
     )
 
 
+# How often the server asks whether anything moved. The marker file is 39
+# bytes, so this is affordable at almost any interval; hourly is chosen
+# because a dataslate is a monthly event and a check that costs one small
+# request does not need to be more eager than the thing it watches.
+CHECK_INTERVAL_SECONDS = int(os.environ.get("CREED_CHECK_INTERVAL", "3600"))
+
+
+def _refresh_once() -> None:
+    """One check, and a sync only if the export actually moved."""
+    try:
+        result = sync.sync(on_progress=lambda line: logger.info("%s", line))
+    except ExportUnreachableError as error:
+        logger.warning("could not reach the export (%s); keeping what is here", error)
+        return
+    if result.failed:
+        logger.warning("sync failed (%s); keeping what was already here", result.failed)
+    elif not result.already_current:
+        logger.info("refreshed to %s: %s rows", result.last_update, result.rows)
+
+
+def _start_refresher(stop: threading.Event) -> threading.Thread | None:
+    """Keep checking while the server runs, on a daemon thread.
+
+    A thread rather than work inside a tool call: syncing is 8.4MB over
+    twenty-one requests and nothing should block a model's turn on that. The
+    swap it ends with is atomic, so a call in flight reads either the whole
+    old database or the whole new one.
+    """
+    if CHECK_INTERVAL_SECONDS <= 0:
+        logger.info("periodic checks disabled")
+        return None
+
+    def loop() -> None:
+        while not stop.wait(CHECK_INTERVAL_SECONDS):
+            _refresh_once()
+
+    thread = threading.Thread(target=loop, name="creed-refresh", daemon=True)
+    thread.start()
+    logger.info("checking for updates every %s seconds", CHECK_INTERVAL_SECONDS)
+    return thread
+
+
 def _sync_on_start() -> None:
     """Bring the data up to date before serving, and never on stdout.
 
@@ -447,7 +490,12 @@ def main() -> int:
     # the lines creed writes about what it actually did.
     logging.getLogger("httpx").setLevel(logging.WARNING)
     _sync_on_start()
-    server.run("stdio")
+    stop = threading.Event()
+    _start_refresher(stop)
+    try:
+        server.run("stdio")
+    finally:
+        stop.set()
     return 0
 
 

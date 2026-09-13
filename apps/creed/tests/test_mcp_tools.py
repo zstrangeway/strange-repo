@@ -274,3 +274,61 @@ class TestServerEntryPoint(CreedTestCase):
             run.assert_called_once_with("stdio")
         finally:
             os.environ.pop("CREED_SYNC_ON_START", None)
+
+
+class TestPeriodicRefresh(CreedTestCase):
+    def test_a_check_that_finds_nothing_new_changes_nothing(self):
+        before = mcp_server.sync.status()["last_update"]
+        mcp_server._refresh_once()
+        self.assertEqual(mcp_server.sync.status()["last_update"], before)
+
+    def test_a_check_that_finds_a_new_export_picks_it_up(self):
+        self.site.set_last_update("2027-02-02 02:02:02")
+        self.site.change_price("D1", " 100", "111")
+        mcp_server._refresh_once()
+        self.assertEqual(mcp_server.sync.status()["last_update"], "2027-02-02 02:02:02")
+
+    def test_an_unreachable_export_is_not_fatal(self):
+        self.site.offline = True
+        mcp_server._refresh_once()
+        self.assertEqual(mcp_server.sync.status()["last_update"], "2026-01-01 00:00:00")
+
+    def test_a_failed_refresh_keeps_the_data_it_had(self):
+        self.site.set_last_update("2027-02-02 02:02:02")
+        self.site.fail_after = 2
+        mcp_server._refresh_once()
+        self.assertEqual(mcp_server.sync.status()["last_update"], "2026-01-01 00:00:00")
+
+    def test_the_refresher_starts_and_stops(self):
+        import threading
+
+        stop = threading.Event()
+        thread = mcp_server._start_refresher(stop)
+        self.assertIsNotNone(thread)
+        stop.set()
+        thread.join(timeout=5)
+        self.assertFalse(thread.is_alive())
+
+    def test_it_can_be_turned_off(self):
+        import threading
+        import unittest.mock
+
+        with unittest.mock.patch.object(mcp_server, "CHECK_INTERVAL_SECONDS", 0):
+            self.assertIsNone(mcp_server._start_refresher(threading.Event()))
+
+    def test_the_refresher_runs_on_its_interval(self):
+        import threading
+        import unittest.mock
+
+        ran = threading.Event()
+        with (
+            unittest.mock.patch.object(mcp_server, "CHECK_INTERVAL_SECONDS", 0.01),
+            unittest.mock.patch.object(
+                mcp_server, "_refresh_once", side_effect=lambda: ran.set()
+            ),
+        ):
+            stop = threading.Event()
+            thread = mcp_server._start_refresher(stop)
+            self.assertTrue(ran.wait(5), "the refresher never ran")
+            stop.set()
+            thread.join(timeout=5)
