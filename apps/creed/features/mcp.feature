@@ -26,6 +26,22 @@ Feature: creed as an MCP server
     And the tools should include one for getting a datasheet whole
     And the tools should include one for finding stratagems
     And the tools should include one for listing factions
+    And the tools should include one for detachments
+
+  Scenario: The list-building tools are there
+    When I ask the server what tools it has
+    Then the tools should include one for starting a list
+    And the tools should include one for adding a unit to a list
+    And the tools should include one for removing a unit from a list
+    And the tools should include one for seeing a list
+    And the tools should include one for checking a list
+
+  # The arithmetic is the reason to have a tool rather than let the model do
+  # it: a wound roll one pip off looks exactly like a correct one.
+  Scenario: And one for working out an attack
+    When I ask the server what tools it has
+    Then the tools should include one for working out an attack
+    And that tool should take two datasheets rather than typed statlines
 
   # Without this a model has no way to tell a human how current its answer
   # is, and "never stale" becomes a claim nobody can check from the outside.
@@ -58,6 +74,28 @@ Feature: creed as an MCP server
     Then the call should succeed
     And every stratagem in the reply should match both
 
+  Scenario: Building a list through the server
+    When I call the start-list tool for the Adeptus Custodes at 2000 points
+    And I call the add-unit tool twice
+    And I call the show-list tool
+    Then the reply should carry both units and the total
+
+  # A check that comes back reading like a pass is the thing this whole app
+  # must not do. Through a tool it matters more, not less: the model will
+  # relay whatever it is handed.
+  Scenario: Checking a list through the server
+    Given a list with nothing creed can fault
+    When I call the check tool for it
+    Then the reply should say which checks passed
+    And the reply should say which rules were not checked
+    And the reply should not say the list is legal
+
+  Scenario: Working out an attack through the server
+    When I call the attack tool with two datasheets
+    Then the call should succeed
+    And the reply should carry the rolls needed and the expected damage
+    And the reply should name any weapon ability it did not apply
+
   # A datasheet is a lot of text and a search can match many. A reply that
   # fills a model's context with fifty full datasheets has answered nothing.
   Scenario: A search that matches a great many
@@ -79,7 +117,7 @@ Feature: creed as an MCP server
     Then the call should report a failure
     And the server should still be running
 
-  # Syncing is 8.3MB over nineteen requests. Doing it inside a tool call
+  # Syncing is 8.4MB over twenty-one requests. Doing it inside a tool call
   # blocks the model's turn on a download; failing to do it at all is how the
   # data goes stale. So it happens around the call, and the call says what it
   # is reading.

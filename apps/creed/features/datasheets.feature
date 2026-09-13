@@ -72,12 +72,33 @@ Feature: Looking up a datasheet
     Then each weapon should carry its range, attacks, skill, strength, AP and damage
     And each weapon should carry its own abilities
 
-  # Points live in their own table and are keyed by model count, because a
-  # ten-model squad is not twice a five-model one.
+  # Points are not a number per datasheet, and in 11th edition they are not
+  # even a number per unit size. Datasheets_models_cost.csv is a flattened
+  # rendering of the printed table: rows with an empty cost are section
+  # headers, and the value rows under one belong to it until the next.
+  #
+  # Of 1,658 datasheets, 669 price by how many of that unit the army already
+  # has — "YOUR 1ST TO 2ND UNITS COST" then "YOUR 3RD + UNIT COSTS", with
+  # 1st/2nd+ and 1st-to-3rd/4th+ shapes too. A third section, "WARGEAR
+  # OPTIONS", prices wargear per item.
+  #
+  # So a datasheet on its own cannot be quoted one price, and anything that
+  # returns a single number is lying about 40% of the roster.
   Scenario: Points for each size the unit comes in
     When I look up a datasheet that comes in more than one size
     Then the answer should give a cost for each size
     And each cost should say how many models it buys
+
+  Scenario: A unit that gets dearer the more of it you take
+    When I look up a datasheet priced by how many you have taken
+    Then the answer should give each tier
+    And each tier should say which of your units it applies to
+    And creed should not quote one price as though it were the price
+
+  Scenario: Wargear that costs points
+    When I look up a datasheet with priced wargear options
+    Then the answer should list each option with its cost
+    And those costs should be kept apart from the unit's own cost
 
   # The export marks a datasheet as attachable and lists what it can join.
   Scenario: A character that attaches to other units

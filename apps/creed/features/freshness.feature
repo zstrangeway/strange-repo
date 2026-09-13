@@ -9,9 +9,15 @@ Feature: Data that is never stale
   #
   # The source is Wahapedia's official CSV export for 11th edition
   # (https://wahapedia.ru/wh40k11ed/the-rules/data-export/), not the HTML
-  # site. Nineteen pipe-delimited files, ~8.3MB, republished within about
+  # site. Twenty-one pipe-delimited files, ~8.4MB, republished within about
   # fifteen minutes of any site edit. No scraping, no HTML parsing, no
   # selector that breaks when the site is restyled.
+  #
+  # Twenty-one is out of the export's own specification workbook rather than
+  # out of guessing at filenames. Guessing found nineteen and missed
+  # Detachments.csv and Detachments_chapter_dp.csv, which between them carry
+  # every detachment's ability, points and Force Disposition — a whole
+  # feature, absent with nothing to show it was absent.
   #
   # Freshness has an oracle: Last_update.csv is 39 bytes and holds one
   # timestamp covering the whole export. Checking it costs one request, so
@@ -28,6 +34,14 @@ Feature: Data that is never stale
     When creed syncs
     Then every export table should be in the database
     And the database should record the export's update timestamp
+
+  # A table nobody fetches is a feature that quietly does not work, and the
+  # way that happens is somebody writing the file list by hand. The
+  # specification workbook is the authority on what the export contains.
+  Scenario: The file list comes from the specification, not from memory
+    When creed syncs
+    Then creed should have fetched every table the export's specification names
+    And a table in the specification that creed did not fetch should fail the sync
 
   # Until the first sync lands there is no data, and an empty answer reads
   # exactly like "that unit does not exist". The difference matters: one is
@@ -57,7 +71,7 @@ Feature: Data that is never stale
 
   # Conditional GET is honoured by the origin: every file carries an ETag and
   # a Last-Modified, and both return 304. A dataslate usually moves a handful
-  # of files, so re-syncing should not re-download all 8.3MB.
+  # of files, so re-syncing should not re-download all 8.4MB.
   Scenario: A re-sync only pays for the files that changed
     Given creed synced at an older timestamp
     And the export has since been updated
@@ -68,7 +82,7 @@ Feature: Data that is never stale
 
   # --------------------------------------------------- never a partial view
 
-  # Eight megabytes over nineteen requests has plenty of room to fail halfway.
+  # Eight megabytes over twenty-one requests has plenty of room to fail halfway.
   # A database holding new stratagems against old datasheets is worse than
   # one holding yesterday's everything, because nothing about it looks wrong.
   Scenario: A sync that dies halfway leaves the old data intact
