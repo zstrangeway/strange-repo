@@ -44,9 +44,43 @@ prometheus:
 
 alertmanager:
   alertmanagerSpec:
+    # From `secret:slack-webhook`; mounted at
+    # /etc/alertmanager/secrets/alertmanager-slack/.
+    secrets: [alertmanager-slack]
     resources:
       requests: {cpu: 10m, memory: 32Mi}
       limits: {memory: 128Mi}
+  config:
+    route:
+      receiver: slack
+      group_by: [alertname, namespace]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+      routes:
+        # Watchdog always fires (it proves the pipeline works) and
+        # InfoInhibitor only mutes info-level alerts; neither belongs in Slack.
+        - matchers: ['alertname = "Watchdog"']
+          receiver: "null"
+        - matchers: ['alertname = "InfoInhibitor"']
+          receiver: "null"
+    inhibit_rules:
+      # A critical alert mutes the warning version of the same thing.
+      - source_matchers: ['severity = "critical"']
+        target_matchers: ['severity = "warning"']
+        equal: [alertname, namespace]
+    receivers:
+      - name: "null"
+      - name: slack
+        slack_configs:
+          # The URL picks the channel, so there's no `channel` here.
+          - api_url_file: /etc/alertmanager/secrets/alertmanager-slack/webhook-url
+            send_resolved: true
+            title: '{{ if eq .Status "firing" }}:red_circle:{{ else }}:large_green_circle:{{ end }} {{ .CommonLabels.alertname }}{{ if .CommonLabels.namespace }} in {{ .CommonLabels.namespace }}{{ end }}'
+            text: |-
+              {{ range .Alerts }}*{{ .Labels.severity | toUpper }}* {{ .Annotations.summary }}
+              {{ .Annotations.description }}
+              {{ end }}
 
 grafana:
   # From `task secret:grafana-admin`; never in this repo.

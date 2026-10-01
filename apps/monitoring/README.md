@@ -28,6 +28,7 @@ unless `KUBECONFIG` says otherwise.
 
 ```sh
 pnpm --filter monitoring run secret:grafana-admin  # once
+pnpm --filter monitoring run secret:slack-webhook  # once, in a real terminal
 pnpm --filter monitoring run test     # values check, render, dry run
 pnpm --filter monitoring run diff     # what deploy would change
 pnpm --filter monitoring run deploy   # install, wait, check every target is up
@@ -41,6 +42,21 @@ cluster, it checks rendering only and says so.
 `deploy` fails if any target Prometheus scrapes is down: that is either a
 real problem or a scrape that can't work on this cluster and should be
 switched off in `values.yaml`.
+
+## Alerts
+
+Alertmanager posts to Slack through an incoming webhook (the Slack app
+`homelab`; the webhook picks the channel). Firing alerts are red, resolved
+ones green; a critical alert mutes the warning-level version of the same
+thing. `Watchdog` always fires, by design, and goes nowhere.
+
+The webhook URL is a credential: `secret:slack-webhook` reads it at a hidden
+prompt and stores it in the cluster, and `deploy` refuses to run without it.
+Replacing the webhook is the same command.
+
+To check the path end to end, post a test alert to Alertmanager's
+`/api/v2/alerts` with an `endsAt` a couple of minutes out: a red message,
+then a green one within about five minutes.
 
 ### Grafana's admin password
 

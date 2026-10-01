@@ -71,9 +71,29 @@ tasks:
         echo "monitoring/grafana-admin: created (user: admin)"
         echo "  read the password: kubectl -n monitoring get secret grafana-admin -o jsonpath='{.data.admin-password}' | base64 -d"
 
+  secret:slack-webhook:
+    desc: Store the Slack incoming-webhook URL alerts go to, from a hidden prompt
+    interactive: true
+    cmds:
+      - kubectl apply -f namespace.yaml >/dev/null
+      - |
+        printf 'Slack webhook URL (input hidden): '
+        read -rs url; echo
+        case "$url" in
+          https://hooks.slack.com/services/*) ;;
+          *) echo "monitoring: that isn't a https://hooks.slack.com/services/... URL - nothing stored"; exit 1 ;;
+        esac
+        # Straight into the cluster: never printed, written to disk or committed.
+        printf '%s' "$url" | kubectl -n monitoring create secret generic alertmanager-slack \
+          --from-file=webhook-url=/dev/stdin --dry-run=client -o yaml |
+          kubectl apply --server-side --force-conflicts -f - >/dev/null
+        echo "monitoring/alertmanager-slack: stored"
+
   deploy:
     desc: Install or upgrade the stack, wait for it, and check Prometheus and Grafana work
     preconditions:
+      - sh: kubectl -n monitoring get secret alertmanager-slack >/dev/null 2>&1
+        msg: "monitoring/alertmanager-slack is missing. In a terminal: pnpm --filter monitoring run secret:slack-webhook"
       - sh: kubectl -n monitoring get secret grafana-admin >/dev/null 2>&1
         msg: "monitoring/grafana-admin is missing. Run: pnpm --filter monitoring run secret:grafana-admin"
     cmds:

@@ -6,6 +6,7 @@
     "deploy": "task deploy",
     "diff": "task diff",
     "secret:grafana-admin": "task secret:grafana-admin",
+    "secret:slack-webhook": "task secret:slack-webhook",
     "test": "task test"
   },
   "devDependencies": {
