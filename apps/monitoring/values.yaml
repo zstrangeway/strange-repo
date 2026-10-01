@@ -1,0 +1,66 @@
+# kube-prometheus-stack, trimmed for one small homelab cluster. Anything not
+# set here is the chart's default. `task test` fails on a key the chart
+# doesn't have, since Helm ignores those silently.
+
+# Talos binds these four to localhost, so Prometheus can't scrape them; on,
+# they show as down and alert from day one. Exposing them is a Talos patch in
+# the homelab repo if they're ever wanted.
+kubeEtcd: {enabled: false}
+kubeScheduler: {enabled: false}
+kubeControllerManager: {enabled: false}
+kubeProxy: {enabled: false}
+defaultRules:
+  rules:
+    etcd: false
+    kubeSchedulerAlerting: false
+    kubeSchedulerRecording: false
+    kubeControllerManager: false
+    kubeProxy: false
+    windows: false
+
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    # Below the volume's 10Gi, so Prometheus prunes before the disk fills.
+    retentionSize: 8GB
+    # Pick up ServiceMonitors, PodMonitors, Probes and rules from any
+    # namespace, not only ones labelled for this release - apps bring their own.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    resources:
+      requests: {cpu: 100m, memory: 512Mi}
+      limits: {memory: 2Gi}
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          # local-path: pinned to one node, gone with its disk. A week of
+          # metrics is worth that trade.
+          storageClassName: local-path
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests: {storage: 10Gi}
+
+alertmanager:
+  alertmanagerSpec:
+    resources:
+      requests: {cpu: 10m, memory: 32Mi}
+      limits: {memory: 128Mi}
+
+grafana:
+  # From `task secret:grafana-admin`; never in this repo.
+  admin:
+    existingSecret: grafana-admin
+  service:
+    type: LoadBalancer
+    annotations:
+      metallb.io/loadBalancerIPs: 192.168.1.231
+    port: 80
+  # Dashboards and datasources come from the chart and from ConfigMaps, so
+  # nothing in Grafana's own database needs to survive a restart.
+  persistence:
+    enabled: false
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {memory: 512Mi}

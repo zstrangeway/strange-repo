@@ -1,0 +1,92 @@
+version: '3'
+
+env:
+  # The homelab repo writes the cluster's kubeconfig here. Set KUBECONFIG to
+  # point anywhere else.
+  KUBECONFIG: '{{env "KUBECONFIG" | default (print (env "HOME") "/Code/homelab/talos/_out/kubeconfig")}}'
+
+vars:
+  CHART: kube-prometheus-stack --repo https://prometheus-community.github.io/helm-charts --version 91.8.2
+  RELEASE: monitoring
+  GRAFANA: http://192.168.1.231
+
+tasks:
+  test:
+    desc: Check values against the chart, render it, and have the cluster's API check it if reachable
+    cmds:
+      - |
+        tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+        # The whole chart, not `helm show values`: that leaves out the bundled
+        # sub-charts' (grafana, node-exporter, ...) own defaults.
+        helm pull {{.CHART}} --untar -d "$tmp"
+        yq -o=json values.yaml > "$tmp/ours.json"
+        python3 check_values.py "$tmp/kube-prometheus-stack" "$tmp/ours.json"
+      - |
+        n=$(helm template {{.RELEASE}} {{.CHART}} -n monitoring -f values.yaml | yq -N 'select(.kind != null) | .kind' | wc -l)
+        echo "monitoring: chart renders $n objects"
+      # The chart's own resources (Prometheus, Alertmanager, ServiceMonitors,
+      # rules) are custom resources, so the API can only check them once the
+      # chart's CRDs are installed - i.e. from the second deploy on.
+      - |
+        if ! kubectl version --request-timeout=3s >/dev/null 2>&1; then
+          echo "monitoring: no cluster reachable - schemas NOT checked, only rendering"
+        elif ! kubectl get crd prometheuses.monitoring.coreos.com >/dev/null 2>&1; then
+          echo "monitoring: CRDs not installed yet - schemas NOT checked, only rendering"
+        else
+          helm template {{.RELEASE}} {{.CHART}} -n monitoring -f values.yaml | kubectl apply --dry-run=server -f - >/dev/null
+          echo "monitoring: cluster API accepted every object (server-side dry run)"
+        fi
+
+  diff:
+    desc: Show what deploy would change in the cluster
+    cmds:
+      - kubectl diff -f namespace.yaml || [ $? -eq 1 ]
+      # helm diff can't map the chart's custom resources before their CRDs
+      # exist, so the first install lists what it would create instead.
+      - |
+        if kubectl get crd prometheuses.monitoring.coreos.com >/dev/null 2>&1; then
+          helm diff upgrade {{.RELEASE}} {{.CHART}} -n monitoring -f values.yaml --allow-unreleased
+        else
+          echo "monitoring: not installed yet, so no diff; deploy creates (plus the chart's CRDs):"
+          helm template {{.RELEASE}} {{.CHART}} -n monitoring -f values.yaml |
+            yq -N 'select(.kind != null) | .kind' | sort | uniq -c | sort -rn
+        fi
+
+  secret:grafana-admin:
+    desc: Create Grafana's admin login in the cluster, once - never in this repo
+    cmds:
+      - kubectl apply -f namespace.yaml >/dev/null
+      - |
+        if kubectl -n monitoring get secret grafana-admin >/dev/null 2>&1; then
+          echo "monitoring/grafana-admin: exists, left alone"; exit 0
+        fi
+        # Generated, piped and stored without being printed.
+        kubectl -n monitoring create secret generic grafana-admin \
+          --from-literal=admin-user=admin \
+          --from-literal=admin-password="$(openssl rand -base64 24)" >/dev/null
+        echo "monitoring/grafana-admin: created (user: admin)"
+        echo "  read the password: kubectl -n monitoring get secret grafana-admin -o jsonpath='{.data.admin-password}' | base64 -d"
+
+  deploy:
+    desc: Install or upgrade the stack, wait for it, and check Prometheus and Grafana work
+    preconditions:
+      - sh: kubectl -n monitoring get secret grafana-admin >/dev/null 2>&1
+        msg: "monitoring/grafana-admin is missing. Run: pnpm --filter monitoring run secret:grafana-admin"
+    cmds:
+      - kubectl apply -f namespace.yaml
+      - helm upgrade --install {{.RELEASE}} {{.CHART}} -n monitoring -f values.yaml --wait --timeout 10m
+      - |
+        code=$(curl -s -o /dev/null -w '%{http_code}' -m 20 {{.GRAFANA}}/api/health)
+        [ "$code" = 200 ] || { echo "monitoring: Grafana at {{.GRAFANA}} answered $code"; exit 1; }
+        echo "monitoring: Grafana up at {{.GRAFANA}}"
+      # Every target Prometheus scrapes should be up. A down one is either a
+      # real problem or a scrape that can't work here and should be switched off.
+      - |
+        sleep 30
+        kubectl -n monitoring port-forward svc/{{.RELEASE}}-kube-prometheus-prometheus 19090:9090 >/dev/null 2>&1 &
+        pf=$!; trap 'kill $pf' EXIT; sleep 3
+        targets=$(curl -s localhost:19090/api/v1/targets?state=active)
+        up=$(echo "$targets" | jq '[.data.activeTargets[] | select(.health == "up")] | length')
+        down=$(echo "$targets" | jq -r '[.data.activeTargets[] | select(.health != "up") | .labels.job + " (" + .lastError + ")"] | join("; ")')
+        [ -z "$down" ] || { echo "monitoring: $up targets up, but down: $down"; exit 1; }
+        echo "monitoring: Prometheus scraping $up targets, all up"

@@ -1,0 +1,14 @@
+{
+  "name": "monitoring",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "deploy": "task deploy",
+    "diff": "task diff",
+    "secret:grafana-admin": "task secret:grafana-admin",
+    "test": "task test"
+  },
+  "devDependencies": {
+    "@go-task/cli": "^3.52.0"
+  }
+}

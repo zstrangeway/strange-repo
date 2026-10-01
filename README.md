@@ -25,6 +25,7 @@ cluster. These are configuration only, so they skip the spec-first rules — see
 | App | What it is |
 | --- | --- |
 | [`apps/homepage`](apps/homepage) | [Homepage](https://gethomepage.dev), a dashboard for the homelab, at http://192.168.1.230 |
+| [`apps/monitoring`](apps/monitoring) | Prometheus, Alertmanager and Grafana, at http://192.168.1.231 |
 
 Play is divided into **scenes**, which are the unit of gary's memory: the
 model is told the current scene and a recap of each one before it, so a long

@@ -1,0 +1,10 @@
+# node-exporter reads the host's /proc, /sys and network from inside the pod,
+# which Talos's default "baseline" pod security refuses.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/audit: privileged
+    pod-security.kubernetes.io/warn: privileged

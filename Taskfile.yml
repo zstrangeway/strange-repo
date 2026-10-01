@@ -10,6 +10,9 @@ includes:
   homepage:
     taskfile: ./apps/homepage
     dir: ./apps/homepage
+  monitoring:
+    taskfile: ./apps/monitoring
+    dir: ./apps/monitoring
   scout:
     taskfile: ./apps/scout
     dir: ./apps/scout
@@ -49,3 +52,4 @@ tasks:
       # Infrastructure only: renders and checks manifests, needs no toolchain
       # beyond kubectl and yq.
       - task: homepage:test
+      - task: monitoring:test
