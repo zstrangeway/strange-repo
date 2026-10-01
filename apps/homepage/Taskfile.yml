@@ -82,9 +82,15 @@ tasks:
       # /api/healthcheck answers before any config is read, so it passes for
       # a pod that crashes on its first real request. Load the page itself,
       # then make sure that didn't take the container down.
+      # Retried: rollout status reports ready a moment before the Service
+      # routes to the new pod, so the first try can be refused outright.
       - |
-        code=$(curl -s -o /dev/null -w '%{http_code}' -m 30 {{.URL}}/)
-        [ "$code" = 200 ] || { echo "homepage: {{.URL}}/ answered $code"; exit 1; }
+        for i in $(seq 1 10); do
+          code=$(curl -s -o /dev/null -w '%{http_code}' -m 30 {{.URL}}/ || true)
+          [ "$code" = 200 ] && break
+          sleep 3
+        done
+        [ "$code" = 200 ] || { echo "homepage: {{.URL}}/ answered ${code:-nothing} after 10 tries"; exit 1; }
         sleep 10
         restarts=$(kubectl -n homepage get pods -l app.kubernetes.io/name=homepage -o jsonpath='{.items[*].status.containerStatuses[0].restartCount}')
         for r in $restarts; do [ "$r" = 0 ] || { echo "homepage: container restarted $r times after serving the page"; exit 1; }; done
