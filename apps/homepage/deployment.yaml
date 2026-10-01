@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: homepage
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  template:
+    spec:
+      serviceAccountName: homepage
+      automountServiceAccountToken: true
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: homepage
+          image: ghcr.io/gethomepage/homepage:v2.4.0
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          env:
+            - name: MY_POD_IP
+              valueFrom: {fieldRef: {fieldPath: status.podIP}}
+            # Homepage refuses any Host header not listed. The pod IP is for
+            # the kubelet's probes; the rest is what a browser sends.
+            - name: HOMEPAGE_ALLOWED_HOSTS
+              value: "$(MY_POD_IP):3000,192.168.1.230"
+            # From `task secret:proxmox-token APP=homepage` in the homelab
+            # repo. Referenced in config/services.yaml as {{HOMEPAGE_VAR_...}}.
+            - name: HOMEPAGE_VAR_PROXMOX_URL
+              valueFrom: {secretKeyRef: {name: proxmox-token, key: url}}
+            - name: HOMEPAGE_VAR_PROXMOX_TOKEN_ID
+              valueFrom: {secretKeyRef: {name: proxmox-token, key: token-id}}
+            - name: HOMEPAGE_VAR_PROXMOX_TOKEN_SECRET
+              valueFrom: {secretKeyRef: {name: proxmox-token, key: token-secret}}
+          ports:
+            - name: http
+              containerPort: 3000
+          readinessProbe:
+            httpGet: {path: /api/healthcheck, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /api/healthcheck, port: http}
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {memory: 384Mi}
+          volumeMounts:
+            - {name: config, mountPath: /app/config/bookmarks.yaml, subPath: bookmarks.yaml}
+            - {name: config, mountPath: /app/config/custom.css, subPath: custom.css}
+            - {name: config, mountPath: /app/config/custom.js, subPath: custom.js}
+            - {name: config, mountPath: /app/config/docker.yaml, subPath: docker.yaml}
+            - {name: config, mountPath: /app/config/kubernetes.yaml, subPath: kubernetes.yaml}
+            - {name: config, mountPath: /app/config/proxmox.yaml, subPath: proxmox.yaml}
+            - {name: config, mountPath: /app/config/services.yaml, subPath: services.yaml}
+            - {name: config, mountPath: /app/config/settings.yaml, subPath: settings.yaml}
+            - {name: config, mountPath: /app/config/widgets.yaml, subPath: widgets.yaml}
+            - {name: logs, mountPath: /app/config/logs}
+      volumes:
+        - name: config
+          configMap: {name: homepage}
+        - name: logs
+          emptyDir: {}

@@ -1,0 +1,3 @@
+# Unused: the Proxmox widget in services.yaml carries its own token. Must
+# exist anyway - see the test in Taskfile.yml for why.
+{}

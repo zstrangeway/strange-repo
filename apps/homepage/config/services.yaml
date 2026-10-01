@@ -1,0 +1,11 @@
+- Infrastructure:
+    - Proxmox:
+        href: https://192.168.1.200:8006
+        description: ThinkCentre M710s
+        icon: proxmox.svg
+        widget:
+          type: proxmox
+          url: "{{HOMEPAGE_VAR_PROXMOX_URL}}"
+          username: "{{HOMEPAGE_VAR_PROXMOX_TOKEN_ID}}"
+          password: "{{HOMEPAGE_VAR_PROXMOX_TOKEN_SECRET}}"
+          node: pve

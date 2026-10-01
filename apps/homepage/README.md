@@ -1,0 +1,54 @@
+# homepage
+
+[Homepage](https://gethomepage.dev) v2.4.0, the homelab's dashboard, at
+**http://192.168.1.230**. Infrastructure only: these are the official
+Kubernetes manifests, adapted, and the dashboard's config — no code of ours.
+
+## What it shows
+
+- **Proxmox** — the host's status, VMs and resources, through a read-only API
+  token.
+- **The cluster** — not yet. Homepage's Kubernetes widget needs metrics-server,
+  even to list nodes, and errors on every refresh without it. It goes back in
+  `config/widgets.yaml` once metrics-server is installed.
+
+Edit the dashboard in `config/`. Each file there is mounted as Homepage's file
+of the same name; a change gives the ConfigMap a new name, which rolls the pod.
+
+## Deploying
+
+The cluster's kubeconfig is read from `~/Code/homelab/talos/_out/kubeconfig`
+unless `KUBECONFIG` says otherwise.
+
+```sh
+pnpm --filter homepage run test     # render, parse, and server-side dry run
+pnpm --filter homepage run diff     # what deploy would change
+pnpm --filter homepage run deploy   # apply, wait, and check it answers
+```
+
+`run` is needed: `pnpm deploy` is a built-in pnpm command (it copies a
+package into a folder) and wins over the script of the same name.
+
+`test` asks the cluster's API to validate every object when a cluster is
+reachable, and says it skipped that when one isn't — so in CI it checks
+rendering and YAML only.
+
+### The Proxmox token
+
+Not in this repo. `deploy` refuses to run until it exists. From the homelab
+repo:
+
+```sh
+task secret:proxmox-token APP=homepage
+```
+
+It lands in the `homepage/proxmox-token` Secret, and the Deployment passes it
+to Homepage as `HOMEPAGE_VAR_PROXMOX_*`, which `config/services.yaml`
+references.
+
+## Changing its address
+
+`192.168.1.230` is pinned in two places that have to agree: the
+`metallb.io/loadBalancerIPs` annotation in `service.yaml`, and
+`HOMEPAGE_ALLOWED_HOSTS` in `deployment.yaml`. Homepage answers any host not
+in the second with an error page.

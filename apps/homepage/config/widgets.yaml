@@ -1,0 +1,7 @@
+# No kubernetes widget yet: it needs metrics-server even with cpu and memory
+# off, and errors on every refresh without it. Add it back with metrics-server.
+- datetime:
+    text_size: md
+    format:
+      dateStyle: long
+      timeStyle: short

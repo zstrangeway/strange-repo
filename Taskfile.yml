@@ -7,6 +7,9 @@ includes:
   gary-web:
     taskfile: ./apps/gary-web
     dir: ./apps/gary-web
+  homepage:
+    taskfile: ./apps/homepage
+    dir: ./apps/homepage
   scout:
     taskfile: ./apps/scout
     dir: ./apps/scout
@@ -43,3 +46,6 @@ tasks:
       # Last, and needs nothing: no database, no browser, no key. Its own
       # lint runs inside it, the same way gary-web's does.
       - task: scout:test
+      # Infrastructure only: renders and checks manifests, needs no toolchain
+      # beyond kubectl and yq.
+      - task: homepage:test

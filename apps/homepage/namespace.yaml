@@ -1,0 +1,6 @@
+# Also created by `task secret:proxmox-token APP=homepage` in the homelab repo,
+# which puts the proxmox-token Secret here; applying it again is a no-op.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: homepage

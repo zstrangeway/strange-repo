@@ -1,0 +1,74 @@
+version: '3'
+
+env:
+  # The homelab repo writes the cluster's kubeconfig here. Set KUBECONFIG to
+  # point anywhere else.
+  KUBECONFIG: '{{env "KUBECONFIG" | default (print (env "HOME") "/Code/homelab/talos/_out/kubeconfig")}}'
+
+vars:
+  URL: http://192.168.1.230
+
+tasks:
+  test:
+    desc: Render the manifests, parse the config, and have the cluster's API check them if it is reachable
+    cmds:
+      - |
+        n=$(kubectl kustomize . | yq -N 'select(.kind != null) | .kind' | wc -l)
+        echo "homepage: rendered $n objects"
+      - |
+        for f in config/*.yaml; do
+          yq -e '.' "$f" >/dev/null || { echo "homepage: $f is not valid YAML"; exit 1; }
+        done
+        echo "homepage: parsed $(ls config/*.yaml | wc -l) config files"
+      # Homepage copies any config file it lacks from its built-in skeleton at
+      # startup. /app/config is read-only here, so one missing file crashes it
+      # on the first request. Checked against the pinned image, not a list.
+      - |
+        if ! docker info >/dev/null 2>&1; then
+          echo "homepage: no docker - config files NOT checked against the image"; exit 0
+        fi
+        tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+        kubectl kustomize . > "$tmp/all.yaml"
+        image=$(yq -r 'select(.kind == "Deployment") | .spec.template.spec.containers[0].image' "$tmp/all.yaml")
+        docker run --rm --entrypoint ls "$image" /app/src/skeleton | sort > "$tmp/skeleton"
+        yq -r 'select(.kind == "Deployment") | .spec.template.spec.containers[0].volumeMounts[] | select(.name == "config") | .subPath' "$tmp/all.yaml" | sort > "$tmp/mounted"
+        yq -r 'select(.kind == "ConfigMap") | .data | keys | .[]' "$tmp/all.yaml" | sort > "$tmp/keys"
+        unmounted=$(grep -vxF -f "$tmp/mounted" "$tmp/skeleton" || true)
+        [ -z "$unmounted" ] || { echo "homepage: $image expects these in /app/config, not mounted:" $unmounted; exit 1; }
+        absent=$(grep -vxF -f "$tmp/keys" "$tmp/mounted" || true)
+        [ -z "$absent" ] || { echo "homepage: mounted but not in the ConfigMap:" $absent; exit 1; }
+        echo "homepage: all $(wc -l < "$tmp/skeleton") config files $image expects are mounted"
+      # The schema check needs a cluster to ask. Without one it says it was
+      # skipped rather than passing quietly.
+      - |
+        if kubectl version --request-timeout=3s >/dev/null 2>&1; then
+          kubectl apply -k . --dry-run=server >/dev/null
+          echo "homepage: cluster API accepted every object (server-side dry run)"
+        else
+          echo "homepage: no cluster reachable - schemas NOT checked, only rendering and YAML"
+        fi
+
+  diff:
+    desc: Show what deploy would change in the cluster
+    cmds:
+      # kubectl diff exits 1 when there is a difference; only >1 is an error.
+      - kubectl diff -k . || [ $? -eq 1 ]
+
+  deploy:
+    desc: Apply to the cluster, wait for the rollout, and check it answers
+    preconditions:
+      - sh: kubectl -n homepage get secret proxmox-token >/dev/null 2>&1
+        msg: "homepage/proxmox-token is missing. In the homelab repo: task secret:proxmox-token APP=homepage"
+    cmds:
+      - kubectl apply -k .
+      - kubectl -n homepage rollout status deploy/homepage --timeout 3m
+      # /api/healthcheck answers before any config is read, so it passes for
+      # a pod that crashes on its first real request. Load the page itself,
+      # then make sure that didn't take the container down.
+      - |
+        code=$(curl -s -o /dev/null -w '%{http_code}' -m 30 {{.URL}}/)
+        [ "$code" = 200 ] || { echo "homepage: {{.URL}}/ answered $code"; exit 1; }
+        sleep 10
+        restarts=$(kubectl -n homepage get pods -l app.kubernetes.io/name=homepage -o jsonpath='{.items[*].status.containerStatuses[0].restartCount}')
+        for r in $restarts; do [ "$r" = 0 ] || { echo "homepage: container restarted $r times after serving the page"; exit 1; }; done
+        echo "homepage: up at {{.URL}} - page served, no restarts"

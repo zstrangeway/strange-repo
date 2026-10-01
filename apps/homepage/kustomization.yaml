@@ -1,0 +1,28 @@
+# Homepage (gethomepage.dev), from the official Kubernetes manifests rather
+# than a chart: the chart its docs link to was still shipping v1.2.0.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: homepage
+resources:
+  - namespace.yaml
+  - rbac.yaml
+  - deployment.yaml
+  - service.yaml
+# A hash suffix on the name, so editing any file under config/ rolls the pod.
+# Every file Homepage's image has a default for must be here: it can't write
+# a missing one, and crashes instead. `task test` checks against the image.
+configMapGenerator:
+  - name: homepage
+    files:
+      - config/bookmarks.yaml
+      - config/custom.css
+      - config/custom.js
+      - config/docker.yaml
+      - config/kubernetes.yaml
+      - config/proxmox.yaml
+      - config/services.yaml
+      - config/settings.yaml
+      - config/widgets.yaml
+labels:
+  - pairs: {app.kubernetes.io/name: homepage}
+    includeSelectors: true

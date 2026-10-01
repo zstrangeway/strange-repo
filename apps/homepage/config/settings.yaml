@@ -1,0 +1,6 @@
+title: Homelab
+headerStyle: clean
+layout:
+  Infrastructure:
+    style: row
+    columns: 3

@@ -1,0 +1,7 @@
+- Code:
+    - strange-repo:
+        - abbr: SR
+          href: https://github.com/zstrangeway/strange-repo
+    - homelab:
+        - abbr: HL
+          href: https://github.com/zstrangeway/homelab

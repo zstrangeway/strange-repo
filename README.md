@@ -1,6 +1,7 @@
 # strange-repo
 
-A pnpm + uv monorepo. It builds two unrelated things.
+A pnpm + uv monorepo. It builds two unrelated things, and configures what runs
+alongside them in the homelab.
 
 **gary**, an AI game master named for Gary Gygax: pick a system and a module,
 make a party, and play a tabletop campaign in chat.
@@ -16,6 +17,14 @@ a conviction about what models should not be trusted to decide.
 | App | Stack | What it is |
 | --- | --- | --- |
 | [`apps/scout`](apps/scout) | Python CLI + MCP server | A local-first job search assistant: save a posting, tailor a resume to it, approve what gets sent, log where it got to |
+
+And software we run but didn't write, deployed to the homelab Kubernetes
+cluster. These are configuration only, so they skip the spec-first rules — see
+[`CLAUDE.md`](CLAUDE.md#infrastructure-only-apps).
+
+| App | What it is |
+| --- | --- |
+| [`apps/homepage`](apps/homepage) | [Homepage](https://gethomepage.dev), a dashboard for the homelab, at http://192.168.1.230 |
 
 Play is divided into **scenes**, which are the unit of gary's memory: the
 model is told the current scene and a recap of each one before it, so a long

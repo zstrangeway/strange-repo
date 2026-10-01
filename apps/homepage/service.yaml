@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: homepage
+  annotations:
+    # Pinned, so the address survives the service being recreated. Must also
+    # be in HOMEPAGE_ALLOWED_HOSTS in deployment.yaml.
+    metallb.io/loadBalancerIPs: 192.168.1.230
+spec:
+  type: LoadBalancer
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
