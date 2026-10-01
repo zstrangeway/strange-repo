@@ -33,7 +33,11 @@ tasks:
         elif ! kubectl get crd prometheuses.monitoring.coreos.com >/dev/null 2>&1; then
           echo "monitoring: CRDs not installed yet - schemas NOT checked, only rendering"
         else
-          helm template {{.RELEASE}} {{.CHART}} -n monitoring -f values.yaml | kubectl apply --dry-run=server -f - >/dev/null
+          # --skip-tests: helm test pods aren't installed, and their service
+          # accounts don't exist. Server-side apply, because Helm owns these
+          # objects and client-side apply wants an annotation Helm doesn't set.
+          helm template {{.RELEASE}} {{.CHART}} -n monitoring -f values.yaml --skip-tests |
+            kubectl apply --server-side --force-conflicts --field-manager=dry-run-check --dry-run=server -f - >/dev/null
           echo "monitoring: cluster API accepted every object (server-side dry run)"
         fi
 
