@@ -211,55 +211,9 @@ records whatever id it is handed, and a browser is what hands it over.
 
 ## Deploying
 
-Both apps deploy to [Fly.io](https://fly.io) from `.github/workflows/ci.yml` on
-every push to `main`. Pull requests run the specs and build both images, but
-never deploy.
-
-### One-time setup
-
-Add a Fly deploy token to the repository as the `FLY_API_TOKEN` secret, and the
-workflow does the rest — it creates each app on the first run if it does not
-already exist, then deploys. Nothing needs running by hand.
-
-Fly app names are globally unique, so `gary-api` and `gary-web` may already be
-taken. If either is, change `app` in that app's `fly.toml` and the matching
-name in the workflow's `Ensure the Fly app exists` step — and for gary-api,
-`NEXT_PUBLIC_GARY_API_URL` in `apps/gary-web/Dockerfile` and `BROWSER_ORIGINS`
-in `apps/gary-api/fly.toml`, since those two name each other.
-
-Apps are created in the `FLY_ORG` organisation set at the top of the workflow,
-which defaults to `personal`.
-
-Fly resolves the two paths against different bases, which is worth knowing
-before editing either `fly.toml`:
-
-- the config path is relative to the **working directory**
-- `build.dockerfile` inside it is relative to **the config file's own directory**
-
-The build context is the working directory. gary-web therefore deploys from the
-repo root with `--config apps/gary-web/fly.toml` and `dockerfile = "Dockerfile"`
-— it cannot build from `apps/gary-web`, because its image needs
-`pnpm-lock.yaml`, `pnpm-workspace.yaml`, and the root `package.json` in the
-context for the workspace to resolve.
-
-gary-api needs a Postgres. It runs on Fly Managed Postgres:
-
-```sh
-flyctl mpg create
-flyctl mpg attach <cluster-id> -a <gary-api-app-name>
-```
-
-`attach` sets `DATABASE_URL` as a secret, which is the only coupling — any
-Postgres works, and `database_url()` normalises whatever connection string a
-provider hands out. Worth knowing that Fly Managed Postgres costs an order of
-magnitude more than the two apps combined, so a hosted free tier or a self-run
-Postgres app is a cheap swap if that ever matters.
-
-Then add a deploy token to the repository as the `FLY_API_TOKEN` secret:
-
-```sh
-flyctl tokens create deploy --name github-actions
-```
+Nowhere, for now. Both apps ran on Fly.io until it was torn down; they are
+moving to the homelab Kubernetes cluster. Until they arrive, CI runs the specs
+and builds both images on every push, and ships nothing.
 
 ### How the two apps find each other
 
@@ -271,7 +225,7 @@ Two settings have to agree, and neither says anything useful when they do not:
 - `NEXT_PUBLIC_GARY_API_URL` — where gary-web looks for gary-api. Inlined by
   `next build`, so it is a **build arg** in `apps/gary-web/Dockerfile`. Setting
   it on the running app changes nothing; a browser has no environment to read.
-- `BROWSER_ORIGINS` — the origins gary-api answers, in `apps/gary-api/fly.toml`.
+- `BROWSER_ORIGINS` — the origins gary-api answers, set in gary-api's environment.
   Named rather than `*`, because the answer to a signed-in request is somebody's
   account.
 

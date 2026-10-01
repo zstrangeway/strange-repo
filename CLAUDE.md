@@ -25,6 +25,21 @@ Ship every new feature at 100% test coverage. A new app is different: a bare
 scaffold has no behavior to cover, so don't wire up the coverage gate until the
 first real feature lands.
 
+## Infrastructure-only apps
+
+An app that is only configuration for software we didn't write — Helm values,
+manifests, someone else's published image — has no behavior of ours to specify.
+It skips the BDD and coverage rules above: no proposal, no `.feature` files, no
+coverage gate.
+
+It still gets a `Taskfile.yml` like every app, and its `test` task validates
+what can be validated — render the chart, check the manifests against the
+Kubernetes schemas — and says what it checked, so `pnpm test` still means
+something there.
+
+Once it grows code of its own — a script with logic in it, a sidecar, a small
+service — that code follows the normal rules.
+
 ## Bugs
 
 Every bug gets a test before it gets a fix. Write the test, watch it fail for
@@ -82,12 +97,6 @@ printed, so passing it on is free.
 
 Every app gets a `Taskfile.yml`, and its `package.json` scripts delegate to it,
 so `pnpm test` means the same thing in every app.
-
-## Deploys
-
-Fly.io, deployed by GitHub Actions on pushes to main. Keep deploys gated behind
-the test and image-build jobs; don't move them to a platform integration that
-ships whatever landed.
 
 ## Work you can't verify
 

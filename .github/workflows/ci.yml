@@ -7,13 +7,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  # Never cancel a deploy that is already in flight.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
-env:
-  # The Fly organisation the apps live in. `personal` is the default org on a
-  # individual account; change it if yours is named otherwise.
-  FLY_ORG: personal
+  cancel-in-progress: true
 
 jobs:
   test-api:
@@ -139,64 +133,3 @@ jobs:
         run: docker build -f apps/gary-api/Dockerfile -t gary-api:ci apps/gary-api
       - name: Build gary-web image
         run: docker build -f apps/gary-web/Dockerfile -t gary-web:ci .
-
-  deploy-api:
-    name: Deploy gary-api
-    needs: [test-api, test-ui, test-web, e2e, images]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: superfly/flyctl-actions/setup-flyctl@master
-      # Idempotent: creates the app on the first run, no-ops afterwards.
-      - name: Ensure the Fly app exists
-        run: flyctl apps list | grep -qw gary-api || flyctl apps create gary-api --org "$FLY_ORG"
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      # Run from the app directory so fly.toml and the Dockerfile are both
-      # found relative to it, with no path flags to resolve ambiguously.
-      # RELEASE has to come from here for the same reason gary-web's does:
-      # only apps/gary-api reaches the build context, so the builder has no
-      # .git to derive a version from. It is what /health reports, and the
-      # same value gary-web reports as its release — so one commit names both.
-      - run: >-
-          flyctl deploy --remote-only
-          --build-arg RELEASE="${{ github.sha }}"
-        working-directory: apps/gary-api
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
-  deploy-web:
-    name: Deploy gary-web
-    # Sequential: gary-web reads gary-api at request time, so the API should be
-    # on the new revision first.
-    needs: [deploy-api]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: superfly/flyctl-actions/setup-flyctl@master
-      # Idempotent: creates the app on the first run, no-ops afterwards.
-      - name: Ensure the Fly app exists
-        run: flyctl apps list | grep -qw gary-web || flyctl apps create gary-web --org "$FLY_ORG"
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      # Runs from the repo root: the build context must be the whole workspace,
-      # so the config path is given relative to it and cannot be read any
-      # other way.
-      # --build-secret, not --build-arg: the token is a real credential and a
-      # build arg would sit in the image history. It reaches `next build` on
-      # Fly's remote builder, which is the only place source maps exist —
-      # `fly secrets` are runtime and arrive far too late to matter.
-      # Absent, the deploy still succeeds without uploading; the Dockerfile
-      # prints which of the two happened.
-      # SENTRY_RELEASE has to come from here: only apps/gary-web reaches the
-      # build context, so the builder has no .git to derive a version from and
-      # sentry-cli would file the maps under `undefined`. github.sha is the
-      # same value the running app reports as its release.
-      - run: >-
-          flyctl deploy --config apps/gary-web/fly.toml --remote-only
-          --build-secret sentry_auth_token="$SENTRY_AUTH_TOKEN"
-          --build-arg SENTRY_RELEASE="${{ github.sha }}"
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}

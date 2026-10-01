@@ -19,12 +19,6 @@ updates:
   # closed, and nothing has moved since. Those numbers are not re-checked here
   # because this environment cannot reach the GitHub API for repositories
   # outside this one; letting dependabot say what is current is the point.
-  #
-  # One of the five it cannot help with: the deploy steps use
-  # `superfly/flyctl-actions/setup-flyctl@master`, which is a branch and not a
-  # version. Dependabot has nothing to bump, and the deploy runs whatever is
-  # on that branch on the day. Pinning it is a decision about the deploy path
-  # rather than a dependency bump, so it is not made here.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
