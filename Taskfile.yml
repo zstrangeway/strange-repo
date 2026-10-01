@@ -16,6 +16,9 @@ includes:
   monitoring:
     taskfile: ./apps/monitoring
     dir: ./apps/monitoring
+  paperclip:
+    taskfile: ./apps/paperclip
+    dir: ./apps/paperclip
   scout:
     taskfile: ./apps/scout
     dir: ./apps/scout
@@ -57,3 +60,4 @@ tasks:
       - task: homepage:test
       - task: monitoring:test
       - task: dns:test
+      - task: paperclip:test

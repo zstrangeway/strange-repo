@@ -65,3 +65,9 @@
             - label: local (host)
               query: round(100 * pve_disk_usage_bytes{id="storage/pve/local"} / pve_disk_size_bytes{id="storage/pve/local"})
               format: {type: number, suffix: "%"}
+
+- Agents:
+    - Paperclip:
+        href: http://paperclip.home.arpa
+        description: The agent team
+        icon: mdi-paperclip

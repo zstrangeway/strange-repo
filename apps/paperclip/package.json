@@ -1,0 +1,15 @@
+{
+  "name": "paperclip",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "deploy": "task deploy",
+    "diff": "task diff",
+    "secret:internal": "task secret:internal",
+    "secret:model-keys": "task secret:model-keys",
+    "test": "task test"
+  },
+  "devDependencies": {
+    "@go-task/cli": "^3.52.0"
+  }
+}

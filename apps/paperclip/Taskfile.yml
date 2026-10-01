@@ -1,0 +1,93 @@
+version: '3'
+
+env:
+  # The homelab repo writes the cluster's kubeconfig here. Set KUBECONFIG to
+  # point anywhere else.
+  KUBECONFIG: '{{env "KUBECONFIG" | default (print (env "HOME") "/Code/homelab/talos/_out/kubeconfig")}}'
+
+vars:
+  URL: http://192.168.1.232
+
+tasks:
+  test:
+    desc: Render the manifests and have the cluster's API check them if it is reachable
+    cmds:
+      - |
+        n=$(kubectl kustomize . | yq -N 'select(.kind != null) | .kind' | wc -l)
+        echo "paperclip: rendered $n objects"
+      - |
+        # A dry run never creates the namespace, so before the first deploy
+        # everything inside it would be refused for that reason alone.
+        if ! kubectl version --request-timeout=3s >/dev/null 2>&1; then
+          echo "paperclip: no cluster reachable - schemas NOT checked, only rendering"
+        elif ! kubectl get namespace paperclip >/dev/null 2>&1; then
+          echo "paperclip: namespace not created yet - schemas NOT checked, only rendering"
+        else
+          kubectl apply -k . --dry-run=server >/dev/null
+          echo "paperclip: cluster API accepted every object (server-side dry run)"
+        fi
+
+  diff:
+    desc: Show what deploy would change in the cluster
+    cmds:
+      - kubectl diff -k . || [ $? -eq 1 ]
+
+  secret:internal:
+    desc: Generate Paperclip's own secrets in the cluster, once - never rotates them
+    cmds:
+      - kubectl apply -f namespace.yaml >/dev/null
+      - |
+        if kubectl -n paperclip get secret paperclip-internal >/dev/null 2>&1; then
+          echo "paperclip/paperclip-internal: exists, left alone (rotating would lock out existing data)"; exit 0
+        fi
+        # Hex for the database password: it goes into a URL unescaped.
+        kubectl -n paperclip create secret generic paperclip-internal \
+          --from-literal=postgres-password="$(openssl rand -hex 24)" \
+          --from-literal=better-auth-secret="$(openssl rand -base64 32)" \
+          --from-literal=tool-action-signing-secret="$(openssl rand -hex 32)" \
+          --from-literal=secrets-master-key="$(openssl rand -base64 32)" >/dev/null
+        echo "paperclip/paperclip-internal: generated (4 values, none printed)"
+
+  secret:model-keys:
+    desc: Store the Anthropic and OpenRouter API keys from hidden prompts (blank keeps the current one)
+    interactive: true
+    cmds:
+      - kubectl apply -f namespace.yaml >/dev/null
+      - |
+        current() { kubectl -n paperclip get secret paperclip-model-keys -o jsonpath="{.data.$1}" 2>/dev/null | base64 -d; }
+        printf 'Anthropic API key, for Claude agents (input hidden, blank to keep/skip): '; read -rs anthropic; echo
+        printf 'OpenRouter API key, for OpenCode agents (input hidden, blank to keep/skip): '; read -rs openrouter; echo
+        anthropic=${anthropic:-$(current ANTHROPIC_API_KEY)}
+        openrouter=${openrouter:-$(current OPENROUTER_API_KEY)}
+        case "$anthropic" in ""|sk-ant-*) ;; *) echo "paperclip: that Anthropic key doesn't start with sk-ant- - nothing stored"; exit 1 ;; esac
+        case "$openrouter" in ""|sk-or-*) ;; *) echo "paperclip: that OpenRouter key doesn't start with sk-or- - nothing stored"; exit 1 ;; esac
+        args=""
+        [ -n "$anthropic" ] && args="$args --from-literal=ANTHROPIC_API_KEY=$anthropic"
+        [ -n "$openrouter" ] && args="$args --from-literal=OPENROUTER_API_KEY=$openrouter"
+        [ -n "$args" ] || { echo "paperclip: no keys given and none stored - nothing to do"; exit 0; }
+        kubectl -n paperclip create secret generic paperclip-model-keys $args --dry-run=client -o yaml |
+          kubectl apply --server-side --force-conflicts -f - >/dev/null
+        echo "paperclip/paperclip-model-keys: Anthropic $([ -n "$anthropic" ] && echo set || echo unset), OpenRouter $([ -n "$openrouter" ] && echo set || echo unset)"
+        # Env from a Secret is read at start, so restart to pick it up.
+        if kubectl -n paperclip get deploy paperclip >/dev/null 2>&1; then
+          kubectl -n paperclip rollout restart deploy/paperclip >/dev/null && echo "paperclip: restarting to pick up the keys"
+        fi
+
+  deploy:
+    desc: Apply to the cluster, wait for Postgres and Paperclip, and check it answers
+    preconditions:
+      - sh: kubectl -n paperclip get secret paperclip-internal >/dev/null 2>&1
+        msg: "paperclip/paperclip-internal is missing. Run: pnpm --filter paperclip run secret:internal"
+    cmds:
+      - kubectl apply -k .
+      - kubectl -n paperclip rollout status statefulset/postgres --timeout 3m
+      - kubectl -n paperclip rollout status deploy/paperclip --timeout 5m
+      # Retried: ready a moment before the Service routes to the new pod.
+      - |
+        for i in $(seq 1 20); do
+          body=$(curl -s -m 10 {{.URL}}/api/health || true)
+          [ "$(echo "$body" | jq -r .status 2>/dev/null)" = ok ] && break
+          sleep 3
+        done
+        [ "$(echo "$body" | jq -r .status 2>/dev/null)" = ok ] || { echo "paperclip: {{.URL}}/api/health answered: ${body:-nothing}"; exit 1; }
+        echo "paperclip: up at {{.URL}} - $(echo "$body" | jq -r '"mode " + .deploymentMode + ", bootstrap " + .bootstrapStatus')"

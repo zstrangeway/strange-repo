@@ -1,0 +1,11 @@
+# Paperclip (paperclip.ing): orchestration for a team of AI agents. Server and
+# UI, plus its Postgres. Agents run inside the server pod through the CLIs the
+# image ships (claude, opencode, codex). Secrets are never in this repo - see
+# the secret:* tasks.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: paperclip
+resources:
+  - namespace.yaml
+  - postgres.yaml
+  - paperclip.yaml
