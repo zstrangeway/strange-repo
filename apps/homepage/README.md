@@ -8,9 +8,10 @@ Kubernetes manifests, adapted, and the dashboard's config — no code of ours.
 
 - **Proxmox** — the host's status, VMs and resources, through a read-only API
   token.
-- **The cluster** — not yet. Homepage's Kubernetes widget needs metrics-server,
-  even to list nodes, and errors on every refresh without it. It goes back in
-  `config/widgets.yaml` once metrics-server is installed.
+- **The cluster** — CPU and memory for the cluster and each node. Needs
+  metrics-server (installed by the homelab repo's `task platform:deploy`):
+  without it the widget errors on every refresh, even with CPU and memory
+  off.
 
 Edit the dashboard in `config/`. Each file there is mounted as Homepage's file
 of the same name; a change gives the ConfigMap a new name, which rolls the pod.

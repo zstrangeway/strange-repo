@@ -16,7 +16,7 @@ rules:
   - apiGroups: [networking.k8s.io]
     resources: [ingresses]
     verbs: [get, list]
-  # Unused until metrics-server is installed; harmless before.
+  # For the kubernetes widget's CPU and memory, from metrics-server.
   - apiGroups: [metrics.k8s.io]
     resources: [nodes, pods]
     verbs: [get, list]

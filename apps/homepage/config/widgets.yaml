@@ -1,5 +1,17 @@
-# No kubernetes widget yet: it needs metrics-server even with cpu and memory
-# off, and errors on every refresh without it. Add it back with metrics-server.
+# Needs metrics-server in the cluster, even with cpu and memory off: without
+# it the widget errors on every refresh.
+- kubernetes:
+    cluster:
+      show: true
+      cpu: true
+      memory: true
+      showLabel: true
+      label: homelab
+    nodes:
+      show: true
+      cpu: true
+      memory: true
+      showLabel: true
 - datetime:
     text_size: md
     format:
