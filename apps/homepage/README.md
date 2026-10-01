@@ -6,6 +6,9 @@ Kubernetes manifests, adapted, and the dashboard's config — no code of ours.
 
 ## What it shows
 
+- **UniFi** — uptime, WAN, and wired and Wi-Fi clients. It uses apps/dns's
+  UniFi API key, copied in by `secret:unifi-api-key`: more access than a
+  read-only widget needs, chosen over maintaining a separate UniFi admin.
 - **Proxmox** — the host's status, VMs and resources, through a read-only API
   token.
 - **The cluster** — CPU and memory for the cluster and each node. Needs

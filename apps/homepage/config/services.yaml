@@ -1,4 +1,13 @@
 - Infrastructure:
+    - UniFi:
+        href: https://unifi.home.arpa
+        description: UDM - network and Wi-Fi
+        icon: unifi.svg
+        widget:
+          type: unifi
+          url: "{{HOMEPAGE_VAR_UNIFI_URL}}"
+          key: "{{HOMEPAGE_VAR_UNIFI_KEY}}"
+          fields: [uptime, wan, lan_users, wlan_users]
     - Proxmox:
         href: https://proxmox.home.arpa:8006
         description: ThinkCentre M710s

@@ -10,6 +10,7 @@ UDM just knows more names. They resolve on the LAN only, not over Tailscale.
 
 | Name | Points at | Declared in |
 | --- | --- | --- |
+| `unifi.home.arpa` | 192.168.1.1 (the UDM) | `static.yaml` |
 | `proxmox.home.arpa` | 192.168.1.200 | `static.yaml` |
 | `talos-cp1/-w1/-w2.home.arpa` | .201–.203 | `static.yaml` |
 | `homepage.home.arpa` | 192.168.1.230 | `apps/homepage/service.yaml` |

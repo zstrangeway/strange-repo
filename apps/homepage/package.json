@@ -5,6 +5,7 @@
   "scripts": {
     "deploy": "task deploy",
     "diff": "task diff",
+    "secret:unifi-api-key": "task secret:unifi-api-key",
     "test": "task test"
   },
   "devDependencies": {

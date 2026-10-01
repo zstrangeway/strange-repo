@@ -35,6 +35,13 @@ spec:
               valueFrom: {secretKeyRef: {name: proxmox-token, key: token-id}}
             - name: HOMEPAGE_VAR_PROXMOX_TOKEN_SECRET
               valueFrom: {secretKeyRef: {name: proxmox-token, key: token-secret}}
+            # From `secret:unifi-api-key`: a copy of apps/dns's key. More access
+            # than a read-only widget needs - chosen over keeping a separate
+            # UniFi admin for it.
+            - name: HOMEPAGE_VAR_UNIFI_URL
+              value: https://192.168.1.1
+            - name: HOMEPAGE_VAR_UNIFI_KEY
+              valueFrom: {secretKeyRef: {name: unifi-api-key, key: api-key}}
           ports:
             - name: http
               containerPort: 3000

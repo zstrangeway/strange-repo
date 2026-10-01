@@ -54,9 +54,26 @@ tasks:
       # kubectl diff exits 1 when there is a difference; only >1 is an error.
       - kubectl diff -k . || [ $? -eq 1 ]
 
+  secret:unifi-api-key:
+    desc: Copy apps/dns's UniFi API key into this namespace for the UniFi widget
+    cmds:
+      # One key, entered once (pnpm --filter dns run secret:unifi-api-key);
+      # a Secret can only be read from its own namespace, hence the copy.
+      # Re-run after replacing that key.
+      - kubectl apply -f namespace.yaml >/dev/null
+      - |
+        kubectl -n dns get secret unifi-api-key >/dev/null 2>&1 || {
+          echo "homepage: dns/unifi-api-key doesn't exist yet - run: pnpm --filter dns run secret:unifi-api-key"; exit 1; }
+        kubectl -n dns get secret unifi-api-key -o json |
+          jq '{apiVersion: "v1", kind: "Secret", type: "Opaque", metadata: {name: "unifi-api-key", namespace: "homepage"}, data: .data}' |
+          kubectl apply --server-side --force-conflicts -f - >/dev/null
+        echo "homepage/unifi-api-key: copied from dns/unifi-api-key"
+
   deploy:
     desc: Apply to the cluster, wait for the rollout, and check it answers
     preconditions:
+      - sh: kubectl -n homepage get secret unifi-api-key >/dev/null 2>&1
+        msg: "homepage/unifi-api-key is missing. Run: pnpm --filter homepage run secret:unifi-api-key"
       - sh: kubectl -n homepage get secret proxmox-token >/dev/null 2>&1
         msg: "homepage/proxmox-token is missing. In the homelab repo: task secret:proxmox-token APP=homepage"
     cmds:
