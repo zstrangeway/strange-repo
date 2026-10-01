@@ -89,9 +89,28 @@ tasks:
           kubectl apply --server-side --force-conflicts -f - >/dev/null
         echo "monitoring/alertmanager-slack: stored"
 
+  secret:healthchecks-ping:
+    desc: Store the healthchecks.io ping URL Watchdog keeps alive, from a hidden prompt
+    interactive: true
+    cmds:
+      - kubectl apply -f namespace.yaml >/dev/null
+      - |
+        printf 'healthchecks.io ping URL (input hidden): '
+        read -rs url; echo
+        case "$url" in
+          https://hc-ping.com/*) ;;
+          *) echo "monitoring: that isn't a https://hc-ping.com/... URL - nothing stored"; exit 1 ;;
+        esac
+        printf '%s' "$url" | kubectl -n monitoring create secret generic alertmanager-healthchecks \
+          --from-file=ping-url=/dev/stdin --dry-run=client -o yaml |
+          kubectl apply --server-side --force-conflicts -f - >/dev/null
+        echo "monitoring/alertmanager-healthchecks: stored"
+
   deploy:
     desc: Install or upgrade the stack, wait for it, and check Prometheus and Grafana work
     preconditions:
+      - sh: kubectl -n monitoring get secret alertmanager-healthchecks >/dev/null 2>&1
+        msg: "monitoring/alertmanager-healthchecks is missing. In a terminal: pnpm --filter monitoring run secret:healthchecks-ping"
       - sh: kubectl -n monitoring get secret alertmanager-slack >/dev/null 2>&1
         msg: "monitoring/alertmanager-slack is missing. In a terminal: pnpm --filter monitoring run secret:slack-webhook"
       - sh: kubectl -n monitoring get secret grafana-admin >/dev/null 2>&1
@@ -105,11 +124,11 @@ tasks:
         echo "monitoring: Grafana up at {{.GRAFANA}}"
       # Every target Prometheus scrapes should be up. A down one is either a
       # real problem or a scrape that can't work here and should be switched off.
+      # Through the API server's service proxy rather than a port-forward: no
+      # background process to wait for or clean up (Task's shell has no kill).
       - |
         sleep 30
-        kubectl -n monitoring port-forward svc/{{.RELEASE}}-kube-prometheus-prometheus 19090:9090 >/dev/null 2>&1 &
-        pf=$!; trap 'kill $pf' EXIT; sleep 3
-        targets=$(curl -s localhost:19090/api/v1/targets?state=active)
+        targets=$(kubectl get --raw "/api/v1/namespaces/monitoring/services/{{.RELEASE}}-kube-prometheus-prometheus:http-web/proxy/api/v1/targets?state=active")
         up=$(echo "$targets" | jq '[.data.activeTargets[] | select(.health == "up")] | length')
         down=$(echo "$targets" | jq -r '[.data.activeTargets[] | select(.health != "up") | .labels.job + " (" + .lastError + ")"] | join("; ")')
         [ -z "$down" ] || { echo "monitoring: $up targets up, but down: $down"; exit 1; }

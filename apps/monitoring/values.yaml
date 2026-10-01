@@ -44,9 +44,9 @@ prometheus:
 
 alertmanager:
   alertmanagerSpec:
-    # From `secret:slack-webhook`; mounted at
-    # /etc/alertmanager/secrets/alertmanager-slack/.
-    secrets: [alertmanager-slack]
+    # From `secret:slack-webhook` and `secret:healthchecks-ping`; each mounted
+    # at /etc/alertmanager/secrets/<name>/.
+    secrets: [alertmanager-slack, alertmanager-healthchecks]
     resources:
       requests: {cpu: 10m, memory: 32Mi}
       limits: {memory: 128Mi}
@@ -58,10 +58,16 @@ alertmanager:
       group_interval: 5m
       repeat_interval: 12h
       routes:
-        # Watchdog always fires (it proves the pipeline works) and
-        # InfoInhibitor only mutes info-level alerts; neither belongs in Slack.
+        # Watchdog always fires. Re-sending it every minute pings
+        # healthchecks.io, which alerts in Slack itself when the pings stop -
+        # i.e. when this cluster, the host, the network or power is down,
+        # none of which anything in here can report.
         - matchers: ['alertname = "Watchdog"']
-          receiver: "null"
+          receiver: healthchecks
+          group_wait: 0s
+          group_interval: 1m
+          repeat_interval: 1m
+        # Only mutes info-level alerts; nothing to send.
         - matchers: ['alertname = "InfoInhibitor"']
           receiver: "null"
     inhibit_rules:
@@ -71,6 +77,10 @@ alertmanager:
         equal: [alertname, namespace]
     receivers:
       - name: "null"
+      - name: healthchecks
+        webhook_configs:
+          - url_file: /etc/alertmanager/secrets/alertmanager-healthchecks/ping-url
+            send_resolved: false
       - name: slack
         slack_configs:
           # The URL picks the channel, so there's no `channel` here.
