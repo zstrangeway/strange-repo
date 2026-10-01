@@ -13,6 +13,15 @@ kubelets and the API server, with the chart's dashboards and alert rules for
 all of them. Metrics are kept for 7 days on a 10Gi local-path volume —
 pinned to one node, and gone if its disk goes.
 
+**The Proxmox host** too, through
+[prometheus-pve-exporter](https://github.com/prometheus-pve/prometheus-pve-exporter)
+3.10.0 (in `values.yaml`, under `extraManifests`): the host, each VM and each
+storage, read from Proxmox's API with a read-only token. Issue it from the
+homelab repo with `task secret:proxmox-token APP=monitoring`. Alerts, under
+`additionalPrometheusRulesMap`: storage over 80% (warning) and 90% (critical)
+— `local-lvm` full freezes every VM at once — the exporter down, and a guest
+stopped that is set to start on boot.
+
 Not scraped: etcd, the scheduler, the controller manager and kube-proxy.
 Talos binds their metrics to localhost; exposing them is a Talos patch in the
 homelab repo.

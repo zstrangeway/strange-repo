@@ -110,3 +110,120 @@ grafana:
   resources:
     requests: {cpu: 50m, memory: 128Mi}
     limits: {memory: 512Mi}
+
+# The Proxmox host itself - nothing else here sees it. prometheus-pve-exporter
+# reads Proxmox's API with a read-only token (observer@pve!monitoring), issued
+# into monitoring/proxmox-token by the homelab repo's
+# `task secret:proxmox-token APP=monitoring`.
+extraManifests:
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: pve-exporter
+      namespace: monitoring
+      labels: {app.kubernetes.io/name: pve-exporter}
+    spec:
+      replicas: 1
+      selector:
+        matchLabels: {app.kubernetes.io/name: pve-exporter}
+      template:
+        metadata:
+          labels: {app.kubernetes.io/name: pve-exporter}
+        spec:
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: pve-exporter
+              image: prompve/prometheus-pve-exporter:3.10.0
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              env:
+                # The token's id is observer@pve!monitoring: user, then name.
+                - {name: PVE_USER, value: observer@pve}
+                - {name: PVE_TOKEN_NAME, value: monitoring}
+                - name: PVE_TOKEN_VALUE
+                  valueFrom: {secretKeyRef: {name: proxmox-token, key: token-secret}}
+                # Proxmox's certificate is self-signed. The token is read-only.
+                - {name: PVE_VERIFY_SSL, value: "false"}
+              ports:
+                - {name: http, containerPort: 9221}
+              readinessProbe:
+                tcpSocket: {port: http}
+              resources:
+                requests: {cpu: 10m, memory: 48Mi}
+                limits: {memory: 128Mi}
+              # Read-only root, but Python won't start without a writable /tmp.
+              volumeMounts:
+                - {name: tmp, mountPath: /tmp}
+          volumes:
+            - name: tmp
+              emptyDir: {medium: Memory, sizeLimit: 16Mi}
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: pve-exporter
+      namespace: monitoring
+      labels: {app.kubernetes.io/name: pve-exporter}
+    spec:
+      selector: {app.kubernetes.io/name: pve-exporter}
+      ports:
+        - {name: http, port: 9221, targetPort: http}
+  - apiVersion: monitoring.coreos.com/v1
+    kind: ServiceMonitor
+    metadata:
+      name: pve-exporter
+      namespace: monitoring
+    spec:
+      selector:
+        matchLabels: {app.kubernetes.io/name: pve-exporter}
+      endpoints:
+        - port: http
+          path: /pve
+          params:
+            target: [192.168.1.200]
+            cluster: ["1"]
+            node: ["1"]
+          interval: 60s
+          scrapeTimeout: 30s
+
+additionalPrometheusRulesMap:
+  proxmox:
+    groups:
+      - name: proxmox
+        rules:
+          # local-lvm is a thin pool: when it fills, every VM on it freezes
+          # at once. Warn early, page before it's too late.
+          - alert: ProxmoxStorageFilling
+            expr: 100 * pve_disk_usage_bytes{id=~"storage/.*"} / pve_disk_size_bytes{id=~"storage/.*"} > 80
+            for: 15m
+            labels: {severity: warning}
+            annotations:
+              summary: 'Proxmox storage {{ $labels.id }} is {{ $value | humanize }}% full.'
+              description: 'Over 80% for 15 minutes. local-lvm full means every VM freezes.'
+          - alert: ProxmoxStorageFilling
+            expr: 100 * pve_disk_usage_bytes{id=~"storage/.*"} / pve_disk_size_bytes{id=~"storage/.*"} > 90
+            for: 5m
+            labels: {severity: critical}
+            annotations:
+              summary: 'Proxmox storage {{ $labels.id }} is {{ $value | humanize }}% full.'
+              description: 'Over 90%. Free space now: local-lvm full means every VM freezes.'
+          - alert: ProxmoxExporterDown
+            # Whether any exporter works, not each pod: a replaced pod's last
+            # "down" would otherwise alert on its own.
+            expr: max(up{job="pve-exporter"}) == 0 or absent(up{job="pve-exporter"})
+            for: 10m
+            labels: {severity: warning}
+            annotations:
+              summary: 'Not getting metrics from the Proxmox host.'
+              description: 'pve-exporter has been down or unscraped for 10 minutes; storage alerts are blind meanwhile.'
+          - alert: ProxmoxGuestDown
+            expr: pve_up{id=~"qemu/.*|lxc/.*"} == 0 and on(id) pve_onboot_status == 1
+            for: 5m
+            labels: {severity: warning}
+            annotations:
+              summary: 'Proxmox guest {{ $labels.id }} is stopped but set to start on boot.'
+              description: 'Stopped for 5 minutes.'

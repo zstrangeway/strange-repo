@@ -50,3 +50,18 @@
         widget:
           type: prometheus
           url: http://monitoring-kube-prometheus-prometheus.monitoring.svc:9090
+    - Proxmox storage:
+        href: https://proxmox.home.arpa:8006
+        description: When local-lvm fills, every VM freezes
+        icon: proxmox.svg
+        widget:
+          type: prometheusmetric
+          url: http://monitoring-kube-prometheus-prometheus.monitoring.svc:9090
+          refreshInterval: 60000
+          metrics:
+            - label: local-lvm (VM disks)
+              query: round(100 * pve_disk_usage_bytes{id="storage/pve/local-lvm"} / pve_disk_size_bytes{id="storage/pve/local-lvm"})
+              format: {type: number, suffix: "%"}
+            - label: local (host)
+              query: round(100 * pve_disk_usage_bytes{id="storage/pve/local"} / pve_disk_size_bytes{id="storage/pve/local"})
+              format: {type: number, suffix: "%"}
