@@ -1,0 +1,14 @@
+{
+  "name": "dns",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "deploy": "task deploy",
+    "diff": "task diff",
+    "secret:unifi-api-key": "task secret:unifi-api-key",
+    "test": "task test"
+  },
+  "devDependencies": {
+    "@go-task/cli": "^3.52.0"
+  }
+}

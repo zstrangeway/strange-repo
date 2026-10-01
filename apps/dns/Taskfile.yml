@@ -1,0 +1,104 @@
+version: '3'
+
+env:
+  # The homelab repo writes the cluster's kubeconfig here. Set KUBECONFIG to
+  # point anywhere else.
+  KUBECONFIG: '{{env "KUBECONFIG" | default (print (env "HOME") "/Code/homelab/talos/_out/kubeconfig")}}'
+
+vars:
+  CHART: external-dns --repo https://kubernetes-sigs.github.io/external-dns --version 1.23.0
+  RELEASE: external-dns-unifi
+  UDM: 192.168.1.1
+
+tasks:
+  test:
+    desc: Check values against the chart, render it, and have the cluster's API check it if reachable
+    cmds:
+      - |
+        tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+        helm pull {{.CHART}} --untar -d "$tmp"
+        yq -o=json values.yaml > "$tmp/ours.json"
+        python3 ../../tools/check_helm_values.py dns "$tmp/external-dns" "$tmp/ours.json"
+      # Since v0.22 external-dns reads only external-dns.kubernetes.io/
+      # annotations; the old alpha prefix, still common in examples, is
+      # ignored without a word. Fail on it anywhere in apps/.
+      - |
+        # (Bracketed letter: so this pattern doesn't match this file.)
+        old=$(grep -rlE 'external-dns\.alph[a]\.kubernetes\.io/' ../ --include='*.yaml' --include='*.yml' || true)
+        [ -z "$old" ] || { echo "dns: these use the old alpha annotation prefix, which v0.22+ ignores:" $old; exit 1; }
+        echo "dns: no app uses the old alpha annotation prefix"
+      - |
+        n=$(helm template {{.RELEASE}} {{.CHART}} -n dns -f values.yaml | yq -N 'select(.kind != null) | .kind' | wc -l)
+        echo "dns: chart renders $n objects, plus $(yq -N '.spec.endpoints | length' static.yaml) static records"
+      - |
+        if ! kubectl version --request-timeout=3s >/dev/null 2>&1; then
+          echo "dns: no cluster reachable - schemas NOT checked, only rendering"
+        elif ! kubectl get crd dnsendpoints.externaldns.k8s.io >/dev/null 2>&1; then
+          echo "dns: CRDs not installed yet - schemas NOT checked, only rendering"
+        else
+          { helm template {{.RELEASE}} {{.CHART}} -n dns -f values.yaml --skip-tests; echo ---; cat static.yaml; } |
+            kubectl apply --server-side --force-conflicts --field-manager=dry-run-check --dry-run=server -f - >/dev/null
+          echo "dns: cluster API accepted every object (server-side dry run)"
+        fi
+
+  diff:
+    desc: Show what deploy would change in the cluster (not the records - see deploy)
+    cmds:
+      - kubectl diff -f namespace.yaml || [ $? -eq 1 ]
+      - |
+        if kubectl get crd dnsendpoints.externaldns.k8s.io >/dev/null 2>&1; then
+          helm diff upgrade {{.RELEASE}} {{.CHART}} -n dns -f values.yaml --allow-unreleased
+          kubectl diff -f static.yaml || [ $? -eq 1 ]
+        else
+          echo "dns: not installed yet, so no diff; deploy creates (plus the DNSEndpoint CRD):"
+          helm template {{.RELEASE}} {{.CHART}} -n dns -f values.yaml | yq -N 'select(.kind != null) | "  " + .kind + "/" + .metadata.name'
+          echo "  DNSEndpoint/homelab-hosts ($(yq -N '.spec.endpoints | length' static.yaml) records)"
+        fi
+      - |
+        echo "dns: hostnames declared on Services:"
+        kubectl get svc -A -o json | jq -r '.items[] | select(.metadata.annotations["external-dns.kubernetes.io/hostname"]) | "  " + .metadata.annotations["external-dns.kubernetes.io/hostname"] + " -> " + .metadata.namespace + "/" + .metadata.name'
+
+  secret:unifi-api-key:
+    desc: Store the UniFi API key external-dns writes records with, from a hidden prompt
+    interactive: true
+    cmds:
+      - kubectl apply -f namespace.yaml >/dev/null
+      - |
+        printf 'UniFi API key (input hidden): '
+        read -rs key; echo
+        [ ${#key} -ge 20 ] || { echo "dns: that's too short to be a UniFi API key - nothing stored"; exit 1; }
+        # Proves the key works before storing it: one read-only call.
+        code=$(curl -sk -o /dev/null -w '%{http_code}' -H "X-API-KEY: $key" https://192.168.1.1/proxy/network/integration/v1/sites)
+        [ "$code" = 200 ] || { echo "dns: the UDM rejected that key (HTTP $code) - nothing stored"; exit 1; }
+        # Straight into the cluster: never printed, written to disk or committed.
+        printf '%s' "$key" | kubectl -n dns create secret generic unifi-api-key \
+          --from-file=api-key=/dev/stdin --dry-run=client -o yaml |
+          kubectl apply --server-side --force-conflicts -f - >/dev/null
+        echo "dns/unifi-api-key: stored (the UDM accepted it)"
+
+  deploy:
+    desc: Install or upgrade external-dns, then check the UDM answers every declared name correctly
+    preconditions:
+      - sh: kubectl -n dns get secret unifi-api-key >/dev/null 2>&1
+        msg: "dns/unifi-api-key is missing. In a terminal: pnpm --filter dns run secret:unifi-api-key"
+    cmds:
+      - kubectl apply -f namespace.yaml
+      - helm upgrade --install {{.RELEASE}} {{.CHART}} -n dns -f values.yaml --wait --timeout 5m
+      - kubectl apply -f static.yaml
+      # Every declared name -> expected IP, from static.yaml and from Services'
+      # annotations and load balancer IPs; then ask the UDM itself for each.
+      - |
+        tmp=$(mktemp); trap 'rm -f "$tmp"' EXIT
+        yq -N '.spec.endpoints[] | .dnsName + " " + .targets[0]' static.yaml > "$tmp"
+        kubectl get svc -A -o json | jq -r '.items[] | select(.metadata.annotations["external-dns.kubernetes.io/hostname"]) | .metadata.annotations["external-dns.kubernetes.io/hostname"] + " " + (.status.loadBalancer.ingress[0].ip // "none")' >> "$tmp"
+        for i in $(seq 1 18); do
+          bad=""
+          while read -r name want; do
+            got=$(python3 ../../tools/dns_lookup.py {{.UDM}} "$name" 2>/dev/null | head -1)
+            [ "$got" = "$want" ] || bad="$bad $name(got ${got:-nothing}, want $want)"
+          done < "$tmp"
+          [ -z "$bad" ] && break
+          sleep 10
+        done
+        [ -z "$bad" ] || { echo "dns: the UDM doesn't answer correctly for:$bad"; exit 1; }
+        echo "dns: the UDM answers all $(wc -l < "$tmp") names correctly"

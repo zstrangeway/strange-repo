@@ -1,6 +1,9 @@
 version: '3'
 
 includes:
+  dns:
+    taskfile: ./apps/dns
+    dir: ./apps/dns
   gary-api:
     taskfile: ./apps/gary-api
     dir: ./apps/gary-api
@@ -53,3 +56,4 @@ tasks:
       # beyond kubectl and yq.
       - task: homepage:test
       - task: monitoring:test
+      - task: dns:test

@@ -1,0 +1,43 @@
+# external-dns writing *.home.arpa records into the UDM's local DNS, through
+# the UniFi webhook. Hostnames are declared where they belong: on each app's
+# Service (external-dns.kubernetes.io/hostname), and in static.yaml for
+# what isn't in the cluster. `task test` fails on a key the chart doesn't have.
+fullnameOverride: external-dns-unifi
+
+provider:
+  name: webhook
+  webhook:
+    image:
+      repository: ghcr.io/home-operations/external-dns-unifi-webhook
+      tag: 0.10.12
+    env:
+      # The UDM's certificate is self-signed; the webhook skips verifying it by
+      # default (UNIFI_SKIP_TLS_VERIFY). The key is the only credential.
+      - name: UNIFI_HOST
+        value: https://192.168.1.1
+      - name: UNIFI_API_KEY
+        valueFrom:
+          secretKeyRef: {name: unifi-api-key, key: api-key}
+    livenessProbe:
+      httpGet: {path: /healthz, port: http-webhook}
+      initialDelaySeconds: 10
+      timeoutSeconds: 5
+    readinessProbe:
+      httpGet: {path: /readyz, port: http-webhook}
+      initialDelaySeconds: 10
+      timeoutSeconds: 5
+
+sources: [service, crd]
+# Only ever touches home.arpa, whatever a Service asks for.
+domainFilters: [home.arpa]
+# sync: a record goes when its hostname does. Only records external-dns
+# created itself (marked by its TXT ownership records) are ever changed or
+# deleted - anything added by hand in UniFi is left alone.
+policy: sync
+txtOwnerId: homelab
+txtPrefix: k8s.%{record_type}-
+triggerLoopOnEvent: true
+
+# Scraped by apps/monitoring, which picks up ServiceMonitors from anywhere.
+serviceMonitor:
+  enabled: true

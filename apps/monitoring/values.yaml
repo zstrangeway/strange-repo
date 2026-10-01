@@ -100,6 +100,8 @@ grafana:
     type: LoadBalancer
     annotations:
       metallb.io/loadBalancerIPs: 192.168.1.231
+      # Written into the UDM's DNS by apps/dns.
+      external-dns.kubernetes.io/hostname: grafana.home.arpa
     port: 80
   # Dashboards and datasources come from the chart and from ConfigMaps, so
   # nothing in Grafana's own database needs to survive a restart.

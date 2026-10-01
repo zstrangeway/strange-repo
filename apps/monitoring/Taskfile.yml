@@ -20,7 +20,7 @@ tasks:
         # sub-charts' (grafana, node-exporter, ...) own defaults.
         helm pull {{.CHART}} --untar -d "$tmp"
         yq -o=json values.yaml > "$tmp/ours.json"
-        python3 check_values.py "$tmp/kube-prometheus-stack" "$tmp/ours.json"
+        python3 ../../tools/check_helm_values.py monitoring "$tmp/kube-prometheus-stack" "$tmp/ours.json"
       - |
         n=$(helm template {{.RELEASE}} {{.CHART}} -n monitoring -f values.yaml | yq -N 'select(.kind != null) | .kind' | wc -l)
         echo "monitoring: chart renders $n objects"

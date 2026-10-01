@@ -7,7 +7,7 @@ the chart does define is free-form (an empty map or null), like `resources`.
 Sub-charts' defaults are merged in under their names, the way Helm sees
 them: the parent chart's own values for a sub-chart win over the sub-chart's.
 
-Usage: check_values.py <unpacked chart dir> <our values as JSON>
+Usage: check_helm_values.py <label> <unpacked chart dir> <our values as JSON>
 """
 import json
 import pathlib
@@ -48,15 +48,16 @@ def unknown(defaults, path):
     return None
 
 
-chart = pathlib.Path(sys.argv[1])
+label = sys.argv[1]
+chart = pathlib.Path(sys.argv[2])
 defaults = load_yaml(chart / "values.yaml")
 for sub in sorted((chart / "charts").glob("*/values.yaml")):
     name = sub.parent.name
     defaults[name] = merge(load_yaml(sub), defaults.get(name) or {})
-ours = json.load(open(sys.argv[2]))
+ours = json.load(open(sys.argv[3]))
 paths = list(leaves(ours))
 bad = sorted({u for p in paths if (u := unknown(defaults, p))})
 if bad:
-    print("monitoring: values.yaml keys the chart doesn't have: " + ", ".join(bad))
+    print(f"{label}: values.yaml keys the chart doesn't have: " + ", ".join(bad))
     sys.exit(1)
-print(f"monitoring: all {len(paths)} values.yaml settings are keys the chart defines")
+print(f"{label}: all {len(paths)} values.yaml settings are keys the chart defines")

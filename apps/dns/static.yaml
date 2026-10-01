@@ -1,0 +1,14 @@
+# Names for what isn't a Kubernetes Service: the Proxmox host and the nodes.
+# The ones most wanted during an outage, so they live in the UDM, not in
+# anything the cluster runs.
+apiVersion: externaldns.k8s.io/v1alpha1
+kind: DNSEndpoint
+metadata:
+  name: homelab-hosts
+  namespace: dns
+spec:
+  endpoints:
+    - {dnsName: proxmox.home.arpa, recordType: A, targets: [192.168.1.200]}
+    - {dnsName: talos-cp1.home.arpa, recordType: A, targets: [192.168.1.201]}
+    - {dnsName: talos-w1.home.arpa, recordType: A, targets: [192.168.1.202]}
+    - {dnsName: talos-w2.home.arpa, recordType: A, targets: [192.168.1.203]}

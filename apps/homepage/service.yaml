@@ -3,9 +3,11 @@ kind: Service
 metadata:
   name: homepage
   annotations:
-    # Pinned, so the address survives the service being recreated. Must also
-    # be in HOMEPAGE_ALLOWED_HOSTS in deployment.yaml.
+    # Pinned, so the address survives the service being recreated. Both the
+    # IP and the name must also be in HOMEPAGE_ALLOWED_HOSTS in deployment.yaml.
     metallb.io/loadBalancerIPs: 192.168.1.230
+    # Written into the UDM's DNS by apps/dns.
+    external-dns.kubernetes.io/hostname: homepage.home.arpa
 spec:
   type: LoadBalancer
   ports:

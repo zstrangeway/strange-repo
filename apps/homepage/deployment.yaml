@@ -26,7 +26,7 @@ spec:
             # Homepage refuses any Host header not listed. The pod IP is for
             # the kubelet's probes; the rest is what a browser sends.
             - name: HOMEPAGE_ALLOWED_HOSTS
-              value: "$(MY_POD_IP):3000,192.168.1.230"
+              value: "$(MY_POD_IP):3000,192.168.1.230,homepage.home.arpa"
             # From `task secret:proxmox-token APP=homepage` in the homelab
             # repo. Referenced in config/services.yaml as {{HOMEPAGE_VAR_...}}.
             - name: HOMEPAGE_VAR_PROXMOX_URL

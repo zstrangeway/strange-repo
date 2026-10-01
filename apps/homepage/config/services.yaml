@@ -1,6 +1,6 @@
 - Infrastructure:
     - Proxmox:
-        href: https://192.168.1.200:8006
+        href: https://proxmox.home.arpa:8006
         description: ThinkCentre M710s
         icon: proxmox.svg
         widget:
@@ -9,3 +9,7 @@
           username: "{{HOMEPAGE_VAR_PROXMOX_TOKEN_ID}}"
           password: "{{HOMEPAGE_VAR_PROXMOX_TOKEN_SECRET}}"
           node: pve
+    - Grafana:
+        href: http://grafana.home.arpa
+        description: Metrics, dashboards and alerts
+        icon: grafana.svg

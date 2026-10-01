@@ -1,7 +1,7 @@
 # homepage
 
 [Homepage](https://gethomepage.dev) v2.4.0, the homelab's dashboard, at
-**http://192.168.1.230**. Infrastructure only: these are the official
+**http://homepage.home.arpa** (192.168.1.230). Infrastructure only: these are the official
 Kubernetes manifests, adapted, and the dashboard's config — no code of ours.
 
 ## What it shows
@@ -49,7 +49,7 @@ references.
 
 ## Changing its address
 
-`192.168.1.230` is pinned in two places that have to agree: the
-`metallb.io/loadBalancerIPs` annotation in `service.yaml`, and
+`192.168.1.230` and `homepage.home.arpa` are set in `service.yaml` (the
+MetalLB and external-dns annotations), and both must also be in
 `HOMEPAGE_ALLOWED_HOSTS` in `deployment.yaml`. Homepage answers any host not
-in the second with an error page.
+listed there with an error page.
