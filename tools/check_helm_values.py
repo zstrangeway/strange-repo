@@ -11,6 +11,9 @@ Some values are handed to Kubernetes as a whole object (a pod's securityContext,
 say) whose chart default only lists a few fields. Name those with --free-form
 <dotted.path>, and anything below them is accepted.
 
+Paths are dotted, or /-separated when a key itself contains a dot
+(grafana/grafana.ini).
+
 Usage: check_helm_values.py <label> <unpacked chart dir> <our values as JSON> [--free-form path ...]
 """
 import json
@@ -62,7 +65,8 @@ for sub in sorted((chart / "charts").glob("*/values.yaml")):
     defaults[name] = merge(load_yaml(sub), defaults.get(name) or {})
 ours = json.load(open(sys.argv[3]))
 extra = sys.argv[4:]
-free_form = [tuple(extra[i + 1].split(".")) for i, a in enumerate(extra) if a == "--free-form" and i + 1 < len(extra)]
+free_form = [tuple(f.split("/") if "/" in f else f.split("."))
+             for f in (extra[i + 1] for i, a in enumerate(extra) if a == "--free-form" and i + 1 < len(extra))]
 paths = list(leaves(ours))
 bad = sorted({u for p in paths if (u := unknown(defaults, p, free_form))})
 if bad:

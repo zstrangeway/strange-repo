@@ -1,7 +1,7 @@
 # homepage
 
 [Homepage](https://gethomepage.dev) v2.4.0, the homelab's dashboard, at
-**http://homepage.home.arpa** (192.168.1.230). Infrastructure only: these are the official
+**https://homepage.strange-lab.dev** (through apps/proxy; 192.168.1.230 directly). Infrastructure only: these are the official
 Kubernetes manifests, adapted, and the dashboard's config — no code of ours.
 
 ## What it shows

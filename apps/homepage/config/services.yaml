@@ -1,6 +1,6 @@
 - Infrastructure:
     - UniFi:
-        href: https://unifi.home.arpa
+        href: https://unifi.strange-lab.dev
         description: UDM - network and Wi-Fi
         icon: unifi.svg
         widget:
@@ -9,7 +9,7 @@
           key: "{{HOMEPAGE_VAR_UNIFI_KEY}}"
           fields: [uptime, wan, lan_users, wlan_users]
     - Proxmox:
-        href: https://proxmox.home.arpa:8006
+        href: https://proxmox.strange-lab.dev
         description: ThinkCentre M710s
         icon: proxmox.svg
         widget:
@@ -24,7 +24,7 @@
 # no data rather than as 0.
 - Monitoring:
     - Grafana:
-        href: http://grafana.home.arpa/dashboards
+        href: https://grafana.strange-lab.dev/dashboards
         description: Cluster health at a glance
         icon: grafana.svg
         widget:
@@ -44,14 +44,14 @@
                 type: number
                 suffix: "%"
     - Prometheus:
-        href: http://grafana.home.arpa/explore
+        href: https://grafana.strange-lab.dev/explore
         description: Scrape targets
         icon: prometheus.svg
         widget:
           type: prometheus
           url: http://monitoring-kube-prometheus-prometheus.monitoring.svc:9090
     - Proxmox storage:
-        href: https://proxmox.home.arpa:8006
+        href: https://proxmox.strange-lab.dev
         description: When local-lvm fills, every VM freezes
         icon: proxmox.svg
         widget:

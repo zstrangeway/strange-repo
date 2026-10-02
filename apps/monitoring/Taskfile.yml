@@ -20,7 +20,11 @@ tasks:
         # sub-charts' (grafana, node-exporter, ...) own defaults.
         helm pull {{.CHART}} --untar -d "$tmp"
         yq -o=json values.yaml > "$tmp/ours.json"
-        python3 ../../tools/check_helm_values.py monitoring "$tmp/kube-prometheus-stack" "$tmp/ours.json"
+        # grafana.ini is Grafana's own config file - any setting is valid. The
+        # Grafana chart's ingressClassName is commented out in its defaults,
+        # though its ingress template reads it.
+        python3 ../../tools/check_helm_values.py monitoring "$tmp/kube-prometheus-stack" "$tmp/ours.json" \
+          --free-form grafana/grafana.ini --free-form grafana.ingress.ingressClassName
       - |
         out=$(helm template {{.RELEASE}} {{.CHART}} -n monitoring -f values.yaml) || { echo "monitoring: helm template failed"; exit 1; }
         n=$(echo "$out" | yq -N 'select(.kind != null) | .kind' | wc -l)

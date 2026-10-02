@@ -24,11 +24,11 @@ cluster. These are configuration only, so they skip the spec-first rules — see
 
 | App | What it is |
 | --- | --- |
-| [`apps/homepage`](apps/homepage) | [Homepage](https://gethomepage.dev), a dashboard for the homelab, at http://homepage.home.arpa |
-| [`apps/monitoring`](apps/monitoring) | Prometheus, Alertmanager and Grafana, at http://grafana.home.arpa |
+| [`apps/homepage`](apps/homepage) | [Homepage](https://gethomepage.dev), a dashboard for the homelab, at https://homepage.strange-lab.dev |
+| [`apps/monitoring`](apps/monitoring) | Prometheus, Alertmanager and Grafana, at https://grafana.strange-lab.dev |
 | [`apps/dns`](apps/dns) | external-dns, keeping `*.home.arpa` names in the UDM |
 | [`apps/proxy`](apps/proxy) | Traefik: HTTPS for every app at `*.strange-lab.dev`, one Let's Encrypt wildcard |
-| [`apps/paperclip`](apps/paperclip) | [Paperclip](https://paperclip.ing), orchestration for AI agents, at http://paperclip.home.arpa |
+| [`apps/paperclip`](apps/paperclip) | [Paperclip](https://paperclip.ing), orchestration for AI agents, at https://paperclip.strange-lab.dev |
 
 Play is divided into **scenes**, which are the unit of gary's memory: the
 model is told the current scene and a recap of each one before it, so a long

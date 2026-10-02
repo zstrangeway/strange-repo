@@ -13,6 +13,21 @@ from home, through Tailscale split DNS (`strange-lab.dev` → 192.168.1.1).
 Nothing about the homelab is in public DNS; proving the domain only needs a
 temporary TXT record. Off the LAN, only Tailscale devices reach any of it.
 
+## What's behind it
+
+| Name | Goes to |
+| --- | --- |
+| `paperclip`, `grafana`, `homepage` | their Services, through each app's Ingress |
+| `proxmox` | 192.168.1.200:8006 |
+| `unifi` | 192.168.1.1 (the UDM) |
+
+Proxmox and the UDM are Services with no pods (an EndpointSlice points each at
+the device) plus an Ingress, in `values.yaml` under `extraObjects`. Their own
+certificates are self-signed, which Traefik accepts on those two routes only
+(the `backend-selfsigned` ServersTransport).
+
+The `home.arpa` names still work, as a fallback, until they're retired.
+
 ## Adding an app
 
 Give it an Ingress with `ingressClassName: traefik` and a

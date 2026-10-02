@@ -87,12 +87,15 @@ tasks:
       - kubectl apply -f namespace.yaml
       - helm upgrade --install {{.RELEASE}} {{.CHART}} -n dns -f values.yaml --wait --timeout 5m
       - kubectl apply -f static.yaml
-      # Every declared name -> expected IP, from static.yaml and from Services'
-      # annotations and load balancer IPs; then ask the UDM itself for each.
+      # Every declared name -> expected IP, from static.yaml, Services'
+      # annotations and Ingress hosts; then ask the UDM itself for each.
       - |
         tmp=$(mktemp); trap 'rm -f "$tmp"' EXIT
         yq -N '.spec.endpoints[] | .dnsName + " " + .targets[0]' static.yaml > "$tmp"
         kubectl get svc -A -o json | jq -r '.items[] | select(.metadata.annotations["external-dns.kubernetes.io/hostname"]) | .metadata.annotations["external-dns.kubernetes.io/hostname"] + " " + (.status.loadBalancer.ingress[0].ip // "none")' >> "$tmp"
+        # And every Ingress host, which external-dns points at the Ingress's
+        # load balancer (Traefik).
+        kubectl get ingress -A -o json | jq -r '.items[] | .status.loadBalancer.ingress[0].ip as $ip | .spec.rules[].host + " " + ($ip // "none")' >> "$tmp"
         for i in $(seq 1 18); do
           bad=""
           while read -r name want; do

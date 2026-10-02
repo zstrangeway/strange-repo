@@ -98,3 +98,89 @@ ingressRoute:
     enabled: true
     entryPoints: [websecure]
     matchRule: Host(`probe.strange-lab.dev`) && PathPrefix(`/ping`)
+
+# Appliances on the LAN behind the same wildcard: Proxmox and the UDM.
+# Each is a Service with no pods - an EndpointSlice points it at the device -
+# and an Ingress, so apps/dns names it like any app. Both devices serve
+# self-signed HTTPS, which Traefik accepts on these two routes only (the
+# backend-selfsigned ServersTransport); browsers see the wildcard.
+extraObjects:
+  - apiVersion: traefik.io/v1alpha1
+    kind: ServersTransport
+    metadata: {name: backend-selfsigned, namespace: proxy}
+    spec:
+      insecureSkipVerify: true
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: proxmox
+      namespace: proxy
+      annotations:
+        traefik.ingress.kubernetes.io/service.serversscheme: https
+        traefik.ingress.kubernetes.io/service.serverstransport: proxy-backend-selfsigned@kubernetescrd
+    spec:
+      ports: [{name: https, port: 8006, targetPort: 8006}]
+  - apiVersion: discovery.k8s.io/v1
+    kind: EndpointSlice
+    metadata:
+      name: proxmox
+      namespace: proxy
+      labels: {kubernetes.io/service-name: proxmox}
+    addressType: IPv4
+    ports: [{name: https, port: 8006, protocol: TCP}]
+    endpoints:
+      - addresses: [192.168.1.200]
+  - apiVersion: networking.k8s.io/v1
+    kind: Ingress
+    metadata:
+      name: proxmox
+      namespace: proxy
+    spec:
+      ingressClassName: traefik
+      rules:
+        - host: proxmox.strange-lab.dev
+          http:
+            paths:
+              - path: /
+                pathType: Prefix
+                backend:
+                  service:
+                    name: proxmox
+                    port: {name: https}
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: unifi
+      namespace: proxy
+      annotations:
+        traefik.ingress.kubernetes.io/service.serversscheme: https
+        traefik.ingress.kubernetes.io/service.serverstransport: proxy-backend-selfsigned@kubernetescrd
+    spec:
+      ports: [{name: https, port: 443, targetPort: 443}]
+  - apiVersion: discovery.k8s.io/v1
+    kind: EndpointSlice
+    metadata:
+      name: unifi
+      namespace: proxy
+      labels: {kubernetes.io/service-name: unifi}
+    addressType: IPv4
+    ports: [{name: https, port: 443, protocol: TCP}]
+    endpoints:
+      - addresses: [192.168.1.1]
+  - apiVersion: networking.k8s.io/v1
+    kind: Ingress
+    metadata:
+      name: unifi
+      namespace: proxy
+    spec:
+      ingressClassName: traefik
+      rules:
+        - host: unifi.strange-lab.dev
+          http:
+            paths:
+              - path: /
+                pathType: Prefix
+                backend:
+                  service:
+                    name: unifi
+                    port: {name: https}

@@ -1,7 +1,7 @@
 # paperclip
 
 [Paperclip](https://paperclip.ing) 2026.916.1, orchestration for a team of AI
-agents, at **http://paperclip.home.arpa** (192.168.1.232). Infrastructure
+agents, at **https://paperclip.strange-lab.dev** (through apps/proxy; 192.168.1.232 directly). Infrastructure
 only: the server image and Postgres 17.11, configured here.
 
 Agents run inside the server pod through the CLIs the image ships: Claude

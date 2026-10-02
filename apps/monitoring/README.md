@@ -4,7 +4,7 @@ Prometheus, Alertmanager and Grafana for the homelab cluster, from
 [kube-prometheus-stack](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack)
 91.8.2, trimmed. Infrastructure only: `values.yaml` is the whole of it.
 
-**Grafana: http://grafana.home.arpa** (192.168.1.231) (user `admin`; password below).
+**Grafana: https://grafana.strange-lab.dev** (through apps/proxy; 192.168.1.231 directly) (user `admin`; password below).
 
 ## What it watches
 

@@ -8,6 +8,7 @@ resources:
   - rbac.yaml
   - deployment.yaml
   - service.yaml
+  - ingress.yaml
 # A hash suffix on the name, so editing any file under config/ rolls the pod.
 # Every file Homepage's image has a default for must be here: it can't write
 # a missing one, and crashes instead. `task test` checks against the image.
