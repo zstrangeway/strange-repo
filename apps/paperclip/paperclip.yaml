@@ -43,10 +43,12 @@ spec:
             - {name: PAPERCLIP_HOME, value: /paperclip}
             - {name: PAPERCLIP_DEPLOYMENT_MODE, value: authenticated}
             - {name: PAPERCLIP_DEPLOYMENT_EXPOSURE, value: private}
-            - {name: PAPERCLIP_PUBLIC_URL, value: http://paperclip.home.arpa}
+            # HTTPS through apps/proxy. Paperclip's composer and GitHub connection
+            # card both need a secure origin - on plain http they silently do nothing.
+            - {name: PAPERCLIP_PUBLIC_URL, value: https://paperclip.strange-lab.dev}
             # Private mode refuses any Host it doesn't know (403). These are what
             # a browser sends; localhost is always allowed, which the probes use.
-            - {name: PAPERCLIP_ALLOWED_HOSTNAMES, value: "paperclip.home.arpa,192.168.1.232"}
+            - {name: PAPERCLIP_ALLOWED_HOSTNAMES, value: "paperclip.strange-lab.dev,paperclip.home.arpa,192.168.1.232"}
             - name: POSTGRES_PASSWORD
               valueFrom: {secretKeyRef: {name: paperclip-internal, key: postgres-password}}
             - {name: DATABASE_URL, value: "postgres://paperclip:$(POSTGRES_PASSWORD)@postgres:5432/paperclip"}
@@ -104,3 +106,22 @@ spec:
   selector: {app.kubernetes.io/name: paperclip}
   ports:
     - {name: http, port: 80, targetPort: http}
+---
+# https://paperclip.strange-lab.dev, through apps/proxy (Traefik), which
+# holds the wildcard certificate. apps/dns points the name at Traefik.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: paperclip
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: paperclip.strange-lab.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: paperclip
+                port: {name: http}

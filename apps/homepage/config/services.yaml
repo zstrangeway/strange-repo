@@ -68,6 +68,6 @@
 
 - Agents:
     - Paperclip:
-        href: http://paperclip.home.arpa
+        href: https://paperclip.strange-lab.dev
         description: The agent team
         icon: mdi-paperclip

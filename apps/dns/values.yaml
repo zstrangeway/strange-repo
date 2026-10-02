@@ -27,9 +27,11 @@ provider:
       initialDelaySeconds: 10
       timeoutSeconds: 5
 
-sources: [service, crd]
-# Only ever touches home.arpa, whatever a Service asks for.
-domainFilters: [home.arpa]
+# Ingress: apps behind apps/proxy, named by their host, pointed at Traefik.
+sources: [service, ingress, crd]
+# Only ever touches these, whatever a Service or Ingress asks for. Both live
+# only in the UDM - nothing here writes public DNS.
+domainFilters: [home.arpa, strange-lab.dev]
 # sync: a record goes when its hostname does. Only records external-dns
 # created itself (marked by its TXT ownership records) are ever changed or
 # deleted - anything added by hand in UniFi is left alone.

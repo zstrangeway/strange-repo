@@ -1,4 +1,4 @@
-# Traefik: HTTPS for the homelab's apps at *.home.strange-lab.dev, with a
+# Traefik: HTTPS for the homelab's apps at *.strange-lab.dev, with a
 # Let's Encrypt wildcard certificate proved through Cloudflare DNS. Private:
 # the names only exist in the UDM (apps/dns) and over Tailscale split DNS.
 # `task test` fails on a key the chart doesn't define.
@@ -24,10 +24,10 @@ ports:
         # issuance out for days.
         certResolver: letsencrypt
         # One wildcard for every app, so app names stay out of the public
-        # certificate-transparency logs - only home.strange-lab.dev shows.
+        # certificate-transparency logs - only strange-lab.dev shows.
         domains:
-          - main: home.strange-lab.dev
-            sans: ["*.home.strange-lab.dev"]
+          - main: strange-lab.dev
+            sans: ["*.strange-lab.dev"]
 
 certificatesResolvers:
   letsencrypt-staging:
@@ -92,9 +92,9 @@ resources:
 
 # A route of Traefik's own on HTTPS: certificates are requested for routes,
 # so the wildcard is issued (and renewed, and checked by deploy) even before
-# any app routes here. https://probe.home.strange-lab.dev/ping answers OK.
+# any app routes here. https://probe.strange-lab.dev/ping answers OK.
 ingressRoute:
   healthcheck:
     enabled: true
     entryPoints: [websecure]
-    matchRule: Host(`probe.home.strange-lab.dev`) && PathPrefix(`/ping`)
+    matchRule: Host(`probe.strange-lab.dev`) && PathPrefix(`/ping`)

@@ -9,7 +9,7 @@ vars:
   CHART: traefik --repo https://traefik.github.io/charts --version 41.6.1
   RELEASE: traefik
   IP: 192.168.1.233
-  PROBE_NAME: probe.home.strange-lab.dev
+  PROBE_NAME: probe.strange-lab.dev
 
 tasks:
   test:
@@ -71,14 +71,15 @@ tasks:
     cmds:
       - kubectl apply -f namespace.yaml
       - helm upgrade --install {{.RELEASE}} {{.CHART}} -n proxy -f values.yaml --wait --timeout 5m
-      # Issuing takes a minute or two (DNS challenge + propagation). Until
+      # Issuing takes a few minutes (DNS challenge + propagation). Until
       # then Traefik serves its own default certificate, which this rejects.
       - |
-        for i in $(seq 1 30); do
+        # Up to 8 minutes: a certificate for new names takes longer than a renewal.
+        for i in $(seq 1 48); do
           cert=$(echo | openssl s_client -connect {{.IP}}:443 -servername {{.PROBE_NAME}} 2>/dev/null | openssl x509 -noout -issuer -ext subjectAltName -enddate 2>/dev/null)
-          echo "$cert" | grep -q 'home.strange-lab.dev' && break
+          echo "$cert" | grep -qF 'DNS:*.strange-lab.dev' && break
           sleep 10
         done
-        echo "$cert" | grep -q 'home.strange-lab.dev' || { echo "proxy: no home.strange-lab.dev certificate served after 5 minutes - see: kubectl -n proxy logs deploy/traefik | grep -i acme"; exit 1; }
+        echo "$cert" | grep -qF 'DNS:*.strange-lab.dev' || { echo "proxy: no *.strange-lab.dev certificate served after 8 minutes - see: kubectl -n proxy logs deploy/traefik | grep -i acme"; exit 1; }
         echo "proxy: serving on {{.IP}}:443 -"
         echo "$cert" | sed 's/^/  /'
