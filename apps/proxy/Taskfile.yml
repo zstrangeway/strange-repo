@@ -1,0 +1,84 @@
+version: '3'
+
+env:
+  # The homelab repo writes the cluster's kubeconfig here. Set KUBECONFIG to
+  # point anywhere else.
+  KUBECONFIG: '{{env "KUBECONFIG" | default (print (env "HOME") "/Code/homelab/talos/_out/kubeconfig")}}'
+
+vars:
+  CHART: traefik --repo https://traefik.github.io/charts --version 41.6.1
+  RELEASE: traefik
+  IP: 192.168.1.233
+  PROBE_NAME: probe.home.strange-lab.dev
+
+tasks:
+  test:
+    desc: Check values against the chart, render it, and have the cluster's API check it if reachable
+    cmds:
+      - |
+        tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+        helm pull {{.CHART}} --untar -d "$tmp"
+        yq -o=json values.yaml > "$tmp/ours.json"
+        # podSecurityContext goes to the pod spec whole; the chart's default
+        # just doesn't list fsGroup (its own Cloudflare example sets it).
+        python3 ../../tools/check_helm_values.py proxy "$tmp/traefik" "$tmp/ours.json" --free-form podSecurityContext
+      - |
+        out=$(helm template {{.RELEASE}} {{.CHART}} -n proxy -f values.yaml --api-versions monitoring.coreos.com/v1) || { echo "proxy: helm template failed"; exit 1; }
+        n=$(echo "$out" | yq -N 'select(.kind != null) | .kind' | wc -l)
+        [ "$n" -gt 0 ] || { echo "proxy: chart rendered no objects"; exit 1; }
+        echo "proxy: chart renders $n objects"
+      - |
+        if ! kubectl version --request-timeout=3s >/dev/null 2>&1; then
+          echo "proxy: no cluster reachable - schemas NOT checked, only rendering"
+        elif ! kubectl get namespace proxy >/dev/null 2>&1; then
+          echo "proxy: namespace not created yet - schemas NOT checked, only rendering"
+        else
+          helm template {{.RELEASE}} {{.CHART}} -n proxy -f values.yaml --api-versions monitoring.coreos.com/v1 --skip-tests |
+            kubectl apply --server-side --force-conflicts --field-manager=dry-run-check --dry-run=server -f - >/dev/null
+          echo "proxy: cluster API accepted every object (server-side dry run)"
+        fi
+
+  diff:
+    desc: Show what deploy would change in the cluster
+    cmds:
+      - kubectl diff -f namespace.yaml || [ $? -eq 1 ]
+      - helm diff upgrade {{.RELEASE}} {{.CHART}} -n proxy -f values.yaml --allow-unreleased
+
+  secret:cloudflare-token:
+    desc: Store the Cloudflare API token (DNS edit, strange-lab.dev only) from a hidden prompt
+    interactive: true
+    cmds:
+      - kubectl apply -f namespace.yaml >/dev/null
+      - |
+        printf 'Cloudflare API token "traefik-acme" (input hidden): '
+        read -rs token; echo
+        [ -n "$token" ] || { echo "proxy: nothing entered - nothing stored"; exit 1; }
+        # Proves it before storing it: the token is live, and can see the zone.
+        v=$(curl -s https://api.cloudflare.com/client/v4/user/tokens/verify -H "Authorization: Bearer $token")
+        [ "$(echo "$v" | jq -r '.result.status // empty')" = active ] || { echo "proxy: Cloudflare says that token isn't active - nothing stored"; exit 1; }
+        z=$(curl -s "https://api.cloudflare.com/client/v4/zones?name=strange-lab.dev" -H "Authorization: Bearer $token" | jq -r '.result | length')
+        [ "$z" = 1 ] || { echo "proxy: that token can't see the strange-lab.dev zone (needs Zone:Read on it) - nothing stored"; exit 1; }
+        printf '%s' "$token" | kubectl -n proxy create secret generic cloudflare-token \
+          --from-file=token=/dev/stdin --dry-run=client -o yaml |
+          kubectl apply --server-side --force-conflicts -f - >/dev/null
+        echo "proxy/cloudflare-token: stored (active, and can see strange-lab.dev)"
+
+  deploy:
+    desc: Install or upgrade Traefik, then show which certificate it actually serves
+    preconditions:
+      - sh: kubectl -n proxy get secret cloudflare-token >/dev/null 2>&1
+        msg: "proxy/cloudflare-token is missing. In a terminal: pnpm --filter proxy run secret:cloudflare-token"
+    cmds:
+      - kubectl apply -f namespace.yaml
+      - helm upgrade --install {{.RELEASE}} {{.CHART}} -n proxy -f values.yaml --wait --timeout 5m
+      # Issuing takes a minute or two (DNS challenge + propagation). Until
+      # then Traefik serves its own default certificate, which this rejects.
+      - |
+        for i in $(seq 1 30); do
+          cert=$(echo | openssl s_client -connect {{.IP}}:443 -servername {{.PROBE_NAME}} 2>/dev/null | openssl x509 -noout -issuer -ext subjectAltName -enddate 2>/dev/null)
+          echo "$cert" | grep -q 'home.strange-lab.dev' && break
+          sleep 10
+        done
+        echo "$cert" | grep -q 'home.strange-lab.dev' || { echo "proxy: no home.strange-lab.dev certificate served after 5 minutes - see: kubectl -n proxy logs deploy/traefik | grep -i acme"; exit 1; }
+        echo "proxy: serving on {{.IP}}:443 -"
+        echo "$cert" | sed 's/^/  /'

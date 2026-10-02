@@ -22,7 +22,9 @@ tasks:
         yq -o=json values.yaml > "$tmp/ours.json"
         python3 ../../tools/check_helm_values.py monitoring "$tmp/kube-prometheus-stack" "$tmp/ours.json"
       - |
-        n=$(helm template {{.RELEASE}} {{.CHART}} -n monitoring -f values.yaml | yq -N 'select(.kind != null) | .kind' | wc -l)
+        out=$(helm template {{.RELEASE}} {{.CHART}} -n monitoring -f values.yaml) || { echo "monitoring: helm template failed"; exit 1; }
+        n=$(echo "$out" | yq -N 'select(.kind != null) | .kind' | wc -l)
+        [ "$n" -gt 0 ] || { echo "monitoring: chart rendered no objects"; exit 1; }
         echo "monitoring: chart renders $n objects"
       # The chart's own resources (Prometheus, Alertmanager, ServiceMonitors,
       # rules) are custom resources, so the API can only check them once the

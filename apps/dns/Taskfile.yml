@@ -28,7 +28,9 @@ tasks:
         [ -z "$old" ] || { echo "dns: these use the old alpha annotation prefix, which v0.22+ ignores:" $old; exit 1; }
         echo "dns: no app uses the old alpha annotation prefix"
       - |
-        n=$(helm template {{.RELEASE}} {{.CHART}} -n dns -f values.yaml | yq -N 'select(.kind != null) | .kind' | wc -l)
+        out=$(helm template {{.RELEASE}} {{.CHART}} -n dns -f values.yaml) || { echo "dns: helm template failed"; exit 1; }
+        n=$(echo "$out" | yq -N 'select(.kind != null) | .kind' | wc -l)
+        [ "$n" -gt 0 ] || { echo "dns: chart rendered no objects"; exit 1; }
         echo "dns: chart renders $n objects, plus $(yq -N '.spec.endpoints | length' static.yaml) static records"
       - |
         if ! kubectl version --request-timeout=3s >/dev/null 2>&1; then

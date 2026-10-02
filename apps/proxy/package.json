@@ -1,0 +1,14 @@
+{
+  "name": "proxy",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "deploy": "task deploy",
+    "diff": "task diff",
+    "secret:cloudflare-token": "task secret:cloudflare-token",
+    "test": "task test"
+  },
+  "devDependencies": {
+    "@go-task/cli": "^3.52.0"
+  }
+}

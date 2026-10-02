@@ -1,0 +1,100 @@
+# Traefik: HTTPS for the homelab's apps at *.home.strange-lab.dev, with a
+# Let's Encrypt wildcard certificate proved through Cloudflare DNS. Private:
+# the names only exist in the UDM (apps/dns) and over Tailscale split DNS.
+# `task test` fails on a key the chart doesn't define.
+
+service:
+  annotations:
+    metallb.io/loadBalancerIPs: 192.168.1.233
+
+ports:
+  web:
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    http:
+      tls:
+        enabled: true
+        # letsencrypt-staging (kept below) first, for anything that changes
+        # how certificates are obtained: production's rate limits can lock
+        # issuance out for days.
+        certResolver: letsencrypt
+        # One wildcard for every app, so app names stay out of the public
+        # certificate-transparency logs - only home.strange-lab.dev shows.
+        domains:
+          - main: home.strange-lab.dev
+            sans: ["*.home.strange-lab.dev"]
+
+certificatesResolvers:
+  letsencrypt-staging:
+    acme:
+      caServer: https://acme-staging-v02.api.letsencrypt.org/directory
+      storage: /data/acme-staging.json
+      dnsChallenge:
+        provider: cloudflare
+        # Check the challenge record against public resolvers, not the UDM.
+        resolvers: ["1.1.1.1:53", "1.0.0.1:53"]
+  letsencrypt:
+    acme:
+      storage: /data/acme.json
+      dnsChallenge:
+        provider: cloudflare
+        resolvers: ["1.1.1.1:53", "1.0.0.1:53"]
+
+# From `secret:cloudflare-token`: DNS edit on strange-lab.dev only.
+env:
+  - name: CF_DNS_API_TOKEN
+    valueFrom:
+      secretKeyRef: {name: cloudflare-token, key: token}
+
+# Where the certificates live, so a restart doesn't re-request them.
+persistence:
+  enabled: true
+  storageClass: local-path
+  size: 128Mi
+
+deployment:
+  initContainers:
+    # Traefik refuses an acme.json readable by anyone else.
+    - name: acme-permissions
+      image: busybox:1.37
+      command: ["sh", "-c", "touch /data/acme.json /data/acme-staging.json && chmod 600 /data/acme.json /data/acme-staging.json"]
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities: {drop: [ALL]}
+      volumeMounts:
+        - {name: data, mountPath: /data}
+
+podSecurityContext:
+  fsGroup: 65532
+  fsGroupChangePolicy: OnRootMismatch
+
+providers:
+  kubernetesIngress:
+    # Ingresses get Traefik's LoadBalancer IP in their status, which is what
+    # apps/dns reads to point each name at .233.
+    publishedService:
+      enabled: true
+
+# Scraped by apps/monitoring.
+metrics:
+  prometheus:
+    serviceMonitor:
+      enabled: true
+
+resources:
+  requests: {cpu: 50m, memory: 64Mi}
+  limits: {memory: 256Mi}
+
+# A route of Traefik's own on HTTPS: certificates are requested for routes,
+# so the wildcard is issued (and renewed, and checked by deploy) even before
+# any app routes here. https://probe.home.strange-lab.dev/ping answers OK.
+ingressRoute:
+  healthcheck:
+    enabled: true
+    entryPoints: [websecure]
+    matchRule: Host(`probe.home.strange-lab.dev`) && PathPrefix(`/ping`)
