@@ -634,7 +634,7 @@ async def _run(
         ]
 
 
-async def _gary_for(campaign: Campaign) -> narration.Narrator:
+def _gary_for(campaign: Campaign) -> narration.Narrator:
     """The narrator this campaign runs on, or a refusal saying why not.
 
     A deployment with no key is what a fresh app is until its secrets are set.
