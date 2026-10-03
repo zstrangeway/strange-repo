@@ -124,6 +124,12 @@ importers:
         specifier: ^3.52.0
         version: 3.52.0
 
+  apps/vault:
+    devDependencies:
+      '@go-task/cli':
+        specifier: ^3.52.0
+        version: 3.52.0
+
   packages/ui:
     dependencies:
       class-variance-authority:

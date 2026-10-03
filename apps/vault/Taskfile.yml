@@ -1,0 +1,18 @@
+version: '3'
+
+tasks:
+  lint:
+    desc: Lint and format-check, and fail on anything
+    cmds:
+      - uv run ruff check .
+      - uv run ruff format --check .
+
+  test:
+    desc: Lint, then the specs and unit tests under one 100% coverage gate
+    cmds:
+      - task: lint
+      - uv run coverage erase
+      - uv run coverage run --parallel -m behave --format progress
+      - uv run coverage run --parallel -m unittest discover -s tests
+      - uv run coverage combine
+      - uv run coverage report

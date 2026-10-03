@@ -1,0 +1,12 @@
+{
+  "name": "vault",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "lint": "task lint",
+    "test": "task test"
+  },
+  "devDependencies": {
+    "@go-task/cli": "^3.52.0"
+  }
+}

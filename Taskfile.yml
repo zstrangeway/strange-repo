@@ -22,6 +22,9 @@ includes:
   proxy:
     taskfile: ./apps/proxy
     dir: ./apps/proxy
+  vault:
+    taskfile: ./apps/vault
+    dir: ./apps/vault
   scout:
     taskfile: ./apps/scout
     dir: ./apps/scout
@@ -65,3 +68,5 @@ tasks:
       - task: dns:test
       - task: paperclip:test
       - task: proxy:test
+      # vault-sync: real code, so specs and the 100% gate - needs only uv and git.
+      - task: vault:test

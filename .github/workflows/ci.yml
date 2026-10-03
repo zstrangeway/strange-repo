@@ -90,6 +90,23 @@ jobs:
       # server subprocess, and the provider is stubbed.
       - run: pnpm --filter scout test
 
+  test-vault:
+    name: vault-sync specs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: pnpm install --frozen-lockfile
+      # Real git repositories in a temp dir: the runner's git is all it needs.
+      - run: pnpm --filter vault test
+
   e2e:
     name: End-to-end specs
     runs-on: ubuntu-latest
