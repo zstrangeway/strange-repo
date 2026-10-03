@@ -3,7 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "deploy": "task deploy",
+    "diff": "task diff",
     "lint": "task lint",
+    "secret:client-keys": "task secret:client-keys",
+    "secret:github-token": "task secret:github-token",
     "test": "task test"
   },
   "devDependencies": {

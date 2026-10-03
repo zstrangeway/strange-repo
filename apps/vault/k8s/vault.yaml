@@ -1,0 +1,145 @@
+# The vault, served to agents over MCP, with their writes kept in git.
+# IMAGE_TAG is filled in by `task deploy`: the commit that last changed the
+# images, whose build CI has published to GHCR.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vault-data
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests: {storage: 2Gi}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vault
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app.kubernetes.io/name: vault}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: vault}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      initContainers:
+        # First start only: clone the vault. The credential helper reads the
+        # token from the environment, so it's never written into .git/config.
+        - name: clone
+          image: ghcr.io/zstrangeway/vault-sync:IMAGE_TAG
+          command: [sh, -c]
+          args:
+            - |
+              set -e
+              helper='!f() { echo username=x-access-token; echo "password=$GITHUB_TOKEN"; }; f'
+              if [ ! -d /vault/repo/.git ]; then
+                git -c credential.helper="$helper" clone --quiet https://github.com/zstrangeway/vault.git /vault/repo
+                echo "cloned the vault"
+              fi
+              git -C /vault/repo config credential.helper "$helper"
+              echo "vault working copy ready at $(git -C /vault/repo rev-parse --short HEAD)"
+          env: &github
+            - name: GITHUB_TOKEN
+              valueFrom: {secretKeyRef: {name: vault-github-token, key: token}}
+          securityContext: &locked
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          volumeMounts: [{name: data, mountPath: /vault}]
+      containers:
+        - name: sync
+          image: ghcr.io/zstrangeway/vault-sync:IMAGE_TAG
+          args: [/vault/repo, --interval, "60"]
+          env: *github
+          securityContext: *locked
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 128Mi}
+          volumeMounts: [{name: data, mountPath: /vault}]
+        - name: gateway
+          image: ghcr.io/zstrangeway/vault-gateway:IMAGE_TAG
+          args:
+            - --host
+            - 127.0.0.1
+            - --port
+            - "8001"
+            - --named-server
+            - read
+            - mcpvault /vault/repo --read-only
+            - --named-server
+            - agents
+            - mcpvault /vault/repo/Agents
+          securityContext: *locked
+          # Localhost-only, so the kubelet can't reach it from outside the
+          # pod: probe from inside instead.
+          readinessProbe:
+            exec:
+              command: [python3, -c, "import socket; socket.create_connection(('127.0.0.1', 8001), 2)"]
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 20m, memory: 128Mi}
+            limits: {memory: 512Mi}
+          volumeMounts: [{name: data, mountPath: /vault}]
+        - name: caddy
+          image: caddy:2.11.6
+          args: [caddy, run, --config, /etc/caddy/Caddyfile, --adapter, caddyfile]
+          env:
+            - name: KEY_CLAUDE
+              valueFrom: {secretKeyRef: {name: vault-client-keys, key: claude}}
+            - name: KEY_PAPERCLIP
+              valueFrom: {secretKeyRef: {name: vault-client-keys, key: paperclip}}
+            # Caddy wants writable data and config dirs; not running as root.
+            - {name: XDG_DATA_HOME, value: /caddy/data}
+            - {name: XDG_CONFIG_HOME, value: /caddy/config}
+          ports:
+            - {name: http, containerPort: 8080}
+          readinessProbe:
+            httpGet: {path: /healthz, port: http}
+          securityContext: *locked
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 128Mi}
+          volumeMounts:
+            - {name: caddyfile, mountPath: /etc/caddy}
+            - {name: caddy, mountPath: /caddy}
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: vault-data}
+        - name: caddyfile
+          configMap: {name: caddyfile}
+        - name: caddy
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vault
+spec:
+  selector: {app.kubernetes.io/name: vault}
+  ports:
+    - {name: http, port: 80, targetPort: http}
+---
+# https://vault.strange-lab.dev, through apps/proxy. Endpoints:
+#   /servers/read/mcp    the whole vault, read-only
+#   /servers/agents/mcp  Agents/, read-write
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vault
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: vault.strange-lab.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: vault
+                port: {name: http}

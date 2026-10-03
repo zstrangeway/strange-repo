@@ -1,6 +1,101 @@
 version: '3'
 
+env:
+  # The homelab repo writes the cluster's kubeconfig here. Set KUBECONFIG to
+  # point anywhere else.
+  KUBECONFIG: '{{env "KUBECONFIG" | default (print (env "HOME") "/Code/homelab/talos/_out/kubeconfig")}}'
+
+vars:
+  URL: https://vault.strange-lab.dev
+  # The images are built from these; the last commit touching them is the
+  # tag CI published, and what the deploy pins.
+  IMAGE_TAG:
+    sh: git log -1 --format=%H -- Dockerfile.sync Dockerfile.gateway src pyproject.toml uv.lock
+
 tasks:
+  secret:client-keys:
+    desc: Generate a bearer token per MCP client (claude, paperclip), once - never printed
+    cmds:
+      - kubectl create namespace vault --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+      - |
+        if kubectl -n vault get secret vault-client-keys >/dev/null 2>&1; then
+          echo "vault/vault-client-keys: exists, left alone (delete it to rotate both)"; exit 0
+        fi
+        kubectl -n vault create secret generic vault-client-keys \
+          --from-literal=claude="$(openssl rand -hex 32)" \
+          --from-literal=paperclip="$(openssl rand -hex 32)" >/dev/null
+        echo "vault/vault-client-keys: generated (claude, paperclip; neither printed)"
+
+  render:
+    desc: The manifests with the image tag filled in
+    internal: true
+    cmds:
+      - kubectl kustomize k8s | sed 's/IMAGE_TAG/{{.IMAGE_TAG}}/g'
+
+  diff:
+    desc: Show what deploy would change in the cluster
+    cmds:
+      - echo "images at {{.IMAGE_TAG}}"
+      - task render | kubectl diff -f - || [ $? -eq 1 ]
+
+  deploy:
+    desc: Apply, wait, and check the endpoints, auth and sync really work
+    preconditions:
+      - sh: kubectl -n vault get secret vault-github-token >/dev/null 2>&1
+        msg: "vault/vault-github-token is missing. In a terminal: pnpm --filter vault run secret:github-token"
+      - sh: kubectl -n vault get secret vault-client-keys >/dev/null 2>&1
+        msg: "vault/vault-client-keys is missing. Run: pnpm --filter vault run secret:client-keys"
+    cmds:
+      # Only deploy builds CI has actually published.
+      - |
+        for img in vault-sync vault-gateway; do
+          tok=$(curl -s "https://ghcr.io/token?scope=repository:zstrangeway/$img:pull" | jq -r .token)
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $tok" \
+            -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
+            "https://ghcr.io/v2/zstrangeway/$img/manifests/{{.IMAGE_TAG}}")
+          [ "$code" = 200 ] || { echo "vault: $img:{{.IMAGE_TAG}} isn't published (HTTP $code) - push to main and let CI build it"; exit 1; }
+        done
+        echo "vault: images at {{.IMAGE_TAG}} are published"
+      - task render | kubectl apply -f -
+      - kubectl -n vault rollout status deploy/vault --timeout 5m
+      - |
+        key=$(kubectl -n vault get secret vault-client-keys -o jsonpath='{.data.claude}' | base64 -d)
+        for i in $(seq 1 20); do
+          [ "$(curl -s -o /dev/null -w '%{http_code}' {{.URL}}/healthz)" = 200 ] && break; sleep 3
+        done
+        noauth=$(curl -s -o /dev/null -w '%{http_code}' -X POST {{.URL}}/servers/read/mcp)
+        [ "$noauth" = 401 ] || { echo "vault: a request with no token got $noauth, not 401"; exit 1; }
+        init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"deploy-check","version":"1"}}}'
+        for ep in read agents; do
+          body=$(curl -s -m 20 -X POST {{.URL}}/servers/$ep/mcp -H "Authorization: Bearer $key" \
+            -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d "$init")
+          echo "$body" | grep -q '"serverInfo"' || { echo "vault: /servers/$ep/mcp didn't initialize: ${body:-nothing}"; exit 1; }
+        done
+        echo "vault: up at {{.URL}} - no token gets 401; /servers/read and /servers/agents answer MCP"
+      - |
+        sleep 5
+        log=$(kubectl -n vault logs deploy/vault -c sync --tail=5)
+        echo "$log" | grep -q 'vault-sync: FAILED' && { echo "vault: the sync is failing:"; echo "$log"; exit 1; }
+        echo "vault: sync running - $(echo "$log" | tail -3 | tr '\n' ' ')"
+
+  secret:github-token:
+    desc: Store vault-sync's GitHub token (vault repo only, Contents read/write) from a hidden prompt
+    interactive: true
+    cmds:
+      - kubectl create namespace vault --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+      - |
+        printf 'GitHub fine-grained token for zstrangeway/vault (input hidden): '
+        read -rs token; echo
+        [ -n "$token" ] || { echo "vault: nothing entered - nothing stored"; exit 1; }
+        # Proves it reaches the vault repo before storing it. (Write access
+        # can't be checked without pushing; the first sync will tell.)
+        git ls-remote "https://x-access-token:${token}@github.com/zstrangeway/vault.git" HEAD >/dev/null 2>&1 \
+          || { echo "vault: that token can't read zstrangeway/vault - nothing stored"; exit 1; }
+        printf '%s' "$token" | kubectl -n vault create secret generic vault-github-token \
+          --from-file=token=/dev/stdin --dry-run=client -o yaml |
+          kubectl apply --server-side --force-conflicts -f - >/dev/null
+        echo "vault/vault-github-token: stored (it can read zstrangeway/vault)"
+
   lint:
     desc: Lint and format-check, and fail on anything
     cmds:
@@ -16,3 +111,7 @@ tasks:
       - uv run coverage run --parallel -m unittest discover -s tests
       - uv run coverage combine
       - uv run coverage report
+      - |
+        n=$(kubectl kustomize k8s | yq -N 'select(.kind != null) | .kind' | wc -l)
+        [ "$n" -gt 0 ] || { echo "vault: manifests rendered no objects"; exit 1; }
+        echo "vault: manifests render $n objects"

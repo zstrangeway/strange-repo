@@ -1,0 +1,27 @@
+# The pod's only way in. Every request needs a client's bearer token; the
+# MCP gateway behind it listens on localhost only. One token per client, so
+# either can be revoked alone (secret:client-keys).
+{
+	admin off
+	auto_https off
+	persist_config off
+}
+
+:8080 {
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	@claude header Authorization "Bearer {$KEY_CLAUDE}"
+	@paperclip header Authorization "Bearer {$KEY_PAPERCLIP}"
+
+	handle @claude {
+		reverse_proxy 127.0.0.1:8001
+	}
+	handle @paperclip {
+		reverse_proxy 127.0.0.1:8001
+	}
+	handle {
+		respond "unauthorized" 401
+	}
+}
