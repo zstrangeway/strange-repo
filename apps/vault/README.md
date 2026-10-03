@@ -1,5 +1,20 @@
 # vault
 
+**https://vault.strange-lab.dev**, over MCP (Streamable HTTP), a bearer token
+per client:
+
+| Endpoint | What it is |
+| --- | --- |
+| `/servers/read/mcp` | the whole vault, read-only |
+| `/servers/agents/mcp` | rooted at `Agents/`, read-write |
+
+```sh
+pnpm --filter vault run secret:github-token  # once, in a real terminal
+pnpm --filter vault run secret:client-keys   # once: claude + paperclip tokens
+pnpm --filter vault run diff
+pnpm --filter vault run deploy   # refuses unpublished images; checks auth, both endpoints and the sync live
+```
+
 Zac's Obsidian vault (the private `zstrangeway/vault` repo), served to the
 homelab's agents over MCP, with their writes kept in git. Agents read the
 whole vault and write memory only into `Agents/` — see the vault's own

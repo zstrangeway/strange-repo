@@ -26,17 +26,11 @@ tasks:
           --from-literal=paperclip="$(openssl rand -hex 32)" >/dev/null
         echo "vault/vault-client-keys: generated (claude, paperclip; neither printed)"
 
-  render:
-    desc: The manifests with the image tag filled in
-    internal: true
-    cmds:
-      - kubectl kustomize k8s | sed 's/IMAGE_TAG/{{.IMAGE_TAG}}/g'
-
   diff:
     desc: Show what deploy would change in the cluster
     cmds:
       - echo "images at {{.IMAGE_TAG}}"
-      - task render | kubectl diff -f - || [ $? -eq 1 ]
+      - kubectl kustomize k8s | sed 's/IMAGE_TAG/{{.IMAGE_TAG}}/g' | kubectl diff -f - || [ $? -eq 1 ]
 
   deploy:
     desc: Apply, wait, and check the endpoints, auth and sync really work
@@ -56,7 +50,7 @@ tasks:
           [ "$code" = 200 ] || { echo "vault: $img:{{.IMAGE_TAG}} isn't published (HTTP $code) - push to main and let CI build it"; exit 1; }
         done
         echo "vault: images at {{.IMAGE_TAG}} are published"
-      - task render | kubectl apply -f -
+      - kubectl kustomize k8s | sed 's/IMAGE_TAG/{{.IMAGE_TAG}}/g' | kubectl apply -f -
       - kubectl -n vault rollout status deploy/vault --timeout 5m
       - |
         key=$(kubectl -n vault get secret vault-client-keys -o jsonpath='{.data.claude}' | base64 -d)

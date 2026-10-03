@@ -27,6 +27,7 @@ cluster. These are configuration only, so they skip the spec-first rules — see
 | [`apps/homepage`](apps/homepage) | [Homepage](https://gethomepage.dev), a dashboard for the homelab, at https://homepage.strange-lab.dev |
 | [`apps/monitoring`](apps/monitoring) | Prometheus, Alertmanager and Grafana, at https://grafana.strange-lab.dev |
 | [`apps/dns`](apps/dns) | external-dns, keeping `*.home.arpa` names in the UDM |
+| [`apps/vault`](apps/vault) | Zac's Obsidian vault over MCP, agents' memory kept in git, at https://vault.strange-lab.dev |
 | [`apps/proxy`](apps/proxy) | Traefik: HTTPS for every app at `*.strange-lab.dev`, one Let's Encrypt wildcard |
 | [`apps/paperclip`](apps/paperclip) | [Paperclip](https://paperclip.ing), orchestration for AI agents, at https://paperclip.strange-lab.dev |
 
