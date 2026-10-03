@@ -20,20 +20,20 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@gary/ui": "workspace:*",
     "@sentry/nextjs": "^10.69.0",
-    "lucide-react": "^1.31.0",
-    "next": "16.3.0",
-    "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "lucide-react": "^1.49.0",
+    "next": "16.3.7",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
   },
   "devDependencies": {
     "@cucumber/cucumber": "^13.2.1",
-    "@go-task/cli": "^3.52.0",
+    "@go-task/cli": "^3.53.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitest/coverage-v8": "^4.1.10",
-    "playwright": "^1.62.1",
+    "playwright": "^1.63.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.10"
