@@ -199,21 +199,11 @@ construction rather than by test, and only a real model has ever disagreed.
 model only. `--fight` now has four runs across three, which is the shape the
 others want.
 
-### 2. `play.py` is a quarter of the API in one file
+### 2. gary-api has no error tracking
 
-1902 lines: the router, twenty Pydantic schemas, the tool dispatch (`_fighting`,
-`_run`) and the turn runner. It has absorbed every feature since campaigns —
-scenes, the opening, combat, character creation, advancement — and each one
-added to the same module rather than beside it. It was 1679 when this entry was
-written and the number was left stale for a fortnight, which is item 4 happening
-to this file.
-
-Nothing is wrong with it today. It is simply where the next bug will be, and
-where a change will be hardest to make confidently. The seams are already
-visible in the file: the schemas, the read endpoints, and everything after the
-`# ---- playing` divider at line 933 barely reference each other.
-
-### 3. gary-api has no error tracking
+**Formerly:** `play.py` was a quarter of the API in one file. Split into a
+`play/` package in [HOM-4](/HOM/issues/HOM-4); the old module is now a
+backward-compatible shim.
 
 Sentry is wired properly on gary-web: a real DSN in `fly.toml`, source maps
 uploaded at build with the release pinned to the commit SHA, events tunnelled
@@ -254,7 +244,7 @@ to look within the retention window.
 
 ## Cheap, and stale things get believed
 
-### 4. Only two shapes of document rot are caught
+### 3. Only two shapes of document rot are caught
 
 `apps/gary-api/tests/test_documents.py` now checks the two things that are
 exact: no document names a `"kind"` the world does not have, and gary-api's
@@ -286,7 +276,7 @@ What is still uncaught is every claim made in a sentence rather than a name. A
 README that describes the wrong behaviour in fluent English, with every
 identifier spelled correctly, passes all of this.
 
-### 5. Two things dependabot cannot do, now that it is configured
+### 4. Two things dependabot cannot do, now that it is configured
 
 `.github/dependabot.yml` exists: github-actions, npm at the workspace root, uv
 for gary-api, and docker for the two base images — monthly, grouped so minor
@@ -294,7 +284,7 @@ and patch arrive as one pull request per ecosystem and a major arrives alone.
 That is the answer to the ten that were opened against `apps/example-web` and
 `apps/example-api` and closed against a repo shape that had already gone.
 
-### 6. scout's grounding check has been run against one model, once
+### 5. scout's grounding check has been run against one model, once
 
 It has now seen real drafts — three runs on 2026-08-29, all
 `nvidia/nemotron-3-super-120b-a12b:free` through OpenRouter, against the
@@ -405,7 +395,7 @@ What is still thin:
   finding about small free models: a tailoring that returns the master
   unchanged is accepted and useless.
 
-### 7. The browser suite's patience is one number now, and still untested
+### 6. The browser suite's patience is one number now, and still untested
 
 **The old title was wrong and worth correcting: nothing waited fifteen
 seconds.** All twenty-seven were *ceilings* on condition waits —
