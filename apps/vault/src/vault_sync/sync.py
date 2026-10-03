@@ -41,8 +41,11 @@ class Report:
 
 
 def git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
+    # The identity goes on every call, not just commits: rebasing and
+    # autostashing write commits too, and the server has no git config.
+    identity = ["-c", f"user.name={AUTHOR_NAME}", "-c", f"user.email={AUTHOR_EMAIL}"]
     # check=False: the return code is examined below, to raise a readable error.
-    result = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=False)
+    result = subprocess.run(["git", "-C", str(repo), *identity, *args], capture_output=True, text=True, check=False)
     if check and result.returncode != 0:
         raise SyncError(f"git {' '.join(args)} failed: {(result.stderr or result.stdout).strip()}")
     return result
@@ -63,17 +66,7 @@ def commit_agent_changes(repo: Path, report: Report) -> None:
         return
     git(repo, "add", "--all", "--", AGENTS)
     message = "agents: update memory\n\n" + "\n".join(f"- {p}" for p in agent_paths)
-    git(
-        repo,
-        "-c",
-        f"user.name={AUTHOR_NAME}",
-        "-c",
-        f"user.email={AUTHOR_EMAIL}",
-        "commit",
-        "--quiet",
-        "--message",
-        message,
-    )
+    git(repo, "commit", "--quiet", "--message", message)
     report.committed = agent_paths
 
 

@@ -3,6 +3,7 @@ failures that aren't conflicts."""
 
 import contextlib
 import io
+import os
 import shutil
 import stat
 import sys
@@ -12,6 +13,10 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "features"))
+
+# Like the server: no git identity anywhere (see features/environment.py).
+os.environ["GIT_CONFIG_GLOBAL"] = os.devnull
+os.environ["GIT_CONFIG_NOSYSTEM"] = "1"
 
 from support_repos import make_vault
 
