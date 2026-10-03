@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "zstrangeway.heart",
+  "name": "Heart",
+  "version": "1.0.0",
+  "author": "zstrangeway",
+  "description": "Heart button with a dropdown of birthday and anniversary countdowns",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Heart",
+    "description": "Heart button with a dropdown of birthday and anniversary countdowns",
+    "category": "System",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "title": "I ♥ You",
+      "people": [],
+      "soonDays": 7
+    }
+  }
+}

@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+# Desktop reminders for the dates in the heart bar widget.
+# Reads the widget's "people" from ~/.config/omarchy/shell.json; run hourly by
+# heart-reminders.timer. Sends a heads-up within soonDays (default 7) of each
+# date and again on the day, once per occurrence, and only during waking hours.
+import datetime
+import json
+import os
+import subprocess
+
+SHELL_JSON = os.path.expanduser("~/.config/omarchy/shell.json")
+STATE = os.path.expanduser("~/.local/state/heart-reminders/sent")
+WIDGET_ID = "zstrangeway.heart"
+WAKING_HOURS = range(9, 22)
+
+
+def widget_settings():
+    with open(SHELL_JSON) as f:
+        layout = json.load(f).get("bar", {}).get("layout", {})
+    for section in layout.values():
+        for entry in section:
+            if isinstance(entry, dict) and entry.get("id") == WIDGET_ID:
+                return entry
+    return {}
+
+
+def parse(value):
+    # "YYYY-MM-DD" or "MM-DD"; year is None when it was left out
+    parts = str(value or "").strip().split("-")
+    try:
+        nums = [int(p) for p in parts]
+    except ValueError:
+        return None
+    if len(nums) == 3:
+        return nums[0], nums[1], nums[2]
+    if len(nums) == 2:
+        return None, nums[0], nums[1]
+    return None
+
+
+def next_occurrence(month, day, today):
+    for year in (today.year, today.year + 1):
+        try:
+            date = datetime.date(year, month, day)
+        except ValueError:  # Feb 29 in a non-leap year
+            date = datetime.date(year, 3, 1)
+        if date >= today:
+            return date
+
+
+def message(kind, name, date, years, days):
+    when = date.strftime("%B ") + str(date.day)
+    if kind == "birthday":
+        if days == 0:
+            return f"Happy birthday, {name}! \U0001F382", f"{years} today" if years else when
+        return f"{name}'s birthday in {days} day{'s' if days != 1 else ''}", \
+            f"{when} — turning {years}" if years else when
+    if days == 0:
+        return "Happy anniversary! ♥", f"{years} years together today" if years else when
+    return f"Your anniversary is in {days} day{'s' if days != 1 else ''}", \
+        f"{when} — {years} years" if years else when
+
+
+def main():
+    now = datetime.datetime.now()
+    if now.hour not in WAKING_HOURS:
+        return
+    today = now.date()
+    settings = widget_settings()
+    soon_days = int(settings.get("soonDays", 7))
+
+    os.makedirs(os.path.dirname(STATE), exist_ok=True)
+    try:
+        with open(STATE) as f:
+            sent = set(f.read().split())
+    except FileNotFoundError:
+        sent = set()
+
+    for person in settings.get("people", []):
+        for kind in ("birthday", "anniversary"):
+            parsed = parse(person.get(kind))
+            if not parsed:
+                continue
+            year, month, day = parsed
+            date = next_occurrence(month, day, today)
+            days = (date - today).days
+            if days > soon_days:
+                continue
+            stage = "today" if days == 0 else "soon"
+            key = f"{date.isoformat()}:{person.get('name', '')}:{kind}:{stage}".replace(" ", "_")
+            if key in sent:
+                continue
+            years = date.year - year if year else None
+            title, body = message(kind, person.get("name", ""), date, years, days)
+            subprocess.run(["notify-send", "-a", settings.get("title", "I \u2665 You"), title, body], check=False)
+            sent.add(key)
+
+    with open(STATE, "w") as f:
+        f.write("\n".join(sorted(sent)) + "\n")
+
+
+if __name__ == "__main__":
+    main()

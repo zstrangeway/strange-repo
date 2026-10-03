@@ -1,0 +1,6 @@
+[Unit]
+Description=Heart widget date reminders
+
+[Service]
+Type=oneshot
+ExecStart=%h/.config/omarchy/plugins/zstrangeway.heart/reminders

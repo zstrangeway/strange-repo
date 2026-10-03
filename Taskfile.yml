@@ -16,6 +16,9 @@ includes:
   monitoring:
     taskfile: ./apps/monitoring
     dir: ./apps/monitoring
+  omarchy-heart:
+    taskfile: ./apps/omarchy-heart
+    dir: ./apps/omarchy-heart
   paperclip:
     taskfile: ./apps/paperclip
     dir: ./apps/paperclip
