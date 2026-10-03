@@ -1,0 +1,25 @@
+version: '3'
+
+vars:
+  PLUGIN_DIR: '{{env "HOME"}}/.config/omarchy/plugins/zstrangeway.heart'
+  UNIT_DIR: '{{env "HOME"}}/.config/systemd/user'
+
+tasks:
+  install:
+    desc: Copy the bar widget and its reminder timer into this machine's Omarchy and systemd config
+    cmds:
+      - mkdir -p "{{.PLUGIN_DIR}}" "{{.UNIT_DIR}}"
+      - cp plugin/manifest.json plugin/Panel.qml plugin/reminders "{{.PLUGIN_DIR}}/"
+      - chmod +x "{{.PLUGIN_DIR}}/reminders"
+      - cp systemd/heart-reminders.service systemd/heart-reminders.timer "{{.UNIT_DIR}}/"
+      - systemctl --user daemon-reload
+      - systemctl --user enable --now heart-reminders.timer
+      # Best effort: the shell may not be running (e.g. installing over SSH).
+      - omarchy-shell shell rescanPlugins || true
+      - |
+        if grep -q '"zstrangeway.heart"' "{{env "HOME"}}/.config/omarchy/shell.json" 2>/dev/null; then
+          echo "omarchy-heart: installed; the widget is already in the bar"
+        else
+          echo "omarchy-heart: installed. Add it with: omarchy plugin enable zstrangeway.heart"
+          echo "  then put your dates in its shell.json entry - see config.example.json"
+        fi
