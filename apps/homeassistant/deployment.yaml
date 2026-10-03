@@ -1,0 +1,56 @@
+# Everything Home Assistant writes itself: users and integrations set up in
+# the UI (.storage/), automations made in the editor, the recorder database.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: config
+spec:
+  # local-path: pinned to one node, and gone with its disk. Back up
+  # anything in here that matters.
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests: {storage: 2Gi}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: homeassistant
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  # One pod at a time: its volume can only be mounted by one.
+  strategy: {type: Recreate}
+  template:
+    spec:
+      containers:
+        - name: homeassistant
+          image: ghcr.io/home-assistant/home-assistant:2026.9.4
+          # No runAsNonRoot lockdown, unlike apps/homepage: the image's
+          # s6-overlay init refuses to start as any other user. Containment
+          # here is the network, not the container user.
+          ports:
+            - {name: http, containerPort: 8123}
+          startupProbe:
+            httpGet: {path: /, port: http}
+            # First boot installs Python dependencies before it answers.
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: {path: /, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /, port: http}
+            periodSeconds: 20
+            timeoutSeconds: 5
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {memory: 1Gi}
+          volumeMounts:
+            - {name: data, mountPath: /config}
+            # The one file managed here, in git, over the volume's copy.
+            - {name: config, mountPath: /config/configuration.yaml, subPath: configuration.yaml}
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: config}
+        - name: config
+          configMap: {name: homeassistant}
