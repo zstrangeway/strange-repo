@@ -1,0 +1,6 @@
+.venv
+.coverage*
+__pycache__
+features
+tests
+node_modules

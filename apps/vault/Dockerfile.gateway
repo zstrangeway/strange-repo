@@ -1,0 +1,10 @@
+# vault-gateway: serves the vault over MCP (Streamable HTTP). supergateway
+# fronts mcpvault, which is stdio-only. Versions pinned here rather than
+# fetched by npx at every start.
+FROM node:22-slim
+
+RUN npm install --global --no-fund --no-audit supergateway@4.1.0 @bitbonsai/mcpvault@0.16.0 \
+    && npm cache clean --force
+
+USER 1000
+ENTRYPOINT ["supergateway"]

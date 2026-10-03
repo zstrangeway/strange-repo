@@ -25,3 +25,18 @@ pulls, pushes, races and conflicts happen for real.
 ```sh
 pnpm --filter vault run test    # lint, specs and unit tests, 100% coverage
 ```
+
+## Images
+
+Built by CI from `Dockerfile.sync` and `Dockerfile.gateway`, and published to
+GHCR only from `main` and only after the sync's specs pass:
+
+- `ghcr.io/zstrangeway/vault-sync:<commit>` — this package, plus git.
+- `ghcr.io/zstrangeway/vault-gateway:<commit>` — supergateway 4.1.0 in front of
+  mcpvault 0.16.0, pinned rather than fetched by npx at every start.
+
+Deploys pin the commit tag; `:main` only follows the branch.
+
+supergateway 4.1.0 (the latest release) has no API-key options - its README
+describes unreleased ones - so authentication is a Caddy container in front,
+with the gateways listening only inside the pod.

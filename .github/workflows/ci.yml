@@ -150,3 +150,36 @@ jobs:
         run: docker build -f apps/gary-api/Dockerfile -t gary-api:ci apps/gary-api
       - name: Build gary-web image
         run: docker build -f apps/gary-web/Dockerfile -t gary-web:ci .
+
+  publish-vault-images:
+    name: Publish vault images
+    # Gated like a deploy: only from main, and only once the sync's specs pass.
+    needs: [test-vault]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        image: [sync, gateway]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # Tagged with the commit, so the cluster pins an exact build; "main"
+      # moves with the branch for convenience, never for deploys.
+      - uses: docker/build-push-action@v7
+        with:
+          context: apps/vault
+          file: apps/vault/Dockerfile.${{ matrix.image }}
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/zstrangeway/vault-${{ matrix.image }}:${{ github.sha }}
+            ghcr.io/zstrangeway/vault-${{ matrix.image }}:main
+          labels: org.opencontainers.image.source=https://github.com/zstrangeway/strange-repo
+
