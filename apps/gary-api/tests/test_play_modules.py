@@ -20,7 +20,7 @@ class ModuleSurfaceTests(unittest.TestCase):
 
     def test_opening_constant_is_exported(self):
         self.assertIsInstance(play.OPENING, str)
-        self.assertIn("Gary", play.OPENING)
+        self.assertIn("Open the campaign", play.OPENING)
 
     def test_turn_routines_are_exported(self):
         self.assertTrue(callable(play.take_turn))
