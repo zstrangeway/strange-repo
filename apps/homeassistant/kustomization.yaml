@@ -1,0 +1,19 @@
+# Home Assistant (home-assistant.io), from the official image. Plain
+# manifests rather than a chart, like apps/homepage and apps/paperclip.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: homeassistant
+resources:
+  - namespace.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+# A hash suffix on the name, so editing config/configuration.yaml rolls the
+# pod.
+configMapGenerator:
+  - name: homeassistant
+    files:
+      - config/configuration.yaml
+labels:
+  - pairs: {app.kubernetes.io/name: homeassistant}
+    includeSelectors: true

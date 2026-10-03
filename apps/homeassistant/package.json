@@ -1,0 +1,13 @@
+{
+  "name": "homeassistant",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "deploy": "task deploy",
+    "diff": "task diff",
+    "test": "task test"
+  },
+  "devDependencies": {
+    "@go-task/cli": "^3.52.0"
+  }
+}

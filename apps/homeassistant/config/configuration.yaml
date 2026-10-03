@@ -1,0 +1,14 @@
+# Managed in git, like the rest of the homelab: edit it here and redeploy,
+# and the pod rolls with the new ConfigMap. Everything Home Assistant writes
+# itself (users, UI-configured integrations, the recorder database) lives
+# beside this file on the volume in /config.
+default_config:
+
+# Behind Traefik (apps/proxy): without this, a request arriving with an
+# X-Forwarded-For header is refused and the Ingress answers 400. The range is
+# the cluster's pod network, which is where Traefik runs - if the cluster's
+# pod CIDR differs, this is the line to change.
+http:
+  use_x_forwarded_for: true
+  trusted_proxies:
+    - 10.244.0.0/16

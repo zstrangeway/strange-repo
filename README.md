@@ -29,6 +29,7 @@ cluster. These are configuration only, so they skip the spec-first rules — see
 | [`apps/dns`](apps/dns) | external-dns, keeping `*.home.arpa` names in the UDM |
 | [`apps/proxy`](apps/proxy) | Traefik: HTTPS for every app at `*.strange-lab.dev`, one Let's Encrypt wildcard |
 | [`apps/paperclip`](apps/paperclip) | [Paperclip](https://paperclip.ing), orchestration for AI agents, at https://paperclip.strange-lab.dev |
+| [`apps/homeassistant`](apps/homeassistant) | [Home Assistant](https://www.home-assistant.io), home automation, at https://home.strange-lab.dev |
 
 Play is divided into **scenes**, which are the unit of gary's memory: the
 model is told the current scene and a recap of each one before it, so a long
