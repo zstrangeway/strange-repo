@@ -10,6 +10,6 @@
     "test": "task test"
   },
   "devDependencies": {
-    "@go-task/cli": "^3.52.0"
+    "@go-task/cli": "^3.53.1"
   }
 }
