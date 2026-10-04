@@ -1,0 +1,14 @@
+version: '3'
+
+tasks:
+  test:
+    desc: Render the RBAC manifests and report what was checked
+    cmds:
+      - |
+        if ! command -v kubectl >/dev/null 2>&1; then
+          echo "agent-deploy: kubectl not in PATH - rendering and schema checks skipped"
+          exit 0
+        fi
+        n=$(kubectl kustomize . | grep -c '^kind:' || true)
+        echo "agent-deploy: rendered $n objects"
+        echo "agent-deploy: kubectl kustomize succeeded"

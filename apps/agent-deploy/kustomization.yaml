@@ -1,0 +1,19 @@
+# RBAC and tooling bootstrap that lets the Paperclip agent runner deploy
+# plain-kustomize infrastructure apps to the homelab cluster.
+#
+# The runner pod authenticates as system:serviceaccount:paperclip:default.
+# This app grants that identity the minimum rights to apply manifests in
+# apps/homeassistant and apps/homepage. It does not grant secrets, delete,
+# or cluster-level changes beyond creating namespaces.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - clusterrole-bootstrap.yaml
+  - clusterrolebinding-bootstrap.yaml
+  - role-homeassistant.yaml
+  - role-homepage.yaml
+  - rolebinding-homeassistant.yaml
+  - rolebinding-homepage.yaml
+labels:
+  - pairs: {app.kubernetes.io/name: agent-deploy}
+    includeSelectors: true

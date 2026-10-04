@@ -1,6 +1,9 @@
 version: '3'
 
 includes:
+  agent-deploy:
+    taskfile: ./apps/agent-deploy
+    dir: ./apps/agent-deploy
   dns:
     taskfile: ./apps/dns
     dir: ./apps/dns
@@ -67,6 +70,7 @@ tasks:
       # Infrastructure only: renders and checks manifests, needs no toolchain
       # beyond kubectl and yq.
       - task: homepage:test
+      - task: agent-deploy:test
       - task: monitoring:test
       - task: dns:test
       - task: paperclip:test
