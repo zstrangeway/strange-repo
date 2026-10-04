@@ -1,0 +1,13 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: paperclip-agent-deploy
+  namespace: homeassistant
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: paperclip-agent-deploy
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: paperclip

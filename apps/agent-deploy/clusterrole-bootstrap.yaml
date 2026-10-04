@@ -1,0 +1,10 @@
+# One-time bootstrap: lets the agent create namespaces, because each app ships
+# its own namespace.yaml. Apps that already exist are left untouched.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: paperclip-agent-deploy-bootstrap
+rules:
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [get, list, create]
