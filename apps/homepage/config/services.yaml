@@ -71,3 +71,12 @@
         href: https://paperclip.strange-lab.dev
         description: The agent team
         icon: mdi-paperclip
+    # No human web UI: the URL 401s every browser (MCP endpoint behind a
+    # bearer token), so the tile links to the repo and the status pill checks
+    # /healthz, which the Caddy sidecar answers without a token. LAN names
+    # don't resolve inside the cluster, so the pill uses the in-cluster name.
+    - Vault:
+        href: https://github.com/zstrangeway/vault
+        description: The agents' memory - MCP endpoint, no web UI
+        icon: obsidian.svg
+        siteMonitor: http://vault.vault.svc/healthz
