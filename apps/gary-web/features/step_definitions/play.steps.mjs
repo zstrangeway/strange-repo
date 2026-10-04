@@ -47,6 +47,9 @@ async function choose(label) {
  *  arrives in the same tick as the submit or not at all. */
 export async function say(message) {
   world.said = message;
+  world.turnGmCountBeforeSay = await world.page
+    .locator('[data-testid="turn-gm"]')
+    .count();
 
   const onScreen = () =>
     world.page
@@ -351,8 +354,25 @@ Then("gary should answer", async function () {
 Then(
   "the narration should appear while it is still being written",
   async function () {
-    const answer = world.page.getByTestId("turn-gm").last();
+    // Wait for the *new* turn's element, not whichever turn-gm is currently
+    // last. The opening narration is already on screen; reading .last()
+    // races that completed turn against the in-flight one.
+    const before = world.turnGmCountBeforeSay ?? 0;
+    const answer = world.page.locator('[data-testid="turn-gm"]').nth(before);
     await answer.waitFor({ timeout: PATIENCE });
+
+    // Poll the new turn's own narration text so we do not fail just because
+    // the element appeared a frame before its first piece did.
+    await world.page.waitForFunction(
+      (index) => {
+        const turns = document.querySelectorAll('[data-testid="turn-gm"]');
+        const el = turns[index];
+        return el ? el.textContent?.includes("groans") : false;
+      },
+      before,
+      { timeout: PATIENCE },
+    );
+
     const said = (await answer.textContent()) ?? "";
 
     // Both halves matter. Narration on screen proves it rendered; the
