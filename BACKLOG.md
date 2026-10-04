@@ -199,20 +199,6 @@ construction rather than by test, and only a real model has ever disagreed.
 model only. `--fight` now has four runs across three, which is the shape the
 others want.
 
-### 2. `play.py` is a quarter of the API in one file
-
-1902 lines: the router, twenty Pydantic schemas, the tool dispatch (`_fighting`,
-`_run`) and the turn runner. It has absorbed every feature since campaigns —
-scenes, the opening, combat, character creation, advancement — and each one
-added to the same module rather than beside it. It was 1679 when this entry was
-written and the number was left stale for a fortnight, which is item 4 happening
-to this file.
-
-Nothing is wrong with it today. It is simply where the next bug will be, and
-where a change will be hardest to make confidently. The seams are already
-visible in the file: the schemas, the read endpoints, and everything after the
-`# ---- playing` divider at line 933 barely reference each other.
-
 ### 3. gary-api has no error tracking
 
 Sentry is wired properly on gary-web: a real DSN in `fly.toml`, source maps
