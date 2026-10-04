@@ -1,8 +1,10 @@
-# Agent workspaces, uploads and Paperclip's own files.
+# Agent workspaces, uploads and Paperclip's own files. Named paperclip-data
+# since it moved off the control plane (2026-10-04): agent runs read the disk
+# hard enough to starve etcd. local-path pins it to whichever node it was made on.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: paperclip-home
+  name: paperclip-data
 spec:
   accessModes: [ReadWriteOnce]
   resources:
@@ -91,7 +93,7 @@ spec:
             - {name: home, mountPath: /paperclip}
       volumes:
         - name: home
-          persistentVolumeClaim: {claimName: paperclip-home}
+          persistentVolumeClaim: {claimName: paperclip-data}
 ---
 apiVersion: v1
 kind: Service
