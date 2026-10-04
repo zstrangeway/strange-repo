@@ -1,7 +1,8 @@
 # RBAC and tooling bootstrap that lets the Paperclip agent runner deploy
 # plain-kustomize infrastructure apps to the homelab cluster.
 #
-# The runner pod authenticates as system:serviceaccount:paperclip:default.
+# The runner pod authenticates as system:serviceaccount:paperclip:paperclip-agent
+# (apps/paperclip/serviceaccount.yaml).
 # This app grants that identity the minimum rights to apply manifests in
 # apps/homeassistant and apps/homepage. It does not grant secrets, delete,
 # or cluster-level changes beyond creating namespaces.

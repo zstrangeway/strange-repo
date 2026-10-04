@@ -3,10 +3,13 @@
 RBAC kit and tooling bootstrap so the Paperclip agent runner can deploy
 plain-kustomize infrastructure apps to the homelab cluster.
 
-The runner pod authenticates as `system:serviceaccount:paperclip:default`.
-This app grants that identity the smallest set of rights needed to apply
-manifests in [`apps/homeassistant`](../homeassistant) and
-[`apps/homepage`](../homepage).
+The runner pod authenticates as
+`system:serviceaccount:paperclip:paperclip-agent`
+([`apps/paperclip/serviceaccount.yaml`](../paperclip/serviceaccount.yaml)) — its
+own identity, so Postgres (which runs as the namespace's `default` account)
+shares none of these rights. This app grants that identity the smallest set of
+rights needed to apply manifests in [`apps/homeassistant`](../homeassistant)
+and [`apps/homepage`](../homepage).
 
 ## One-time user grant
 
@@ -18,6 +21,28 @@ kubectl apply -k apps/agent-deploy
 ```
 
 This is intentionally a human action. Agents never grant themselves access.
+
+## Moving the grants off the default account
+
+The grants used to bind to the namespace's `default` account. To move them
+without stranding the agents midway, in this exact order:
+
+1. Deploy [`apps/paperclip`](../paperclip) first — it creates the
+   `paperclip-agent` ServiceAccount and restarts the runner onto it.
+2. `kubectl apply -k apps/agent-deploy` — re-points the bindings at
+   `paperclip-agent`. They keep their names, so the apply updates them in
+   place rather than adding alongside.
+3. Remove the old `default` bindings — the bindings keep their names, so step
+   2 already re-pointed them and there is nothing left to delete. Confirm that
+   nothing still names the `default` account:
+
+   ```sh
+   kubectl get clusterrolebinding paperclip-agent-deploy-bootstrap -o jsonpath='{.subjects}'
+   kubectl -n homeassistant get rolebinding paperclip-agent-deploy -o jsonpath='{.subjects}'
+   kubectl -n homepage get rolebinding paperclip-agent-deploy -o jsonpath='{.subjects}'
+   ```
+
+   Each should list only `paperclip-agent` in namespace `paperclip`.
 
 ## What gets granted
 
@@ -38,7 +63,7 @@ This is intentionally a human action. Agents never grant themselves access.
 After the grant, an agent can check:
 
 ```sh
-kubectl auth can-i create deployments -n homeassistant --as=system:serviceaccount:paperclip:default
+kubectl auth can-i create deployments -n homeassistant --as=system:serviceaccount:paperclip:paperclip-agent
 ```
 
 Expected: `yes`.
