@@ -1,0 +1,20 @@
+# https://home.strange-lab.dev, through apps/proxy (Traefik), which holds the
+# wildcard certificate. apps/dns points the name at Traefik. Only works
+# because configuration.yaml trusts the pod network as a proxy: HA refuses a
+# request whose X-Forwarded-For arrives from an address it doesn't trust.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: homeassistant
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: home.strange-lab.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: homeassistant
+                port: {name: http}
