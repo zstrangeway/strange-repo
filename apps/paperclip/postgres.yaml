@@ -21,6 +21,10 @@ spec:
     metadata:
       labels: {app.kubernetes.io/name: postgres}
     spec:
+      # Postgres never calls the Kubernetes API. Don't hand it a token: the
+      # namespace default account is exactly what the agent rights used to be
+      # bound to, and this pod should hold no credentials at all.
+      automountServiceAccountToken: false
       containers:
         - name: postgres
           image: postgres:17.11

@@ -22,6 +22,10 @@ spec:
     metadata:
       labels: {app.kubernetes.io/name: paperclip}
     spec:
+      # Its own identity, not the namespace default: apps/agent-deploy binds
+      # the agent deploy rights to paperclip-agent, so nothing else in the
+      # namespace (Postgres runs as default) shares them.
+      serviceAccountName: paperclip-agent
       # Straight in as the image's node user: the entrypoint execs directly
       # when not root, so no chown/gosu step needs root.
       securityContext:

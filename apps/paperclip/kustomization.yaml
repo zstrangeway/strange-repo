@@ -7,5 +7,6 @@ kind: Kustomization
 namespace: paperclip
 resources:
   - namespace.yaml
+  - serviceaccount.yaml
   - postgres.yaml
   - paperclip.yaml

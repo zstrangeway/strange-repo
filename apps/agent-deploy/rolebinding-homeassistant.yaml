@@ -9,5 +9,5 @@ roleRef:
   name: paperclip-agent-deploy
 subjects:
   - kind: ServiceAccount
-    name: default
+    name: paperclip-agent
     namespace: paperclip

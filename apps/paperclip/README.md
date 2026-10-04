@@ -30,6 +30,10 @@ don't leave a fresh install unclaimed.
 
 ## Things that bite
 
+- **The server runs as its own `paperclip-agent` ServiceAccount**, not the
+  namespace `default`: [`apps/agent-deploy`](../agent-deploy) binds the agent
+  deploy rights there, and Postgres runs as `default` with
+  `automountServiceAccountToken: false`, so it holds no credentials at all.
 - **Private mode 403s any Host it doesn't know** — including the kubelet's
   probes, which arrive by pod IP. Browser-facing names are in
   `PAPERCLIP_ALLOWED_HOSTNAMES`; the probes send `Host: localhost`, which is
