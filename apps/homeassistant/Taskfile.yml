@@ -18,6 +18,16 @@ tasks:
       - |
         yq -e '.' config/configuration.yaml >/dev/null || { echo "homeassistant: config/configuration.yaml is not valid YAML"; exit 1; }
         echo "homeassistant: parsed config/configuration.yaml"
+      # Since 2026.8 a YAML `http:` block is dead config (imported as a
+      # five-minute trial, then reverted; gone entirely in 2027.2). The
+      # settings live in config/http.json, seeded over /config/.storage/http
+      # by the init container. Pin both halves of that.
+      - |
+        yq -e 'has("http") | not' config/configuration.yaml >/dev/null || {
+          echo "homeassistant: config/configuration.yaml has an http: block - ignored since HA 2026.8; put it in config/http.json"; exit 1; }
+        yq -e '.data.stable.use_x_forwarded_for == true and (.data.stable.trusted_proxies | length > 0) and .data.yaml_migration_done == true' config/http.json >/dev/null || {
+          echo "homeassistant: config/http.json must set use_x_forwarded_for, a non-empty trusted_proxies, and yaml_migration_done"; exit 1; }
+        echo "homeassistant: no http: in configuration.yaml; config/http.json seeds proxy trust"
       # The schema check needs a cluster to ask. Without one it says it was
       # skipped rather than passing quietly.
       - |
@@ -26,8 +36,33 @@ tasks:
         elif ! kubectl get namespace homeassistant >/dev/null 2>&1; then
           echo "homeassistant: namespace not created yet - schemas NOT checked, only rendering and YAML"
         else
-          kubectl apply -k . --dry-run=server >/dev/null
+          # Everything but the Namespace: the paperclip service account can
+          # create namespaces but not patch one that already exists, and a
+          # dry run including it fails on the annotation patch alone.
+          kubectl kustomize . | yq 'select(.kind != "Namespace")' | kubectl apply --dry-run=server -f - >/dev/null
           echo "homeassistant: cluster API accepted every object (server-side dry run)"
+        fi
+      # The one check that sees what Zac sees: ask for the real URL through
+      # Traefik, like a browser. A fresh install answers 302 (to onboarding)
+      # and an onboarded one 200; 400 means HA is refusing the proxy's
+      # X-Forwarded-For. Needs the cluster, to learn where the Ingress
+      # points; without it the check says it was skipped rather than passing
+      # quietly. --resolve pins the name to the Ingress address, so this also
+      # works from inside the cluster where the LAN DNS names don't resolve.
+      - |
+        if ! kubectl version --request-timeout=3s >/dev/null 2>&1; then
+          echo "homeassistant: no cluster reachable - {{.URL}} NOT checked"
+        elif ! kubectl -n homeassistant get ingress homeassistant >/dev/null 2>&1; then
+          echo "homeassistant: ingress not created yet - {{.URL}} NOT checked"
+        else
+          host=$(kubectl -n homeassistant get ingress homeassistant -o jsonpath='{.spec.rules[0].host}')
+          ip=$(kubectl -n homeassistant get ingress homeassistant -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          code=$(curl -sk -o /dev/null -w '%{http_code}' -m 15 --resolve "$host:443:$ip" "https://$host/" || true)
+          case "$code" in
+            200|302) echo "homeassistant: https://$host/ answered $code through Traefik at $ip" ;;
+            400) echo "homeassistant: https://$host/ answered 400 - Home Assistant is refusing the proxy's X-Forwarded-For (see README: trusted proxies live in config/http.json)"; exit 1 ;;
+            *) echo "homeassistant: https://$host/ answered ${code:-nothing} - expected 200 or 302"; exit 1 ;;
+          esac
         fi
 
   diff:
@@ -39,17 +74,23 @@ tasks:
   deploy:
     desc: Apply to the cluster, wait for the rollout, and check it answers
     cmds:
-      - kubectl apply -k .
+      # The namespace goes in on its own, and only when missing: the
+      # paperclip service account can create namespaces but not patch an
+      # existing one, so a plain apply -k would fail on it.
+      - kubectl get namespace homeassistant >/dev/null 2>&1 || kubectl apply -f namespace.yaml
+      - kubectl kustomize . | yq 'select(.kind != "Namespace")' | kubectl apply -f -
       # 5m: the first rollout pulls a large image and then installs Python
       # dependencies before it answers.
       - kubectl -n homeassistant rollout status deploy/homeassistant --timeout 5m
       # Retried: rollout status reports ready a moment before the Service
       # routes to the new pod, so the first try can be refused outright.
+      # 302 is a healthy fresh install (redirect to onboarding); 400 means HA
+      # is refusing the proxy's X-Forwarded-For.
       - |
         for i in $(seq 1 10); do
           code=$(curl -s -o /dev/null -w '%{http_code}' -m 30 {{.URL}}/ || true)
-          [ "$code" = 200 ] && break
+          [ "$code" = 200 ] || [ "$code" = 302 ] && break
           sleep 3
         done
-        [ "$code" = 200 ] || { echo "homeassistant: {{.URL}}/ answered ${code:-nothing} after 10 tries"; exit 1; }
+        [ "$code" = 200 ] || [ "$code" = 302 ] || { echo "homeassistant: {{.URL}}/ answered ${code:-nothing} after 10 tries"; exit 1; }
         echo "homeassistant: up at {{.URL}}"

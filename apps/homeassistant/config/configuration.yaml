@@ -4,11 +4,9 @@
 # beside this file on the volume in /config.
 default_config:
 
-# Behind Traefik (apps/proxy): without this, a request arriving with an
-# X-Forwarded-For header is refused and the Ingress answers 400. The range is
-# the cluster's pod network, which is where Traefik runs - if the cluster's
-# pod CIDR differs, this is the line to change.
-http:
-  use_x_forwarded_for: true
-  trusted_proxies:
-    - 10.244.0.0/16
+# No `http:` block here, on purpose. Since 2026.8 Home Assistant keeps its
+# HTTP server settings (trusted proxies among them) in its own store at
+# /config/.storage/http; a YAML `http:` block is imported only as a five-
+# minute trial and then reverted unconfirmed, and it breaks entirely in
+# 2027.2. Those settings live in config/http.json instead, seeded onto the
+# volume at every pod start - that file is where trusted_proxies is set.

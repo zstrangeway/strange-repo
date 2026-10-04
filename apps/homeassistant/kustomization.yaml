@@ -8,12 +8,12 @@ resources:
   - deployment.yaml
   - service.yaml
   - ingress.yaml
-# A hash suffix on the name, so editing config/configuration.yaml rolls the
-# pod.
+# A hash suffix on the name, so editing the config files rolls the pod.
 configMapGenerator:
   - name: homeassistant
     files:
       - config/configuration.yaml
+      - config/http.json
 labels:
   - pairs: {app.kubernetes.io/name: homeassistant}
     includeSelectors: true

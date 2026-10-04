@@ -22,6 +22,21 @@ spec:
   strategy: {type: Recreate}
   template:
     spec:
+      initContainers:
+        # Since 2026.8 Home Assistant ignores `http:` in configuration.yaml
+        # and keeps those settings in /config/.storage/http instead. Seed
+        # that store from git on every start (config/http.json), so the
+        # Traefik proxy trust survives restarts and fresh volumes alike. An
+        # always-overwrite: edits land by redeploying, and UI edits to
+        # Settings > System > Network do not survive a pod restart.
+        - name: seed-http-store
+          image: ghcr.io/home-assistant/home-assistant:2026.9.4
+          command: ["/bin/sh", "-c"]
+          args:
+            - mkdir -p /config/.storage && cp /seed/http.json /config/.storage/http
+          volumeMounts:
+            - {name: data, mountPath: /config}
+            - {name: config, mountPath: /seed/http.json, subPath: http.json}
       containers:
         - name: homeassistant
           image: ghcr.io/home-assistant/home-assistant:2026.9.4
