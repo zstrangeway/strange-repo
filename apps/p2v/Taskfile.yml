@@ -1,0 +1,30 @@
+version: '3'
+
+tasks:
+  dev:
+    desc: Run the React development server at http://localhost:8080
+    cmds:
+      - pnpm exec next dev --port 8080 --hostname 127.0.0.1
+
+  build:
+    desc: Export the React site to static files in out/
+    cmds:
+      - pnpm exec next build
+
+  serve:
+    desc: Serve the production export at http://localhost:8080
+    cmds:
+      - python3 -m http.server 8080 --bind 127.0.0.1 --directory out
+
+  typecheck:
+    desc: Check the React application types
+    cmds:
+      - pnpm exec next typegen
+      - pnpm exec tsc --noEmit
+
+  test:
+    desc: Build the React site, validate its assets, and run browser regression scenarios
+    cmds:
+      - task: build
+      - python3 scripts/check_site.py
+      - pnpm exec cucumber-js
