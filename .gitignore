@@ -14,3 +14,7 @@ htmlcov/
 .scout/
 apps/scout/resumes/
 archive-*/
+# P2V's source lives in src/ and public/; Next generates the static export.
+apps/p2v/.next/
+apps/p2v/out/
+apps/p2v/*.tsbuildinfo

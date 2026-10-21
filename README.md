@@ -22,7 +22,7 @@ And **P2V**, the existing basketball academy website imported from ChatGPT Sites
 
 | App | Stack | What it is |
 | --- | --- | --- |
-| [`apps/p2v`](apps/p2v) | Static HTML, CSS, JavaScript | P2V Basketball Academy redesign; run with `pnpm --filter p2v dev` |
+| [`apps/p2v`](apps/p2v) | React + Next.js static export | P2V Basketball Academy redesign; run with `pnpm --filter p2v dev` |
 
 And software we run but didn't write, deployed to the homelab Kubernetes
 cluster. These are configuration only, so they skip the spec-first rules — see

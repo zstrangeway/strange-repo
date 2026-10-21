@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   test-p2v:
-    name: P2V static site checks
+    name: P2V React build and browser checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,6 +21,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter p2v exec playwright install --with-deps chromium
       - run: pnpm --filter p2v test
 
   test-api:

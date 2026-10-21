@@ -6,7 +6,7 @@ import re
 from urllib.parse import unquote, urlsplit
 
 
-ROOT = Path(__file__).resolve().parents[1] / "dist"
+ROOT = Path(__file__).resolve().parents[1] / "out"
 errors = []
 checked = 0
 
@@ -32,9 +32,9 @@ class References(HTMLParser):
                 check_reference(self.source, value)
 
 
-pages = sorted(ROOT.glob("*.html"))
+pages = sorted(ROOT.rglob("*.html"))
 if not (ROOT / "index.html").is_file():
-    errors.append("Missing dist/index.html")
+    errors.append("Missing out/index.html; run pnpm --filter p2v build first")
 for page in pages:
     parser = References()
     parser.source = page
