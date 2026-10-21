@@ -1,0 +1,9 @@
+{
+  "name": "p2v",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "task dev",
+    "test": "task test"
+  }
+}

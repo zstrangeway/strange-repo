@@ -1,6 +1,9 @@
 version: '3'
 
 includes:
+  p2v:
+    taskfile: ./apps/p2v
+    dir: ./apps/p2v
   agent-deploy:
     taskfile: ./apps/agent-deploy
     dir: ./apps/agent-deploy
@@ -57,6 +60,7 @@ tasks:
   test:
     desc: Run every app's tests
     cmds:
+      - task: p2v:test
       - task: gary-api:test
       - task: ui:test
       # Lints first, inside this one. gary-web's `test` starts with its own

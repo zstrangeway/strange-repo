@@ -1,6 +1,6 @@
 # strange-repo
 
-A pnpm + uv monorepo. It builds two unrelated things, and configures what runs
+A pnpm + uv monorepo. It contains several projects, and configures what runs
 alongside them in the homelab.
 
 **gary**, an AI game master named for Gary Gygax: pick a system and a module,
@@ -17,6 +17,12 @@ a conviction about what models should not be trusted to decide.
 | App | Stack | What it is |
 | --- | --- | --- |
 | [`apps/scout`](apps/scout) | Python CLI + MCP server | A local-first job search assistant: save a posting, tailor a resume to it, approve what gets sent, log where it got to |
+
+And **P2V**, the existing basketball academy website imported from ChatGPT Sites.
+
+| App | Stack | What it is |
+| --- | --- | --- |
+| [`apps/p2v`](apps/p2v) | Static HTML, CSS, JavaScript | P2V Basketball Academy redesign; run with `pnpm --filter p2v dev` |
 
 And software we run but didn't write, deployed to the homelab Kubernetes
 cluster. These are configuration only, so they skip the spec-first rules — see

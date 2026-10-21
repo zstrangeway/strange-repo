@@ -10,6 +10,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  test-p2v:
+    name: P2V static site checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter p2v test
+
   test-api:
     name: gary-api specs
     runs-on: ubuntu-latest
@@ -182,4 +195,3 @@ jobs:
             ghcr.io/zstrangeway/vault-${{ matrix.image }}:${{ github.sha }}
             ghcr.io/zstrangeway/vault-${{ matrix.image }}:main
           labels: org.opencontainers.image.source=https://github.com/zstrangeway/strange-repo
-

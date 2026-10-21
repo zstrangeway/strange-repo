@@ -1,0 +1,13 @@
+version: '3'
+
+tasks:
+  dev:
+    desc: Serve the P2V site at http://localhost:8080
+    cmds:
+      - python3 -m http.server 8080 --bind 127.0.0.1 --directory dist
+
+  test:
+    desc: Check JavaScript syntax and local page and asset references
+    cmds:
+      - node --check dist/app.js
+      - python3 scripts/check_site.py

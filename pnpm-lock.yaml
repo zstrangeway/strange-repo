@@ -118,6 +118,8 @@ importers:
         specifier: ^3.52.0
         version: 3.52.0
 
+  apps/p2v: {}
+
   apps/paperclip:
     devDependencies:
       '@go-task/cli':
