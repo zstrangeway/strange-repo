@@ -2,7 +2,7 @@
   "name": "gary-api",
   "private": true,
   "devDependencies": {
-    "@go-task/cli": "^3.52.0"
+    "@go-task/cli": "^3.54.0"
   },
   "scripts": {
     "dev": "task dev",
